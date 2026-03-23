@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { SEED_FLYERS } from '../constants/seedData';
 import type { Post } from '../types';
 
 const MONTH_MAP: Record<string, number> = {
@@ -78,7 +77,7 @@ function sortByEventDate(posts: Post[]): Post[] {
  * Falls back to seed data if the table is empty or unreachable.
  */
 export function useFlyers() {
-  const [flyers, setFlyers] = useState<Post[]>(sortByEventDate(SEED_FLYERS));
+  const [flyers, setFlyers] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -106,15 +105,14 @@ export function useFlyers() {
         .limit(50);
 
       if (fetchError) {
-        console.warn('Supabase fetch error, using seed data:', fetchError.message);
-        setFlyers(sortByEventDate(SEED_FLYERS));
+        console.warn('Supabase fetch error:', fetchError.message);
+        setFlyers([]);
         setError(fetchError.message);
         return;
       }
 
       if (!data || data.length === 0) {
-        // DB is empty — use seed data for now
-        setFlyers(sortByEventDate(SEED_FLYERS));
+        setFlyers([]);
         return;
       }
 
@@ -148,7 +146,7 @@ export function useFlyers() {
       setFlyers(sortByEventDate(mapped));
     } catch (err) {
       console.warn('Network error, using seed data');
-      setFlyers(sortByEventDate(SEED_FLYERS));
+      setFlyers([]);
       setError('Network error');
     } finally {
       setLoading(false);

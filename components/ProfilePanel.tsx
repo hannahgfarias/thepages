@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
-import { SEED_FLYERS } from '../constants/seedData';
+import { useFlyers } from '../hooks/useFlyers';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
 import type { Post } from '../types';
@@ -196,8 +196,9 @@ export function ProfilePanel() {
     })
   ).current;
 
-  const yourPosts = SEED_FLYERS.slice(0, 3);
-  const savedPosts = SEED_FLYERS.slice(3, 5);
+  const { flyers: allFlyers } = useFlyers();
+  const yourPosts: Post[] = []; // Will be populated from Supabase when user posts
+  const savedPosts: Post[] = []; // Will be populated from Supabase saves
 
   const savedByDate = useMemo(() => categorizePosts(savedPosts), []);
 

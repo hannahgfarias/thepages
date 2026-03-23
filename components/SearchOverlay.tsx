@@ -14,7 +14,8 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
-import { SEED_FLYERS } from '../constants/seedData';
+import { useFlyers } from '../hooks/useFlyers';
+import type { Post } from '../types';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
 
@@ -64,8 +65,8 @@ function SearchIcon({ size = 40, color = 'rgba(2,4,15,0.25)' }: { size?: number;
   );
 }
 
-function filterFlyers(filters: SearchFilters) {
-  return SEED_FLYERS.filter((flyer) => {
+function filterFlyers(filters: SearchFilters, allFlyers: Post[]) {
+  return allFlyers.filter((flyer) => {
     // Query filter
     if (filters.query) {
       const q = filters.query.toLowerCase();
@@ -109,6 +110,7 @@ interface SearchOverlayProps {
 
 export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   const { showSearch, setShowSearch } = useOverlay();
+  const { flyers: allFlyers } = useFlyers();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
@@ -229,7 +231,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
     customDate: showDateInput ? customDate : undefined,
   };
 
-  const results = hasSearched ? filterFlyers(currentFilters) : [];
+  const results = hasSearched ? filterFlyers(currentFilters, allFlyers) : [];
 
   const thumbWidth = (width - 24 * 2 - 12) / 2;
   const thumbHeight = (thumbWidth * 4) / 3;
