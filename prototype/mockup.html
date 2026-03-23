@@ -1,0 +1,2984 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>The Pages</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Lilita+One&display=swap" rel="stylesheet">
+<style>
+  @font-face {
+    font-family: 'Quicksand';
+    src: url('fonts/Quicksand-Bold.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'Work Sans';
+    src: url('fonts/WorkSans-Regular.ttf') format('truetype');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'Work Sans';
+    src: url('fonts/WorkSans-Medium.ttf') format('truetype');
+    font-weight: 500;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'Work Sans';
+    src: url('fonts/WorkSans-SemiBold.ttf') format('truetype');
+    font-weight: 600;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'Work Sans';
+    src: url('fonts/WorkSans-Bold.ttf') format('truetype');
+    font-weight: 700;
+    font-style: normal;
+    font-display: swap;
+  }
+  @font-face {
+    font-family: 'Work Sans';
+    src: url('fonts/WorkSans-Italic.ttf') format('truetype');
+    font-weight: 400;
+    font-style: italic;
+    font-display: swap;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --nav-h: 64px;
+    --safe-b: env(safe-area-inset-bottom, 0px);
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #F0ECEC;
+    font-family: 'Work Sans', sans-serif;
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+    color: #02040F;
+  }
+
+  /* ─── Feed Container ─── */
+  #feed {
+    width: 100%;
+    height: 100%;
+    overflow-y: scroll;
+    scroll-snap-type: y mandatory;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  #feed::-webkit-scrollbar { display: none; }
+
+  /* ─── Card (each flyer = full screen) ─── */
+  .card {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+  }
+
+  /* Blurred fill behind the flyer */
+  .card-blur {
+    position: absolute;
+    inset: -40px;
+    background-size: cover;
+    background-position: center;
+    filter: blur(40px) saturate(1.2) brightness(0.6);
+    transform: scale(1.1);
+  }
+
+  /* Flyer artwork — full image, no cropping */
+  .card-bg {
+    position: absolute;
+    inset: 0;
+    bottom: calc(var(--nav-h) + var(--safe-b));
+    background-size: contain;
+    background-position: center;
+    background-repeat: no-repeat;
+    transition: transform 0.4s var(--ease-out);
+  }
+  .card.active .card-bg {
+    transform: scale(1.02);
+  }
+
+  /* ─── Dark Overlay on Tap ─── */
+  .card-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(0,0,0,0.0);
+    transition: background 0.35s var(--ease-out);
+    pointer-events: none;
+    z-index: 2;
+  }
+  .card.active .card-overlay {
+    background: rgba(2,4,15,0.55);
+  }
+
+  /* ─── Info Panel (slides up on tap) ─── */
+  .card-info {
+    position: absolute;
+    bottom: calc(var(--nav-h) + var(--safe-b) + 8px);
+    left: 0; right: 0;
+    padding: 28px 24px 20px;
+    z-index: 3;
+    transform: translateY(30px);
+    opacity: 0;
+    transition: all 0.4s var(--ease-out);
+    pointer-events: none;
+  }
+  .card.active .card-info {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .info-category {
+    display: inline-block;
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 2.5px;
+    text-transform: uppercase;
+    color: #fff;
+    background: transparent;
+    border: 0.5px solid #fff;
+    padding: 4px 12px;
+    border-radius: 0;
+    margin-bottom: 14px;
+  }
+
+  .info-title {
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 900;
+    font-size: clamp(28px, 8vw, 42px);
+    line-height: 0.95;
+    text-transform: uppercase;
+    color: #fff;
+    margin-bottom: 4px;
+  }
+
+  .info-subtitle {
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    color: rgba(255,255,255,0.7);
+    font-style: italic;
+    margin-bottom: 16px;
+  }
+
+  .info-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    color: rgba(255,255,255,0.85);
+    line-height: 1.4;
+  }
+  .info-row-tappable {
+    cursor: pointer;
+    transition: opacity 0.15s;
+    text-decoration: underline;
+    text-decoration-color: rgba(255,255,255,0.2);
+    text-underline-offset: 3px;
+  }
+  .info-row-tappable:active { opacity: 0.6; }
+  .info-row svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+    opacity: 0.7;
+  }
+
+  .info-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 14px;
+    margin-bottom: 18px;
+  }
+  .info-tag {
+    font-size: 11px;
+    color: #fff;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 0;
+    font-family: 'Space Mono', monospace;
+  }
+  .info-tag:nth-child(5n+1) { background: #78B896; }
+  .info-tag:nth-child(5n+2) { background: #EB736C; }
+  .info-tag:nth-child(5n+3) { background: #67C9E3; }
+  .info-tag:nth-child(5n+4) { background: #E9D25E; color: #1a1a1a; }
+  .info-tag:nth-child(5n+5) { background: #F0ECEC; color: #1a1a1a; }
+
+  .info-btn {
+    display: block;
+    width: 100%;
+    padding: 14px;
+    background: transparent;
+    color: #78B896;
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    text-align: center;
+    border: 0.5px solid #78B896;
+    border-radius: 0;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .info-btn:active {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+  }
+
+  /* ─── Top Action Rail (appears on tap) ─── */
+  .action-rail {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    z-index: 4;
+    display: flex;
+    flex-direction: row;
+    gap: 8px;
+    align-items: center;
+    opacity: 0;
+    transform: translateY(-12px);
+    transition: all 0.35s var(--ease-out);
+    pointer-events: none;
+  }
+  .card.active .action-rail {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .action-btn {
+    width: 36px;
+    height: 36px;
+    border-radius: 0;
+    background: rgba(229,218,218,0.9);
+    border: 1px solid rgba(2,4,15,0.12);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #02040F;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .action-btn:active { transform: scale(0.92); }
+  .action-btn.saved { background: #EB736C; border-color: #EB736C; color: #fff; }
+  .action-btn.saved svg { stroke: #fff; }
+  .action-btn svg { width: 16px; height: 16px; }
+
+  .action-label {
+    display: none;
+  }
+
+  /* ─── Swipe Hint ─── */
+  .tag-filter-bar {
+    position: fixed;
+    top: calc(var(--safe-t) + 56px);
+    left: 0; right: 0;
+    z-index: 15;
+    background: rgba(0,0,0,0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .tag-filter-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    color: #78B896;
+  }
+  .tag-filter-reset {
+    background: none;
+    border: 1px solid rgba(255,255,255,0.3);
+    color: #fff;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .tag-filter-reset:active { background: rgba(255,255,255,0.1); }
+
+  .swipe-hint {
+    position: absolute;
+    bottom: calc(var(--nav-h) + var(--safe-b) + 24px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    animation: hintPulse 2s ease-in-out infinite, hintFade 4s ease forwards;
+    pointer-events: none;
+  }
+  .swipe-hint span {
+    font-size: 11px;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-family: 'Space Mono', monospace;
+  }
+  @keyframes hintPulse {
+    0%, 100% { transform: translateX(-50%) translateY(0); }
+    50% { transform: translateX(-50%) translateY(-6px); }
+  }
+  @keyframes hintFade {
+    0%, 60% { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  /* ─── Top Bar (wordmark + search) ─── */
+  .top-bar {
+    position: fixed;
+    top: 0;
+    left: 0; right: 0;
+    z-index: 10;
+    padding: 14px 20px 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: none;
+    pointer-events: none;
+    transform: translateY(0);
+    transition: transform 0.3s var(--ease-out);
+  }
+  .top-bar.hidden {
+    transform: translateY(-100%);
+  }
+  .card.active ~ .top-bar .search-trigger,
+  .top-bar.detail-active .search-trigger {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .top-bar h1 {
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 900;
+    font-size: 18px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: #02040F;
+  }
+  .search-trigger {
+    width: 34px;
+    height: 34px;
+    border-radius: 0;
+    background: rgba(255,255,255,0.85);
+    border: 1px solid rgba(2,4,15,0.15);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #02040F;
+    pointer-events: auto;
+    transition: all 0.15s;
+  }
+  .search-trigger:active { transform: scale(0.9); }
+  .search-trigger svg { width: 18px; height: 18px; }
+
+  /* ─── Bottom Nav (3 items: Browse, Add, Profile) ─── */
+  .bottom-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0; right: 0;
+    z-index: 20;
+    height: calc(var(--nav-h) + var(--safe-b));
+    padding-bottom: var(--safe-b);
+    background: #F0ECEC;
+    border-top: 1px solid rgba(2,4,15,0.06);
+    display: flex;
+    align-items: center;
+    justify-content: space-around;
+  }
+  .nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 8px 20px;
+    color: rgba(2,4,15,0.35);
+    transition: color 0.2s;
+  }
+  .nav-item.active { color: #02040F; }
+  .nav-item svg { width: 22px; height: 22px; }
+  .nav-item span {
+    font-size: 10px;
+    font-family: 'Space Mono', monospace;
+    letter-spacing: 0.5px;
+  }
+
+  /* Post button (flat circle) */
+  .nav-post {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    background: #78B896;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s;
+  }
+  .nav-post:active { transform: scale(0.9); }
+  .nav-post svg { width: 22px; height: 22px; color: #fff; }
+
+  /* ─── Search Overlay ─── */
+  .search-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgba(0,0,0,0.0);
+    pointer-events: none;
+    transition: background 0.35s var(--ease-out);
+  }
+  .search-overlay.open {
+    background: rgba(229,218,218,0.95);
+    pointer-events: auto;
+  }
+
+  .search-panel {
+    position: absolute;
+    top: 0;
+    left: 0; right: 0;
+    bottom: 0;
+    padding: 60px 20px 30px;
+    transform: translateY(-30px);
+    opacity: 0;
+    transition: all 0.4s var(--ease-out);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .search-overlay.open .search-panel {
+    transform: translateY(0);
+    opacity: 1;
+  }
+
+  .search-close {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(2,4,15,0.08);
+    border: none;
+    cursor: pointer;
+    color: #02040F;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+  }
+
+  .search-bar {
+    width: 100%;
+    padding: 16px 20px;
+    background: rgba(255,255,255,0.6);
+    border: 1px solid rgba(2,4,15,0.12);
+    border-radius: 0;
+    font-family: 'Work Sans', sans-serif;
+    font-size: 16px;
+    color: #02040F;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .search-bar::placeholder { color: rgba(2,4,15,0.35); }
+  .search-bar:focus { border-color: rgba(2,4,15,0.25); }
+
+  .filter-section {
+    margin-top: 28px;
+  }
+  .filter-label {
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(2,4,15,0.45);
+    margin-bottom: 12px;
+  }
+  .filter-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .filter-chip {
+    padding: 8px 16px;
+    border-radius: 0;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(2,4,15,0.12);
+    color: rgba(2,4,15,0.6);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .filter-chip:active { transform: scale(0.95); }
+  .filter-chip.selected {
+    background: #EB736C;
+    border-color: #EB736C;
+    color: #fff;
+  }
+
+  .date-picker-input {
+    width: 100%;
+    margin-top: 8px;
+    padding: 12px 16px;
+    background: rgba(255,255,255,0.7);
+    border: 1px solid rgba(2,4,15,0.12);
+    border-radius: 0;
+    font-family: 'Space Mono', monospace;
+    font-size: 14px;
+    color: #02040F;
+    outline: none;
+  }
+  .date-picker-input:focus { border-color: #1a1a1a; }
+
+  .search-apply-btn {
+    width: 100%;
+    padding: 16px;
+    background: #E9D25E;
+    color: #1a1a1a;
+    border: none;
+    border-radius: 0;
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    margin-top: 24px;
+    transition: transform 0.15s, opacity 0.15s;
+  }
+  .search-apply-btn:active { transform: scale(0.97); opacity: 0.9; }
+
+  .search-results {
+    margin-top: 20px;
+  }
+  .search-results-label {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(2,4,15,0.4);
+    margin-bottom: 12px;
+  }
+  .search-results-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .search-result-card {
+    aspect-ratio: 3/4;
+    border-radius: 0;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+  .search-result-card:active { transform: scale(0.97); }
+  .search-result-info {
+    position: absolute;
+    bottom: 0;
+    left: 0; right: 0;
+    padding: 12px 10px;
+    background: linear-gradient(to top, rgba(0,0,0,0.75), transparent);
+  }
+  .search-result-category {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 4px;
+  }
+  .search-result-title {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.2;
+    margin-bottom: 2px;
+  }
+  .search-result-date {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: rgba(255,255,255,0.5);
+  }
+  .search-no-results {
+    text-align: center;
+    padding: 48px 20px;
+  }
+  .search-no-results svg { width: 40px; height: 40px; color: rgba(2,4,15,0.12); margin-bottom: 12px; }
+  .search-no-results .no-results-title {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: rgba(2,4,15,0.45);
+    margin-bottom: 6px;
+  }
+  .search-no-results p {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 13px;
+    color: rgba(2,4,15,0.3);
+    line-height: 1.5;
+  }
+
+  /* ─── Add Event Overlay ─── */
+  .add-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 30;
+    background: rgba(0,0,0,0.0);
+    pointer-events: none;
+    transition: background 0.35s var(--ease-out);
+  }
+  .add-overlay.open {
+    background: rgba(0,0,0,0.5);
+    pointer-events: auto;
+  }
+
+  .add-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0; right: 0;
+    z-index: 31;
+    background: #F0ECEC;
+    border-radius: 24px 24px 0 0;
+    padding: 0;
+    transform: translateY(100%);
+    transition: transform 0.45s var(--ease-out);
+    max-height: 90vh;
+    overflow: hidden;
+    color: #1a1a1a;
+    display: flex;
+    flex-direction: column;
+  }
+  .add-sheet-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding: 24px 24px 16px;
+  }
+  .add-overlay.open .add-sheet {
+    transform: translateY(0);
+  }
+
+  .add-handle {
+    width: 36px;
+    height: 4px;
+    background: #ccc;
+    border-radius: 2px;
+    margin: 0 auto 20px;
+  }
+
+  .add-title {
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #888;
+    text-align: center;
+    margin-bottom: 24px;
+  }
+
+  .upload-zone {
+    width: 100%;
+    aspect-ratio: 4/5;
+    border: 2px dashed #ccc;
+    border-radius: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    background: rgba(0,0,0,0.02);
+  }
+  .upload-zone:hover {
+    border-color: #999;
+    background: rgba(0,0,0,0.04);
+  }
+  .upload-zone svg { width: 36px; height: 36px; color: #aaa; }
+  .upload-zone span {
+    font-size: 13px;
+    color: #999;
+    font-family: 'Space Mono', monospace;
+  }
+
+  .add-form {
+    width: 100%;
+    margin-top: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .add-input {
+    width: 100%;
+    padding: 14px 16px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 0;
+    font-family: 'Work Sans', sans-serif;
+    font-size: 14px;
+    color: #333;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .add-input:focus { border-color: #1a1a1a; }
+  .add-input::placeholder { color: #bbb; }
+
+  .add-select {
+    width: 100%;
+    padding: 14px 16px;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 0;
+    font-family: 'Work Sans', sans-serif;
+    font-size: 14px;
+    color: #333;
+    outline: none;
+    appearance: none;
+    -webkit-appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg width='12' height='8' viewBox='0 0 12 8' fill='none' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1.5L6 6.5L11 1.5' stroke='%23999' stroke-width='1.5' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 16px center;
+  }
+
+  .add-sheet > .add-submit {
+    display: block;
+    width: 100%;
+    padding: 20px 16px calc(20px + var(--safe-b));
+    background: #02040F;
+    color: #fff;
+    border: none;
+    border-top: 1px solid rgba(2,4,15,0.1);
+    border-radius: 0;
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    font-size: 15px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    cursor: pointer;
+    margin: 0;
+    flex-shrink: 0;
+    transition: opacity 0.15s;
+    box-sizing: border-box;
+  }
+  .add-submit:active { opacity: 0.8; }
+
+  .add-tags-section {
+    margin-top: 4px;
+  }
+  .add-tags-label {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(2,4,15,0.45);
+    margin-bottom: 8px;
+  }
+  .add-tags-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+    min-height: 0;
+  }
+  .add-tag-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: #fff;
+    border: none;
+    border-radius: 0;
+    cursor: default;
+  }
+  .add-tag-chip:nth-child(5n+1) { background: #78B896; }
+  .add-tag-chip:nth-child(5n+2) { background: #EB736C; }
+  .add-tag-chip:nth-child(5n+3) { background: #67C9E3; }
+  .add-tag-chip:nth-child(5n+4) { background: #E9D25E; color: #1a1a1a; }
+  .add-tag-chip:nth-child(5n+5) { background: #F0ECEC; color: #1a1a1a; }
+  .add-tag-remove {
+    cursor: pointer;
+    font-size: 14px;
+    line-height: 1;
+    opacity: 0.7;
+  }
+  .add-tag-remove:hover { opacity: 1; }
+
+  /* AI Scan Loading */
+  .upload-zone.scanning {
+    border-color: #78B896;
+    background: rgba(120,184,150,0.08);
+    pointer-events: none;
+  }
+  .upload-zone.scanning span { color: #78B896; }
+  .upload-zone.scanned {
+    border-color: #78B896;
+    background-size: cover;
+    background-position: center;
+  }
+  .upload-zone.scanned svg { display: none; }
+  .upload-zone.scanned span {
+    color: #fff;
+    background: rgba(0,0,0,0.5);
+    padding: 4px 10px;
+    font-size: 11px;
+  }
+  .scan-spinner {
+    width: 28px; height: 28px;
+    border: 2px solid rgba(120,184,150,0.2);
+    border-top-color: #78B896;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ─── Toast ─── */
+  .toast {
+    position: fixed;
+    top: 60px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-100px);
+    z-index: 100;
+    background: rgba(30,30,30,0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    padding: 12px 24px;
+    border-radius: 0;
+    font-size: 13px;
+    color: #fff;
+    font-family: 'Space Mono', monospace;
+    white-space: nowrap;
+    transition: transform 0.4s var(--ease-out), opacity 0.4s;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+  }
+  .toast.toast-error { background: rgba(235,115,108,0.95); }
+  .toast.toast-success { background: rgba(120,184,150,0.95); }
+
+  /* ─── Report Bottom Sheet ─── */
+  .sheet-bg {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0);
+    z-index: 50;
+    pointer-events: none;
+    transition: background 0.3s;
+  }
+  .sheet-bg.open {
+    background: rgba(0,0,0,0.5);
+    pointer-events: auto;
+  }
+
+  .sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0; right: 0;
+    z-index: 51;
+    background: #f5efef;
+    border-radius: 20px 20px 0 0;
+    padding: 20px 24px calc(24px + var(--safe-b));
+    transform: translateY(100%);
+    transition: transform 0.4s var(--ease-out);
+  }
+  .sheet-bg.open .sheet {
+    transform: translateY(0);
+  }
+
+  .sheet-handle {
+    width: 36px;
+    height: 4px;
+    background: rgba(2,4,15,0.15);
+    border-radius: 2px;
+    margin: 0 auto 16px;
+  }
+  .sheet h3 {
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    font-size: 18px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 16px;
+  }
+  .sheet-option {
+    display: block;
+    width: 100%;
+    padding: 14px 0;
+    background: none;
+    border: none;
+    border-bottom: 1px solid rgba(2,4,15,0.06);
+    color: #02040F;
+    font-family: 'Space Mono', monospace;
+    font-size: 15px;
+    text-align: left;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .sheet-option:active { opacity: 0.6; }
+  .sheet-option:last-child { border-bottom: none; color: #EB736C; }
+
+  /* ─── Profile View ─── */
+  .profile-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 15;
+    background: #F0ECEC;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    transform: translateX(100%);
+    transition: transform 0.4s var(--ease-out);
+    will-change: transform;
+  }
+  .profile-overlay.open {
+    transform: translateX(0);
+  }
+  .profile-overlay.dragging {
+    transition: none;
+  }
+
+  .profile-header {
+    padding: 20px 20px 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+  .profile-settings {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(2,4,15,0.06);
+    border: none;
+    cursor: pointer;
+    color: rgba(2,4,15,0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .profile-settings svg { width: 18px; height: 18px; }
+
+  .profile-info {
+    padding: 24px 20px 20px;
+    text-align: center;
+  }
+  .profile-avatar {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: #EB736C;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 14px;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 28px;
+    color: #fff;
+  }
+  .profile-name {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 22px;
+    color: #02040F;
+    margin-bottom: 2px;
+  }
+  .profile-handle {
+    font-family: 'Space Mono', monospace;
+    font-size: 13px;
+    color: rgba(2,4,15,0.4);
+    margin-bottom: 6px;
+  }
+  .profile-bio {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 14px;
+    color: rgba(2,4,15,0.55);
+    max-width: 280px;
+    margin: 0 auto 16px;
+    line-height: 1.4;
+  }
+  .profile-location {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: rgba(2,4,15,0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+  }
+  .profile-location svg { width: 12px; height: 12px; opacity: 0.5; }
+
+  .profile-stats {
+    display: flex;
+    justify-content: center;
+    gap: 32px;
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid rgba(2,4,15,0.06);
+  }
+  .stat {
+    text-align: center;
+  }
+  .stat-num {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 20px;
+    color: #02040F;
+  }
+  .stat-label {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: rgba(2,4,15,0.4);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  /* Profile Tabs */
+  .profile-tabs {
+    display: flex;
+    border-bottom: 1px solid rgba(2,4,15,0.06);
+  }
+  .profile-tab {
+    flex: 1;
+    padding: 14px 0;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    cursor: pointer;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: rgba(2,4,15,0.35);
+    transition: all 0.2s;
+  }
+  .profile-tab.active {
+    color: #02040F;
+    border-bottom-color: #E9D25E;
+  }
+
+  /* Clickable community stat */
+  .stat.clickable {
+    cursor: pointer;
+    transition: opacity 0.15s;
+    position: relative;
+  }
+  .stat.clickable:active { opacity: 0.6; }
+  .stat.clickable .stat-num::after {
+    content: ' ›';
+    font-size: 14px;
+    opacity: 0.4;
+  }
+
+  /* Community Sheet (overlay from bottom) */
+  .community-sheet-bg {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0);
+    z-index: 35;
+    pointer-events: none;
+    transition: background 0.3s;
+  }
+  .community-sheet-bg.open {
+    background: rgba(0,0,0,0.5);
+    pointer-events: auto;
+  }
+  .community-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0; right: 0;
+    z-index: 36;
+    background: #f5efef;
+    border-radius: 20px 20px 0 0;
+    padding: 20px 20px calc(24px + var(--safe-b));
+    transform: translateY(100%);
+    transition: transform 0.4s var(--ease-out);
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+  .community-sheet-bg.open .community-sheet {
+    transform: translateY(0);
+  }
+  .community-sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 16px;
+  }
+  .community-sheet-header h3 {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 18px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  .community-sheet-close {
+    width: 30px;
+    height: 30px;
+    border-radius: 50%;
+    background: rgba(2,4,15,0.06);
+    border: none;
+    cursor: pointer;
+    color: #02040F;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Tab Content */
+  .tab-content {
+    display: none;
+    padding: 16px 12px calc(var(--nav-h) + var(--safe-b) + 16px);
+  }
+  .tab-content.active { display: block; }
+
+  /* Grid of flyer thumbnails */
+  .flyer-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+  .saved-section-header {
+    grid-column: 1 / -1;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(2,4,15,0.4);
+    padding: 12px 0 4px;
+    margin-top: 8px;
+  }
+  .saved-section-header:first-child { margin-top: 0; }
+  .flyer-thumb {
+    aspect-ratio: 3/4;
+    border-radius: 0;
+    background-size: cover;
+    background-position: center;
+    position: relative;
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.15s;
+  }
+  .flyer-thumb:active { transform: scale(0.97); }
+  .flyer-thumb-info {
+    position: absolute;
+    bottom: 0;
+    left: 0; right: 0;
+    padding: 10px;
+    background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+  }
+  .flyer-thumb-title {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 12px;
+    color: #fff;
+    line-height: 1.2;
+  }
+  .flyer-thumb-date {
+    font-family: 'Space Mono', monospace;
+    font-size: 9px;
+    color: rgba(255,255,255,0.6);
+    margin-top: 2px;
+  }
+
+  /* Community list */
+  .community-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .community-person {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 8px;
+    border-radius: 0;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .community-person:active { background: rgba(2,4,15,0.04); }
+  .community-avatar {
+    width: 42px;
+    height: 42px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 15px;
+    color: #fff;
+    flex-shrink: 0;
+  }
+  .community-info {
+    flex: 1;
+    min-width: 0;
+  }
+  .community-name {
+    font-family: 'Work Sans', sans-serif;
+    font-weight: 600;
+    font-size: 14px;
+    color: #02040F;
+  }
+  .community-handle {
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    color: rgba(2,4,15,0.35);
+  }
+  .community-badge {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: rgba(2,4,15,0.3);
+    padding: 4px 10px;
+    border: 1px solid rgba(2,4,15,0.1);
+    border-radius: 0;
+    flex-shrink: 0;
+  }
+
+  /* Empty / Error / End states */
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+  }
+  .empty-state svg { width: 40px; height: 40px; color: rgba(2,4,15,0.15); margin-bottom: 12px; }
+  .empty-state p {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 14px;
+    color: rgba(2,4,15,0.3);
+    line-height: 1.5;
+  }
+  .empty-state .empty-title {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: rgba(2,4,15,0.5);
+    margin-bottom: 6px;
+  }
+  .empty-state .empty-action {
+    display: inline-block;
+    margin-top: 16px;
+    padding: 10px 24px;
+    background: #E9D25E;
+    color: #1a1a1a;
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    font-size: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .empty-state .empty-action:active { opacity: 0.8; }
+
+  /* Feed end card */
+  .feed-end-card {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #F0ECEC;
+    text-align: center;
+    padding: 40px;
+    gap: 12px;
+  }
+  .feed-end-card svg { width: 48px; height: 48px; color: rgba(2,4,15,0.12); }
+  .feed-end-card .end-title {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #02040F;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .feed-end-card .end-subtitle {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 14px;
+    color: rgba(2,4,15,0.4);
+    line-height: 1.5;
+    max-width: 260px;
+  }
+  .feed-end-card .end-action {
+    margin-top: 12px;
+    padding: 12px 28px;
+    background: #E9D25E;
+    color: #1a1a1a;
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .feed-end-card .end-action:active { opacity: 0.8; }
+
+  /* Error state (dark bg version for feed) */
+  .feed-error-card {
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #0a0a0a;
+    text-align: center;
+    padding: 40px;
+    gap: 12px;
+  }
+  .feed-error-card svg { width: 48px; height: 48px; color: rgba(255,255,255,0.15); }
+  .feed-error-card .error-title {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+  }
+  .feed-error-card .error-subtitle {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 14px;
+    color: rgba(255,255,255,0.4);
+    line-height: 1.5;
+    max-width: 260px;
+  }
+  .feed-error-card .error-action {
+    margin-top: 12px;
+    padding: 12px 28px;
+    background: #EB736C;
+    color: #fff;
+    font-family: 'Quicksand', sans-serif;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .feed-error-card .error-action:active { opacity: 0.8; }
+
+  /* ─── Auth Flow ─── */
+  .auth-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    background: #F0ECEC;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.35s var(--ease-out);
+  }
+  .auth-overlay.open {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .auth-card {
+    width: calc(100% - 48px);
+    max-width: 380px;
+    text-align: center;
+  }
+
+  .auth-wordmark {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 28px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: #02040F;
+    margin-bottom: 8px;
+  }
+  .auth-subtitle {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 14px;
+    color: rgba(2,4,15,0.45);
+    margin-bottom: 40px;
+  }
+
+  .auth-step {
+    display: none;
+  }
+  .auth-step.active {
+    display: block;
+  }
+
+  .auth-label {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(2,4,15,0.45);
+    margin-bottom: 12px;
+    text-align: left;
+  }
+
+  .auth-phone-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+  .auth-country {
+    width: 72px;
+    padding: 16px 12px;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(2,4,15,0.1);
+    border-radius: 0;
+    font-family: 'Space Mono', monospace;
+    font-size: 16px;
+    color: #02040F;
+    text-align: center;
+    outline: none;
+    flex-shrink: 0;
+  }
+  .auth-phone {
+    flex: 1;
+    padding: 16px;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(2,4,15,0.1);
+    border-radius: 0;
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    color: #02040F;
+    outline: none;
+    letter-spacing: 1px;
+  }
+  .auth-phone::placeholder { color: rgba(2,4,15,0.3); font-size: 15px; letter-spacing: 0; }
+  .auth-phone:focus, .auth-country:focus {
+    border-color: #1a1a1a;
+  }
+  .auth-phone.valid, .auth-country.valid {
+    border-color: #78B896;
+  }
+  .auth-phone.invalid, .auth-country.invalid {
+    border-color: #EB736C;
+  }
+
+  .auth-otp-row {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 16px;
+  }
+  .auth-otp-digit {
+    width: 48px;
+    height: 56px;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(2,4,15,0.1);
+    border-radius: 0;
+    font-family: 'Space Mono', monospace;
+    font-size: 24px;
+    color: #02040F;
+    text-align: center;
+    outline: none;
+    caret-color: #1a1a1a;
+  }
+  .auth-otp-digit:focus {
+    border-color: #1a1a1a;
+  }
+  .auth-otp-digit.filled {
+    border-color: #78B896;
+  }
+  .auth-otp-digit.invalid {
+    border-color: #EB736C;
+  }
+
+  .auth-resend {
+    background: none;
+    border: none;
+    color: rgba(2,4,15,0.35);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    margin-bottom: 24px;
+    padding: 8px;
+  }
+  .auth-resend:hover { color: rgba(2,4,15,0.6); }
+
+  .auth-btn {
+    width: 100%;
+    padding: 16px;
+    background: #E9D25E;
+    color: #1a1a1a;
+    border: none;
+    border-radius: 0;
+    font-family: 'Quicksand', sans-serif;
+    font-size: 15px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: transform 0.15s, opacity 0.15s;
+    margin-bottom: 12px;
+  }
+  .auth-btn:active { transform: scale(0.97); opacity: 0.9; }
+  .auth-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+    transform: none;
+  }
+
+  .auth-skip {
+    background: none;
+    border: none;
+    color: rgba(2,4,15,0.3);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 8px 16px;
+    letter-spacing: 0.5px;
+  }
+  .auth-skip:hover { color: rgba(2,4,15,0.5); }
+
+  .auth-legal {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: rgba(2,4,15,0.25);
+    margin-top: 24px;
+    line-height: 1.5;
+  }
+  .auth-legal a { color: rgba(2,4,15,0.4); }
+
+  /* ─── Preferences Step ─── */
+  .pref-title {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 20px;
+    color: #02040F;
+    margin-bottom: 6px;
+  }
+  .pref-desc {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 13px;
+    color: rgba(2,4,15,0.45);
+    margin-bottom: 28px;
+  }
+
+  .pref-section {
+    margin-bottom: 24px;
+    text-align: left;
+  }
+  .pref-section-label {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: rgba(2,4,15,0.45);
+    margin-bottom: 10px;
+  }
+  .pref-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .pref-chip {
+    padding: 10px 18px;
+    border-radius: 0;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(2,4,15,0.08);
+    color: rgba(2,4,15,0.55);
+    font-family: 'Work Sans', sans-serif;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .pref-chip:active { transform: scale(0.95); }
+  .pref-chip.selected {
+    background: #E9D25E;
+    border-color: #E9D25E;
+    color: #1a1a1a;
+  }
+
+  .pref-location-input {
+    width: 100%;
+    padding: 14px 16px;
+    background: rgba(255,255,255,0.5);
+    border: 1px solid rgba(2,4,15,0.1);
+    border-radius: 0;
+    font-family: 'Work Sans', sans-serif;
+    font-size: 14px;
+    color: #02040F;
+    outline: none;
+    margin-bottom: 8px;
+  }
+  .pref-location-input::placeholder { color: rgba(2,4,15,0.3); }
+  .pref-location-input:focus { border-color: #1a1a1a; }
+
+  .pref-location-row {
+    display: flex;
+    gap: 8px;
+    align-items: stretch;
+    margin-bottom: 8px;
+  }
+  .pref-location-row .pref-location-input {
+    flex: 1;
+    margin-bottom: 0;
+  }
+  .pref-locate-btn {
+    width: 48px;
+    background: #E9D25E;
+    border: 1px solid rgba(2,4,15,0.08);
+    border-radius: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.15s;
+  }
+  .pref-locate-btn:active { opacity: 0.7; }
+  .pref-locate-btn svg { width: 20px; height: 20px; }
+
+  .pref-location-hint {
+    font-family: 'Space Mono', monospace;
+    font-size: 10px;
+    color: rgba(2,4,15,0.25);
+    text-align: left;
+  }
+
+  /* Auth prompt (inline, for gated actions) */
+  .auth-prompt-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 38;
+    background: rgba(0,0,0,0);
+    pointer-events: none;
+    transition: background 0.3s;
+  }
+  .auth-prompt-overlay.open {
+    background: rgba(0,0,0,0.6);
+    pointer-events: auto;
+  }
+  .auth-prompt-sheet {
+    position: fixed;
+    bottom: 0;
+    left: 0; right: 0;
+    z-index: 39;
+    background: #f5efef;
+    border-radius: 20px 20px 0 0;
+    padding: 28px 24px calc(24px + var(--safe-b));
+    transform: translateY(100%);
+    transition: transform 0.4s var(--ease-out);
+    text-align: center;
+  }
+  .auth-prompt-overlay.open .auth-prompt-sheet {
+    transform: translateY(0);
+  }
+  .auth-prompt-sheet h3 {
+    font-family: 'Quicksand', sans-serif;
+    font-size: 18px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 8px;
+  }
+  .auth-prompt-sheet p {
+    font-family: 'Work Sans', sans-serif;
+    font-size: 13px;
+    color: rgba(2,4,15,0.5);
+    margin-bottom: 20px;
+    line-height: 1.5;
+  }
+  .auth-prompt-sheet .auth-btn {
+    margin-bottom: 8px;
+  }
+  .auth-prompt-dismiss {
+    background: none;
+    border: none;
+    color: rgba(2,4,15,0.35);
+    font-family: 'Space Mono', monospace;
+    font-size: 12px;
+    cursor: pointer;
+    padding: 8px 16px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Top Bar (wordmark + search trigger) -->
+<div class="top-bar">
+  <h1>The Pages</h1>
+  <button class="search-trigger" onclick="openSearch()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg>
+  </button>
+</div>
+
+<!-- Swipe hint -->
+<div class="swipe-hint" id="swipeHint">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.5)" stroke-width="2" stroke-linecap="round"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+  <span>swipe up</span>
+</div>
+
+<!-- Tag Filter Bar -->
+<div class="tag-filter-bar" id="tagFilterBar" style="display:none;">
+  <span class="tag-filter-label" id="tagFilterLabel"></span>
+  <button class="tag-filter-reset" onclick="resetTagFilter()">Show All</button>
+</div>
+
+<!-- Feed -->
+<div id="feed"></div>
+
+<!-- Bottom Nav (3 items) -->
+<div class="bottom-nav">
+  <button class="nav-item active">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/></svg>
+    <span>Browse</span>
+  </button>
+  <button class="nav-post" onclick="openAdd()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+  </button>
+  <button class="nav-item" id="profileNav" onclick="openProfile()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><circle cx="12" cy="8" r="4"/><path d="M5 21c0-3.87 3.13-7 7-7s7 3.13 7 7"/></svg>
+    <span>Profile</span>
+  </button>
+</div>
+
+<!-- Search Overlay -->
+<div class="search-overlay" id="searchOverlay" onclick="closeSearch(event)">
+  <div class="search-panel" onclick="event.stopPropagation()">
+    <button class="search-close" onclick="closeSearch()">&times;</button>
+    <input class="search-bar" type="text" placeholder="Search events, venues, tags...">
+
+    <div class="filter-section">
+      <p class="filter-label">Event Type</p>
+      <div class="filter-chips">
+        <button class="filter-chip" onclick="toggleChip(this)">Party</button>
+        <button class="filter-chip" onclick="toggleChip(this)">Music</button>
+        <button class="filter-chip" onclick="toggleChip(this)">Community</button>
+        <button class="filter-chip" onclick="toggleChip(this)">Arts</button>
+        <button class="filter-chip" onclick="toggleChip(this)">Wellness</button>
+        <button class="filter-chip" onclick="toggleChip(this)">Food</button>
+        <button class="filter-chip" onclick="toggleChip(this)">Free</button>
+        <button class="filter-chip" onclick="toggleChip(this)">Theatre</button>
+      </div>
+    </div>
+
+    <div class="filter-section">
+      <p class="filter-label">When</p>
+      <div class="filter-chips" id="whenChips">
+        <button class="filter-chip selected" id="happeningNowChip" onclick="toggleChip(this)">Happening Now</button>
+        <button class="filter-chip" onclick="toggleChip(this)">Today</button>
+        <button class="filter-chip" onclick="toggleChip(this)">This Week</button>
+        <button class="filter-chip" onclick="toggleChip(this)">This Weekend</button>
+        <button class="filter-chip" onclick="toggleChip(this)">This Month</button>
+        <button class="filter-chip" id="pickDateChip" onclick="toggleDatePicker()">Pick a Date</button>
+      </div>
+      <input type="date" class="date-picker-input" id="datePicker" style="display:none;" onchange="onDatePicked(this)">
+    </div>
+
+    <div class="filter-section">
+      <p class="filter-label">Location</p>
+      <div class="filter-chips">
+        <button class="filter-chip" onclick="toggleChip(this)">SF</button>
+        <button class="filter-chip" onclick="toggleChip(this)">Oakland</button>
+        <button class="filter-chip" onclick="toggleChip(this)">LA</button>
+        <button class="filter-chip" onclick="toggleChip(this)">NYC</button>
+        <button class="filter-chip" onclick="toggleChip(this)">Near Me</button>
+      </div>
+    </div>
+
+    <button class="search-apply-btn" onclick="runSearch()">Search</button>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+
+<!-- Add Event Overlay -->
+<div class="add-overlay" id="addOverlay" onclick="closeAdd(event)">
+  <div class="add-sheet" onclick="event.stopPropagation()">
+    <div class="add-sheet-scroll">
+    <div class="add-handle"></div>
+    <p class="add-title">share something happening</p>
+    <div class="upload-zone" onclick="showToast('Image picker would open here')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+        <path d="M12 5v14M5 12h14"/>
+      </svg>
+      <span>Upload your flyer</span>
+    </div>
+    <div class="add-form">
+      <input class="add-input" type="text" placeholder="Event title">
+      <input class="add-input" type="text" placeholder="Date & time">
+      <input class="add-input" type="text" placeholder="Location">
+      <input class="add-input" type="url" placeholder="Link (Partiful, Eventbrite, etc.)">
+      <select class="add-select">
+        <option value="" disabled selected>Category</option>
+        <option>Party</option>
+        <option>Music</option>
+        <option>Community</option>
+        <option>Arts</option>
+        <option>Wellness</option>
+        <option>Food</option>
+        <option>Free</option>
+        <option>Theatre</option>
+      </select>
+      <div class="add-tags-section">
+        <p class="add-tags-label">Tags</p>
+        <div class="add-tags-container" id="addTagsContainer"></div>
+        <input class="add-input add-tag-input" id="addTagInput" type="text" placeholder="#hashtag (press Enter)" onkeydown="handleTagInput(event)">
+      </div>
+    </div>
+    </div><!-- end add-sheet-scroll -->
+    <button class="add-submit" onclick="showToast('Posted to The Pages!'); closeAdd();">Post to The Pages</button>
+  </div>
+</div>
+
+<!-- Profile View -->
+<div class="profile-overlay" id="profileOverlay">
+  <div class="profile-header">
+    <button class="profile-settings" onclick="showToast('Settings coming soon')">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+    </button>
+  </div>
+
+  <div class="profile-info">
+    <div class="profile-avatar">HF</div>
+    <h2 class="profile-name">Hannah</h2>
+    <p class="profile-handle">@hannahfarias</p>
+    <p class="profile-bio">finding things to do so you don't have to</p>
+    <p class="profile-location">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      San Francisco, CA
+    </p>
+  </div>
+
+  <div class="profile-stats">
+    <div class="stat">
+      <div class="stat-num">12</div>
+      <div class="stat-label">Posts</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">8</div>
+      <div class="stat-label">Saved</div>
+    </div>
+    <div class="stat clickable" onclick="openCommunitySheet()">
+      <div class="stat-num">34</div>
+      <div class="stat-label">Community</div>
+    </div>
+  </div>
+
+  <div class="profile-tabs">
+    <button class="profile-tab active" onclick="switchTab('posts', this)">Your Posts</button>
+    <button class="profile-tab" onclick="switchTab('saved', this)">Saved</button>
+  </div>
+
+  <div class="tab-content active" id="tab-posts">
+    <div class="flyer-grid" id="postsGrid"></div>
+    <div class="empty-state" id="emptyPosts" style="display:none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 8v8M8 12h8"/></svg>
+      <p class="empty-title">No posts yet</p>
+      <p>Share your first event flyer with the community.</p>
+      <button class="empty-action" onclick="closeProfile(); openAdd();">Post Your First Flyer</button>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-saved">
+    <div class="flyer-grid" id="savedGrid"></div>
+    <div class="empty-state" id="emptySaved" style="display:none;">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><polygon points="12,3 14.5,8.5 20.5,9 16,13.5 17.5,20 12,16.5 6.5,20 8,13.5 3.5,9 9.5,8.5"/></svg>
+      <p class="empty-title">Nothing saved yet</p>
+      <p>Tap the star on any event to save it for later.</p>
+      <button class="empty-action" onclick="closeProfile();">Browse Events</button>
+    </div>
+  </div>
+</div>
+
+<!-- Community Sheet -->
+<div class="community-sheet-bg" id="communitySheetBg" onclick="closeCommunitySheet(event)">
+  <div class="community-sheet" onclick="event.stopPropagation()">
+    <div class="sheet-handle"></div>
+    <div class="community-sheet-header">
+      <h3>Your Community</h3>
+      <button class="community-sheet-close" onclick="closeCommunitySheet()">&times;</button>
+    </div>
+    <div class="community-list" id="communityList"></div>
+  </div>
+</div>
+
+<!-- Auth Flow (fullscreen) -->
+<div class="auth-overlay" id="authOverlay">
+  <div class="auth-card">
+    <h1 class="auth-wordmark">The Pages</h1>
+    <p class="auth-subtitle">discover what's happening around you</p>
+
+    <!-- Step 1: Phone Number -->
+    <div class="auth-step active" id="authStep1">
+      <p class="auth-label">Your phone number</p>
+      <div class="auth-phone-row">
+        <input class="auth-country" value="+1" readonly>
+        <input class="auth-phone" id="authPhone" type="tel" placeholder="(555) 123-4567" inputmode="numeric" autocomplete="tel">
+      </div>
+      <button class="auth-btn" id="authSendBtn" onclick="authSendOTP()" disabled>Send Code</button>
+      <button class="auth-skip" onclick="authSkip()">just browsing — skip for now</button>
+      <p class="auth-legal">By continuing, you agree to our <a href="#">Terms</a> & <a href="#">Privacy Policy</a>. We'll send you a verification code via SMS.</p>
+    </div>
+
+    <!-- Step 2: OTP Verification -->
+    <div class="auth-step" id="authStep2">
+      <p class="auth-label">Enter the 6-digit code</p>
+      <div class="auth-otp-row" id="otpRow">
+        <input class="auth-otp-digit" type="text" maxlength="1" inputmode="numeric" autocomplete="one-time-code">
+        <input class="auth-otp-digit" type="text" maxlength="1" inputmode="numeric">
+        <input class="auth-otp-digit" type="text" maxlength="1" inputmode="numeric">
+        <input class="auth-otp-digit" type="text" maxlength="1" inputmode="numeric">
+        <input class="auth-otp-digit" type="text" maxlength="1" inputmode="numeric">
+        <input class="auth-otp-digit" type="text" maxlength="1" inputmode="numeric">
+      </div>
+      <p id="authPhoneDisplay" style="font-family:'Space Mono',monospace;font-size:12px;color:rgba(255,255,255,0.3);margin-bottom:8px;"></p>
+      <button class="auth-resend" onclick="authResendOTP()">Didn't get it? Resend code</button>
+      <button class="auth-btn" id="authVerifyBtn" onclick="authVerifyOTP()" disabled>Verify</button>
+    </div>
+
+    <!-- Step 3: Preferences -->
+    <div class="auth-step" id="authStep3">
+      <p class="pref-title">What are you into?</p>
+      <p class="pref-desc">Pick what you want to see in your feed</p>
+
+      <div class="pref-section">
+        <p class="pref-section-label">Event Types</p>
+        <div class="pref-chips" id="prefEventChips">
+          <button class="pref-chip" onclick="togglePrefChip(this)">Party</button>
+          <button class="pref-chip" onclick="togglePrefChip(this)">Music</button>
+          <button class="pref-chip" onclick="togglePrefChip(this)">Community</button>
+          <button class="pref-chip" onclick="togglePrefChip(this)">Arts</button>
+          <button class="pref-chip" onclick="togglePrefChip(this)">Wellness</button>
+          <button class="pref-chip" onclick="togglePrefChip(this)">Food</button>
+          <button class="pref-chip" onclick="togglePrefChip(this)">Free</button>
+          <button class="pref-chip" onclick="togglePrefChip(this)">Theatre</button>
+          <button class="pref-chip" onclick="togglePrefChip(this)">Fitness</button>
+          <button class="pref-chip" onclick="togglePrefChip(this)">Nightlife</button>
+        </div>
+      </div>
+
+      <div class="pref-section">
+        <p class="pref-section-label">Your City</p>
+        <div class="pref-location-row">
+          <input class="pref-location-input" id="prefLocation" type="text" placeholder="San Francisco, CA">
+          <button class="pref-locate-btn" onclick="findMyLocation()" title="Use current location">
+            <svg viewBox="0 0 24 24" fill="none" stroke="#1a1a1a" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/><circle cx="12" cy="12" r="8"/></svg>
+          </button>
+        </div>
+        <p class="pref-location-hint">We'll show events near you</p>
+      </div>
+
+      <button class="auth-btn" onclick="authFinish()" style="margin-top:20px;">Let's Go</button>
+      <button class="auth-skip" onclick="authFinish()">skip — i'll set this up later</button>
+    </div>
+  </div>
+</div>
+
+<!-- Auth Prompt (bottom sheet for gated actions) -->
+<div class="auth-prompt-overlay" id="authPromptOverlay" onclick="closeAuthPrompt(event)">
+  <div class="auth-prompt-sheet" onclick="event.stopPropagation()">
+    <div class="sheet-handle"></div>
+    <h3>Join The Pages</h3>
+    <p id="authPromptMsg">Sign up with your phone number to save events, post flyers, and build your community.</p>
+    <button class="auth-btn" onclick="closeAuthPrompt(); openAuth();">Sign Up with Phone</button>
+    <button class="auth-prompt-dismiss" onclick="closeAuthPrompt()">not now</button>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Report Sheet -->
+<div class="sheet-bg" id="reportSheet" onclick="closeReport(event)">
+  <div class="sheet">
+    <div class="sheet-handle"></div>
+    <h3>Report This Event</h3>
+    <button class="sheet-option" onclick="submitReport('misleading')">Misleading or incorrect info</button>
+    <button class="sheet-option" onclick="submitReport('inappropriate')">Inappropriate content</button>
+    <button class="sheet-option" onclick="submitReport('spam')">Spam or duplicate</button>
+    <button class="sheet-option" onclick="submitReport('harmful')">Harmful or dangerous</button>
+    <button class="sheet-option" onclick="closeReport()">Cancel</button>
+  </div>
+</div>
+
+<script>
+// ─── Event Data ───
+const events = [
+  {
+    image: 'flyers/cropped/IMG_9826_cropped.jpg',
+    bgColor: '#4fa8e0',
+    category: 'PARTY',
+    title: 'QUEEN OUT RETURNS',
+    subtitle: 'Dirty Pop \u00b7 Hyper',
+    date: 'MARCH 19 \u00b7 DOORS 10PM',
+    dateSort: '2026-03-19T22:00',
+    location: 'The Cafe, SF',
+    tags: ['#queernightlife', '#dirtypop', '#sf'],
+    link: 'Get Tickets'
+  },
+  {
+    image: 'flyers/cropped/IMG_9827_cropped.jpg',
+    bgColor: '#c8d4e0',
+    category: 'MUSIC',
+    title: 'LOWER GRAND RADIO',
+    subtitle: 'An Evening at Lloyd\u2019s Records',
+    date: 'SUNDAY MARCH 29 \u00b7 5PM\u20139ISH',
+    dateSort: '2026-03-29T17:00',
+    location: '3824 Telegraph Ave, Oakland',
+    tags: ['#vinyl', '#allages', '#oakland', '#punk'],
+    link: 'Learn More'
+  },
+  {
+    image: 'flyers/cropped/IMG_9829_cropped.jpg',
+    bgColor: '#f0eae6',
+    category: 'FREE \u00b7 FITNESS',
+    title: 'QUEER FIGHT SCHOOL',
+    subtitle: 'Trans & Queer Beginner Class + Open Mat',
+    date: 'SUNDAY MARCH 22 \u00b7 10AM',
+    dateSort: '2026-03-22T10:00',
+    location: 'Sjo Jitsu Lounge, 15-19 Decatur St, Ridgewood NY',
+    tags: ['#free', '#queer', '#bjj', '#opentoall'],
+    link: 'Free \u2014 Just Show Up'
+  },
+  {
+    image: 'flyers/cropped/IMG_9830_cropped.jpg',
+    bgColor: '#2d5a28',
+    category: 'COMMUNITY',
+    title: 'MAHJONG MARKET',
+    subtitle: 'East St Never Loses \u00d7 Open Market',
+    date: 'SUNDAY MARCH 29 \u00b7 11AM\u20133PM',
+    dateSort: '2026-03-29T11:00',
+    location: '3339 Wilshire Blvd, Los Angeles',
+    tags: ['#mahjong', '#lessons', '#openplay', '#la'],
+    link: 'Get Tickets \u2014 $10'
+  },
+  {
+    image: 'flyers/cropped/IMG_9832_cropped.jpg',
+    bgColor: '#1a1008',
+    category: 'THEATRE',
+    title: 'COMPTON\u2019S CAFETERIA RIOT',
+    subtitle: 'Immersive Theatrical Experience \u00b7 With Breakfast',
+    date: 'APRIL 5 \u00b7 8PM',
+    dateSort: '2026-04-05T20:00',
+    location: 'Tenderloin Museum, SF',
+    tags: ['#immersive', '#theatre', '#history', '#sf'],
+    link: 'Learn More'
+  }
+];
+
+// Sort chronologically — soonest upcoming first, past events at the bottom
+const now = new Date();
+const fiveYearsAgo = new Date(now);
+fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
+
+// Remove events older than 5 years
+for (let i = events.length - 1; i >= 0; i--) {
+  if (new Date(events[i].dateSort) < fiveYearsAgo) events.splice(i, 1);
+}
+
+events.sort((a, b) => {
+  const da = new Date(a.dateSort), db = new Date(b.dateSort);
+  const aFuture = da >= now, bFuture = db >= now;
+  if (aFuture && !bFuture) return -1;
+  if (!aFuture && bFuture) return 1;
+  return da - db;
+});
+
+// ─── Build Feed ───
+const feed = document.getElementById('feed');
+
+events.forEach((ev, i) => {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.dataset.index = i;
+
+  card.innerHTML = `
+    <div class="card-blur" style="background-image: url('${ev.image}'); background-color: ${ev.bgColor};"></div>
+    <div class="card-bg" style="background-image: url('${ev.image}');"></div>
+    <div class="card-overlay"></div>
+
+    <!-- Action Rail -->
+    <div class="action-rail">
+      <button class="action-btn save-btn" onclick="event.stopPropagation(); toggleSave(this)" title="Save">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><polygon points="12,3 14.5,8.5 20.5,9 16,13.5 17.5,20 12,16.5 6.5,20 8,13.5 3.5,9 9.5,8.5"/></svg>
+      </button>
+
+      <button class="action-btn" onclick="event.stopPropagation(); shareEvent(${i})" title="Share">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><line x1="12" y1="3" x2="12" y2="16"/><polyline points="7,8 12,3 17,8"/><path d="M5 13v6h14v-6"/></svg>
+      </button>
+
+      <button class="action-btn" onclick="event.stopPropagation(); openReport()" title="More">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><circle cx="12" cy="6" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="18" r="1.5"/></svg>
+      </button>
+    </div>
+
+    <!-- Info Panel -->
+    <div class="card-info">
+      <div class="info-category">${ev.category}</div>
+      <h2 class="info-title">${ev.title}</h2>
+      <p class="info-subtitle">${ev.subtitle}</p>
+
+      <div class="info-row info-row-tappable" onclick="event.stopPropagation(); addToCalendar('${ev.title.replace(/'/g,"\\'")}', '${ev.dateSort}', '${ev.location.replace(/'/g,"\\'")}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><rect x="3" y="5" width="18" height="17"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>
+        <span>${ev.date}</span>
+      </div>
+      <div class="info-row info-row-tappable" onclick="event.stopPropagation(); openInMaps('${ev.location.replace(/'/g,"\\'")}')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.25"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>
+        <span>${ev.location}</span>
+      </div>
+
+      <div class="info-tags">
+        ${ev.tags.map(t => `<span class="info-tag" onclick="event.stopPropagation(); filterByTag('${t}')">${t}</span>`).join('')}
+      </div>
+
+      <button class="info-btn" onclick="event.stopPropagation(); showToast('Opening link\u2026')">${ev.link}</button>
+    </div>
+  `;
+
+  card.addEventListener('click', () => {
+    card.classList.toggle('active');
+    const hint = document.getElementById('swipeHint');
+    if (hint) hint.style.display = 'none';
+    // Hide/show search when detail view is open
+    const anyActive = document.querySelector('.card.active');
+    document.querySelector('.top-bar').classList.toggle('detail-active', !!anyActive);
+  });
+
+  feed.appendChild(card);
+});
+
+// ─── "You've reached the end" card ───
+const endCard = document.createElement('div');
+endCard.className = 'feed-end-card';
+endCard.innerHTML = `
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><circle cx="9" cy="9.5" r="1"/><circle cx="15" cy="9.5" r="1"/></svg>
+  <div class="end-title">You're all caught up</div>
+  <div class="end-subtitle">You've seen all the events in your area. Check back later for more.</div>
+  <button class="end-action" onclick="feed.scrollTop = 0;">Back to Top</button>
+`;
+feed.appendChild(endCard);
+
+// ─── Search ───
+function openSearch() {
+  document.getElementById('searchOverlay').classList.add('open');
+  // Default: select "Happening Now"
+  const hapNow = document.getElementById('happeningNowChip');
+  if (hapNow && !hapNow.classList.contains('selected')) hapNow.classList.add('selected');
+  // Clear previous results
+  document.getElementById('searchResults').innerHTML = '';
+  setTimeout(() => document.querySelector('.search-bar').focus(), 300);
+}
+function closeSearch(e) {
+  if (!e || e.target === e.currentTarget) {
+    document.getElementById('searchOverlay').classList.remove('open');
+  }
+}
+function toggleChip(el) {
+  el.classList.toggle('selected');
+}
+function toggleDatePicker() {
+  const picker = document.getElementById('datePicker');
+  const chip = document.getElementById('pickDateChip');
+  if (picker.style.display === 'none') {
+    picker.style.display = 'block';
+    picker.focus();
+    chip.classList.add('selected');
+  } else {
+    picker.style.display = 'none';
+    picker.value = '';
+    chip.classList.remove('selected');
+  }
+}
+function onDatePicked(input) {
+  if (input.value) {
+    const chip = document.getElementById('pickDateChip');
+    const d = new Date(input.value + 'T00:00');
+    chip.textContent = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    chip.classList.add('selected');
+    document.querySelectorAll('#whenChips .filter-chip').forEach(c => {
+      if (c !== chip) c.classList.remove('selected');
+    });
+  }
+}
+
+// ─── Real Search / Filter Logic ───
+function runSearch() {
+  const query = document.querySelector('.search-bar').value.trim().toLowerCase();
+
+  // Gather selected category chips
+  const catSection = document.querySelectorAll('.filter-section')[0];
+  const selectedCats = [...catSection.querySelectorAll('.filter-chip.selected')].map(c => c.textContent.toLowerCase());
+
+  // Gather selected when chips
+  const whenSection = document.getElementById('whenChips');
+  const selectedWhen = [...whenSection.querySelectorAll('.filter-chip.selected')].map(c => c.id || c.textContent.toLowerCase());
+
+  // Gather selected location chips
+  const locSection = document.querySelectorAll('.filter-section')[2];
+  const selectedLocs = [...locSection.querySelectorAll('.filter-chip.selected')].map(c => c.textContent.toLowerCase());
+
+  // Date picker value
+  const pickedDate = document.getElementById('datePicker').value;
+
+  const searchNow = new Date();
+
+  // Filter events
+  let results = events.filter(ev => {
+    // 5-year cap — exclude events older than 5 years
+    if (new Date(ev.dateSort) < fiveYearsAgo) return false;
+
+    // Text search — match title, subtitle, location, tags, category
+    if (query) {
+      const haystack = [ev.title, ev.subtitle, ev.location, ev.category, ...ev.tags].join(' ').toLowerCase();
+      if (!haystack.includes(query)) return false;
+    }
+
+    // Category filter
+    if (selectedCats.length > 0) {
+      const evCat = ev.category.toLowerCase().replace(/[^a-z]/g, ' ').trim();
+      if (!selectedCats.some(c => evCat.includes(c))) return false;
+    }
+
+    // When filter
+    if (selectedWhen.length > 0) {
+      const evDate = new Date(ev.dateSort);
+      let whenMatch = false;
+
+      selectedWhen.forEach(w => {
+        if (w === 'happeningNowChip') {
+          // Happening now = event is today and hasn't ended (within 6 hours)
+          const diffHours = (evDate - searchNow) / (1000 * 60 * 60);
+          if (diffHours >= -6 && diffHours <= 24) whenMatch = true;
+        } else if (w === 'today') {
+          if (evDate.toDateString() === searchNow.toDateString()) whenMatch = true;
+        } else if (w === 'this week') {
+          const weekEnd = new Date(searchNow);
+          weekEnd.setDate(weekEnd.getDate() + (7 - weekEnd.getDay()));
+          if (evDate >= searchNow && evDate <= weekEnd) whenMatch = true;
+        } else if (w === 'this weekend') {
+          const sat = new Date(searchNow);
+          sat.setDate(sat.getDate() + (6 - sat.getDay()));
+          sat.setHours(0, 0, 0, 0);
+          const sun = new Date(sat);
+          sun.setDate(sun.getDate() + 1);
+          sun.setHours(23, 59, 59);
+          if (evDate >= sat && evDate <= sun) whenMatch = true;
+        } else if (w === 'this month') {
+          if (evDate.getMonth() === searchNow.getMonth() && evDate.getFullYear() === searchNow.getFullYear()) whenMatch = true;
+        } else if (w === 'pickDateChip' && pickedDate) {
+          // Specific date picked
+          const picked = new Date(pickedDate + 'T00:00');
+          if (evDate.toDateString() === picked.toDateString()) whenMatch = true;
+        }
+      });
+
+      if (!whenMatch) return false;
+    }
+
+    // Location filter
+    if (selectedLocs.length > 0) {
+      const evLoc = ev.location.toLowerCase();
+      const locMap = {
+        'sf': ['sf', 'san francisco'],
+        'oakland': ['oakland'],
+        'la': ['la', 'los angeles'],
+        'nyc': ['nyc', 'new york', 'ridgewood', 'brooklyn', 'queens'],
+        'near me': [] // Would use geolocation in real app
+      };
+      let locMatch = false;
+      selectedLocs.forEach(loc => {
+        const terms = locMap[loc] || [loc];
+        if (terms.some(t => evLoc.includes(t))) locMatch = true;
+        if (loc === 'near me') locMatch = true; // Fake: show all for "Near Me"
+      });
+      if (!locMatch) return false;
+    }
+
+    return true;
+  });
+
+  // Render results
+  const container = document.getElementById('searchResults');
+  if (results.length === 0) {
+    container.innerHTML = `<div class="search-no-results">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/><path d="M8 11h6"/></svg>
+      <div class="no-results-title">No events found</div>
+      <p>Try adjusting your filters or searching for something else.</p>
+    </div>`;
+    return;
+  }
+
+  container.innerHTML = `
+    <p class="search-results-label">${results.length} event${results.length !== 1 ? 's' : ''} found</p>
+    <div class="search-results-grid">
+      ${results.map(ev => `
+        <div class="search-result-card" style="background-image: url('${ev.image}'); background-color: ${ev.bgColor};"
+             onclick="closeSearch(); scrollToCard('${ev.title}')">
+          <div class="search-result-info">
+            <div class="search-result-category">${ev.category}</div>
+            <div class="search-result-title">${ev.title}</div>
+            <div class="search-result-date">${ev.date}</div>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  // Scroll results into view
+  container.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// Scroll feed to a specific card by title
+function scrollToCard(title) {
+  const cards = document.querySelectorAll('.card');
+  const idx = events.findIndex(e => e.title === title);
+  if (idx >= 0 && cards[idx]) {
+    cards[idx].scrollIntoView({ behavior: 'smooth' });
+    setTimeout(() => cards[idx].classList.add('active'), 400);
+  }
+}
+
+// Also search on Enter key in search bar
+document.querySelector('.search-bar')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') runSearch();
+});
+
+// ─── Calendar & Maps ───
+function addToCalendar(title, dateSort, location) {
+  const start = new Date(dateSort);
+  const end = new Date(start.getTime() + 2 * 60 * 60 * 1000); // 2 hour event
+  const fmt = d => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+  // Google Calendar URL
+  const gcalUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${fmt(start)}/${fmt(end)}&location=${encodeURIComponent(location)}&details=${encodeURIComponent('Found on The Pages')}`;
+  window.open(gcalUrl, '_blank');
+}
+
+function openInMaps(location) {
+  // Apple Maps on iOS, Google Maps elsewhere
+  const encoded = encodeURIComponent(location);
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const url = isIOS
+    ? `maps://maps.apple.com/?q=${encoded}`
+    : `https://maps.google.com/?q=${encoded}`;
+  window.open(url, '_blank');
+}
+
+// ─── Tag Filter on Feed ───
+function filterByTag(tag) {
+  const cards = document.querySelectorAll('.card');
+  let visibleCount = 0;
+  cards.forEach((card, i) => {
+    const ev = events[i];
+    if (ev && ev.tags.some(t => t.toLowerCase() === tag.toLowerCase())) {
+      card.style.display = '';
+      visibleCount++;
+    } else {
+      card.style.display = 'none';
+    }
+  });
+
+  // Hide end card when filtering
+  const endCard = document.querySelector('.feed-end-card');
+  if (endCard) endCard.style.display = 'none';
+
+  // Show filter bar
+  const bar = document.getElementById('tagFilterBar');
+  bar.style.display = 'flex';
+  document.getElementById('tagFilterLabel').textContent = tag + ' (' + visibleCount + ')';
+
+  // Collapse any active card and scroll to top
+  document.querySelectorAll('.card.active').forEach(c => c.classList.remove('active'));
+  document.getElementById('feed').scrollTop = 0;
+
+  if (visibleCount === 0) {
+    showToast('No events with ' + tag);
+  }
+}
+
+function resetTagFilter() {
+  document.querySelectorAll('.card').forEach(c => c.style.display = '');
+  // Show end card again
+  const endCard = document.querySelector('.feed-end-card');
+  if (endCard) endCard.style.display = '';
+  document.getElementById('tagFilterBar').style.display = 'none';
+}
+
+// ─── Add Event ───
+function openAdd() {
+  if (!requireAuth('post events', 'Sign up to share event flyers with the community.')) return;
+  document.getElementById('addOverlay').classList.add('open');
+}
+function closeAdd(e) {
+  if (!e || e.target === e.currentTarget) {
+    document.getElementById('addOverlay').classList.remove('open');
+    // Reset upload zone and form
+    const zone = document.querySelector('.upload-zone');
+    zone.classList.remove('scanning', 'scanned');
+    zone.style.backgroundImage = '';
+    zone.querySelector('svg').style.display = '';
+    zone.querySelector('span').textContent = 'Upload your flyer';
+    document.getElementById('addTagsContainer').innerHTML = '';
+    document.querySelectorAll('.add-form .add-input, .add-form .add-select').forEach(f => { f.value = ''; });
+  }
+}
+
+// ─── Tag Input ───
+const addedTags = [];
+function handleTagInput(e) {
+  if (e.key !== 'Enter' && e.key !== ',') return;
+  e.preventDefault();
+  const input = document.getElementById('addTagInput');
+  let tag = input.value.trim().replace(/,$/,'');
+  if (!tag) return;
+  if (!tag.startsWith('#')) tag = '#' + tag;
+  tag = tag.toLowerCase().replace(/\s+/g, '');
+  if (addedTags.includes(tag) || addedTags.length >= 5) {
+    if (addedTags.length >= 5) showToast('Max 5 tags');
+    input.value = '';
+    return;
+  }
+  addedTags.push(tag);
+  renderTags();
+  input.value = '';
+}
+function removeTag(idx) {
+  addedTags.splice(idx, 1);
+  renderTags();
+}
+function renderTags() {
+  const container = document.getElementById('addTagsContainer');
+  container.innerHTML = addedTags.map((t, i) =>
+    `<span class="add-tag-chip">${t}<span class="add-tag-remove" onclick="removeTag(${i})">&times;</span></span>`
+  ).join('');
+}
+
+// ─── AI Scan Simulation ───
+function simulateScan() {
+  const zone = document.querySelector('.upload-zone');
+  // Show scanning state
+  zone.classList.add('scanning');
+  zone.querySelector('svg').style.display = 'none';
+  zone.innerHTML = `<div class="scan-spinner"></div><span>Scanning flyer...</span>`;
+
+  setTimeout(() => {
+    // Show scanned state with mock auto-fill
+    zone.classList.remove('scanning');
+    zone.classList.add('scanned');
+    zone.style.backgroundImage = "url('flyers/cropped/IMG_9826_cropped.jpg')";
+    zone.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span>Tap to change</span>`;
+
+    // Auto-fill form fields
+    const inputs = document.querySelectorAll('.add-form .add-input');
+    inputs[0].value = 'QUEEN OUT RETURNS';
+    inputs[1].value = 'MARCH 19 · DOORS 10PM';
+    inputs[2].value = 'The Cafe, SF';
+    inputs[3].value = 'https://partiful.com/e/queen-out';
+
+    // Auto-select category
+    const select = document.querySelector('.add-select');
+    select.value = 'Party';
+
+    // Auto-add tags
+    addedTags.length = 0;
+    ['#queernightlife', '#dirtypop', '#sf'].forEach(t => addedTags.push(t));
+    renderTags();
+
+    showToast('AI filled in the details!');
+  }, 2000);
+}
+
+// Override upload zone click
+document.querySelector('.upload-zone').onclick = function(e) {
+  e.stopPropagation();
+  if (this.classList.contains('scanned')) {
+    // Reset and re-scan
+    this.classList.remove('scanned');
+    this.style.backgroundImage = '';
+    simulateScan();
+  } else {
+    simulateScan();
+  }
+};
+
+// ─── Save / Share / Report ───
+function toggleSave(btn) {
+  if (!requireAuth('save events')) return;
+  btn.classList.toggle('saved');
+  const isSaved = btn.classList.contains('saved');
+  showToast(isSaved ? 'Saved!' : 'Removed from saved');
+}
+
+function shareEvent(i) {
+  if (navigator.share) {
+    navigator.share({ title: events[i].title, text: `${events[i].title} — ${events[i].date}` });
+  } else {
+    showToast('Link copied!');
+  }
+}
+
+function openReport() {
+  document.getElementById('reportSheet').classList.add('open');
+}
+function closeReport(e) {
+  if (!e || e.target === e.currentTarget) {
+    document.getElementById('reportSheet').classList.remove('open');
+  }
+}
+function submitReport(reason) {
+  closeReport();
+  showToast('Report submitted. Thank you.');
+}
+
+// ─── Toast ───
+function showToast(msg, type) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.remove('toast-error', 'toast-success');
+  if (type === 'error') t.classList.add('toast-error');
+  if (type === 'success') t.classList.add('toast-success');
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.classList.remove('show', 'toast-error', 'toast-success'); }, 2200);
+}
+
+// ─── Auth State ───
+let isLoggedIn = false; // web starts logged out (browse-only)
+const authOverlay = document.getElementById('authOverlay');
+
+function openAuth() {
+  authOverlay.classList.add('open');
+  goToAuthStep(1);
+  setTimeout(() => document.getElementById('authPhone').focus(), 400);
+}
+
+function closeAuth() {
+  authOverlay.classList.remove('open');
+}
+
+function authSkip() {
+  closeAuth();
+  showToast('Browsing as guest');
+}
+
+function goToAuthStep(step) {
+  document.querySelectorAll('.auth-step').forEach(s => s.classList.remove('active'));
+  document.getElementById('authStep' + step).classList.add('active');
+}
+
+// Phone input formatting
+const phoneInput = document.getElementById('authPhone');
+const sendBtn = document.getElementById('authSendBtn');
+
+phoneInput.addEventListener('input', () => {
+  let digits = phoneInput.value.replace(/\D/g, '');
+  if (digits.length > 10) digits = digits.slice(0, 10);
+
+  // Format as (XXX) XXX-XXXX
+  let formatted = '';
+  if (digits.length > 0) formatted += '(' + digits.slice(0, 3);
+  if (digits.length >= 3) formatted += ') ';
+  if (digits.length > 3) formatted += digits.slice(3, 6);
+  if (digits.length >= 6) formatted += '-' + digits.slice(6);
+  phoneInput.value = formatted;
+
+  sendBtn.disabled = digits.length < 10;
+
+  // Validation styling: green if valid, red if invalid, ink on focus
+  phoneInput.classList.remove('valid', 'invalid');
+  if (digits.length === 10) {
+    phoneInput.classList.add('valid');
+  } else if (digits.length > 0) {
+    phoneInput.classList.add('invalid');
+  }
+});
+
+function authSendOTP() {
+  const phone = phoneInput.value;
+  document.getElementById('authPhoneDisplay').textContent = 'Sent to +1 ' + phone;
+  goToAuthStep(2);
+  // Focus first OTP digit
+  setTimeout(() => document.querySelector('.auth-otp-digit').focus(), 300);
+}
+
+function authResendOTP() {
+  showToast('Code resent!');
+}
+
+// OTP digit inputs — auto-advance and backspace
+const otpDigits = document.querySelectorAll('.auth-otp-digit');
+const verifyBtn = document.getElementById('authVerifyBtn');
+
+otpDigits.forEach((input, i) => {
+  input.addEventListener('input', (e) => {
+    const val = e.target.value.replace(/\D/g, '');
+    e.target.value = val.slice(0, 1);
+    if (val && i < otpDigits.length - 1) {
+      otpDigits[i + 1].focus();
+    }
+    e.target.classList.toggle('filled', !!val);
+    checkOTPComplete();
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Backspace' && !input.value && i > 0) {
+      otpDigits[i - 1].focus();
+      otpDigits[i - 1].value = '';
+      otpDigits[i - 1].classList.remove('filled');
+      checkOTPComplete();
+    }
+  });
+
+  // Handle paste
+  input.addEventListener('paste', (e) => {
+    e.preventDefault();
+    const pasted = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6);
+    pasted.split('').forEach((digit, j) => {
+      if (otpDigits[j]) {
+        otpDigits[j].value = digit;
+        otpDigits[j].classList.add('filled');
+      }
+    });
+    if (pasted.length > 0) otpDigits[Math.min(pasted.length, 5)].focus();
+    checkOTPComplete();
+  });
+});
+
+function checkOTPComplete() {
+  const code = Array.from(otpDigits).map(d => d.value).join('');
+  verifyBtn.disabled = code.length < 6;
+}
+
+function authVerifyOTP() {
+  // Simulate verification (any 6 digits work in prototype)
+  const code = Array.from(otpDigits).map(d => d.value).join('');
+  if (code.length === 6) {
+    goToAuthStep(3);
+  }
+}
+
+// Preferences
+function togglePrefChip(el) {
+  el.classList.toggle('selected');
+}
+
+function findMyLocation() {
+  const locInput = document.getElementById('prefLocation');
+  const locBtn = document.querySelector('.pref-locate-btn');
+  locBtn.style.opacity = '0.5';
+  locInput.value = 'Finding...';
+
+  if (!navigator.geolocation) {
+    locInput.value = '';
+    locInput.placeholder = 'Location not supported';
+    locBtn.style.opacity = '1';
+    return;
+  }
+
+  navigator.geolocation.getCurrentPosition(
+    async (pos) => {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?lat=${pos.coords.latitude}&lon=${pos.coords.longitude}&format=json`);
+        const data = await res.json();
+        const city = data.address.city || data.address.town || data.address.village || '';
+        const state = data.address.state || '';
+        locInput.value = city + (state ? ', ' + state : '');
+      } catch {
+        locInput.value = '';
+        locInput.placeholder = 'Could not find city';
+      }
+      locBtn.style.opacity = '1';
+    },
+    () => {
+      locInput.value = '';
+      locInput.placeholder = 'Location denied';
+      locBtn.style.opacity = '1';
+    }
+  );
+}
+
+function authFinish() {
+  isLoggedIn = true;
+  closeAuth();
+  showToast('Welcome to The Pages!');
+  // Update profile with phone-based info
+  document.querySelector('.profile-handle').textContent = '@' + phoneInput.value.replace(/\D/g, '').slice(-4) + '_user';
+}
+
+// Auth prompt for gated actions
+function requireAuth(action, msg) {
+  if (isLoggedIn) return true;
+  document.getElementById('authPromptMsg').textContent = msg || 'Sign up with your phone number to ' + action + '.';
+  document.getElementById('authPromptOverlay').classList.add('open');
+  return false;
+}
+
+function closeAuthPrompt(e) {
+  if (!e || e.target === e.currentTarget) {
+    document.getElementById('authPromptOverlay').classList.remove('open');
+  }
+}
+
+// ─── Profile ───
+const profileEl = document.getElementById('profileOverlay');
+let profileOpen = false;
+
+function openProfile() {
+  if (!requireAuth('view your profile', 'Sign up to build your profile, save events, and connect with your community.')) return;
+  profileEl.classList.add('open');
+  profileOpen = true;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('profileNav').classList.add('active');
+}
+function closeProfile() {
+  profileEl.classList.remove('open');
+  profileEl.style.transform = '';
+  profileOpen = false;
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.querySelector('.nav-item').classList.add('active');
+}
+
+function switchTab(tab, btn) {
+  document.querySelectorAll('.profile-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+}
+
+// ─── Community Sheet ───
+function openCommunitySheet() {
+  document.getElementById('communitySheetBg').classList.add('open');
+}
+function closeCommunitySheet(e) {
+  if (!e || e.target === e.currentTarget) {
+    document.getElementById('communitySheetBg').classList.remove('open');
+  }
+}
+
+// ─── Swipe Gestures (profile ↔ feed) ───
+(function setupSwipeGestures() {
+  let startX = 0, startY = 0, currentX = 0, swiping = false, direction = null;
+  const THRESHOLD = 60;
+  const EDGE_ZONE = 40; // px from right edge to trigger swipe-to-profile
+
+  // Listen on the whole document
+  document.addEventListener('touchstart', (e) => {
+    // Don't interfere with community sheet or other overlays
+    if (document.querySelector('.community-sheet-bg.open') ||
+        document.querySelector('.search-overlay.open') ||
+        document.querySelector('.add-overlay.open') ||
+        document.querySelector('.sheet-bg.open')) return;
+
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    currentX = startX;
+    swiping = false;
+    direction = null;
+  }, { passive: true });
+
+  document.addEventListener('touchmove', (e) => {
+    if (direction === 'vertical') return;
+
+    const dx = e.touches[0].clientX - startX;
+    const dy = e.touches[0].clientY - startY;
+
+    // Determine direction on first significant move
+    if (!direction && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
+      direction = Math.abs(dx) > Math.abs(dy) ? 'horizontal' : 'vertical';
+      if (direction === 'vertical') return;
+    }
+    if (direction !== 'horizontal') return;
+
+    currentX = e.touches[0].clientX;
+
+    if (profileOpen) {
+      // Swiping right to dismiss profile
+      const offset = Math.max(0, dx);
+      if (offset > 10) {
+        swiping = true;
+        profileEl.classList.add('dragging');
+        profileEl.style.transform = `translateX(${offset}px)`;
+      }
+    } else {
+      // Swiping left from right edge to open profile
+      const fromRight = window.innerWidth - startX;
+      if (fromRight < EDGE_ZONE && dx < -10) {
+        swiping = true;
+        profileEl.classList.add('dragging');
+        const offset = Math.max(0, window.innerWidth + dx);
+        profileEl.style.transform = `translateX(${offset}px)`;
+        // Show it while dragging (needs to be visible)
+        profileEl.style.display = 'block';
+      }
+    }
+  }, { passive: true });
+
+  document.addEventListener('touchend', () => {
+    if (!swiping) { direction = null; return; }
+    profileEl.classList.remove('dragging');
+
+    const dx = currentX - startX;
+
+    if (profileOpen) {
+      // If swiped right far enough, close
+      if (dx > THRESHOLD) {
+        closeProfile();
+      } else {
+        profileEl.style.transform = '';
+      }
+    } else {
+      // If swiped left far enough from edge, open
+      if (dx < -THRESHOLD) {
+        profileEl.style.transform = '';
+        openProfile();
+      } else {
+        profileEl.style.transform = '';
+        profileEl.style.display = '';
+      }
+    }
+
+    swiping = false;
+    direction = null;
+  }, { passive: true });
+})();
+
+// Also handle Browse nav tap
+document.querySelector('.nav-item').addEventListener('click', () => {
+  if (profileOpen) closeProfile();
+});
+
+// Populate "Your Posts" grid (use the first 3 flyers as "posted by you")
+(function buildProfileGrids() {
+  const postsGrid = document.getElementById('postsGrid');
+  const savedGrid = document.getElementById('savedGrid');
+  const communityList = document.getElementById('communityList');
+
+  // Your Posts = first 3 events
+  events.slice(0, 3).forEach(ev => {
+    postsGrid.innerHTML += `
+      <div class="flyer-thumb" style="background-image: url('${ev.image}');" onclick="showToast('${ev.title}')">
+        <div class="flyer-thumb-info">
+          <div class="flyer-thumb-title">${ev.title}</div>
+          <div class="flyer-thumb-date">${ev.date}</div>
+        </div>
+      </div>`;
+  });
+
+  // Saved = last 3 events, sectioned by date — "Happening Now" first
+  const savedEvents = events.slice(2).map(ev => ({...ev})).filter(ev => new Date(ev.dateSort) >= fiveYearsAgo);
+  const savedNow = new Date();
+
+  // Sort: soonest upcoming first
+  savedEvents.sort((a, b) => {
+    const da = new Date(a.dateSort), db = new Date(b.dateSort);
+    const aFuture = da >= savedNow, bFuture = db >= savedNow;
+    if (aFuture && !bFuture) return -1;
+    if (!aFuture && bFuture) return 1;
+    return da - db;
+  });
+
+  // Group by relative date — ordered: Happening Now, Today, This Week, etc.
+  const savedGroupOrder = ['Happening Now', 'Today', 'This Week', 'Next Week'];
+  const savedGroups = {};
+  savedEvents.forEach(ev => {
+    const d = new Date(ev.dateSort);
+    const diffHours = (d - savedNow) / (1000 * 60 * 60);
+    const diffDays = Math.ceil((d - savedNow) / (1000 * 60 * 60 * 24));
+    let label;
+    if (diffHours >= -6 && diffHours <= 6) label = 'Happening Now';
+    else if (diffDays <= 0) label = 'Today';
+    else if (diffDays <= 7) label = 'This Week';
+    else if (diffDays <= 14) label = 'Next Week';
+    else label = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+    if (!savedGroups[label]) savedGroups[label] = [];
+    savedGroups[label].push(ev);
+    if (!savedGroupOrder.includes(label)) savedGroupOrder.push(label);
+  });
+
+  savedGroupOrder.forEach(label => {
+    const evts = savedGroups[label];
+    if (!evts || evts.length === 0) return;
+    savedGrid.innerHTML += `<div class="saved-section-header">${label}</div>`;
+    evts.forEach(ev => {
+      savedGrid.innerHTML += `
+        <div class="flyer-thumb" style="background-image: url('${ev.image}');" onclick="showToast('${ev.title}')">
+          <div class="flyer-thumb-info">
+            <div class="flyer-thumb-title">${ev.title}</div>
+            <div class="flyer-thumb-date">${ev.date}</div>
+          </div>
+        </div>`;
+    });
+  });
+
+  // Community (sample followers/friends)
+  const people = [
+    { initials: 'MR', name: 'Marco Rivera', handle: '@marco_r', color: '#6366f1', badge: 'Mutual' },
+    { initials: 'KT', name: 'Kai Tanaka', handle: '@kai.t', color: '#14b8a6', badge: 'Follows you' },
+    { initials: 'JL', name: 'Jasmine Lee', handle: '@jas_lee', color: '#f59e0b', badge: 'Mutual' },
+    { initials: 'AP', name: 'Alex Park', handle: '@a.park', color: '#ec4899', badge: 'Following' },
+    { initials: 'SR', name: 'Sam Rodriguez', handle: '@samrod', color: '#8b5cf6', badge: 'Mutual' },
+    { initials: 'DW', name: 'Dana Williams', handle: '@danaw', color: '#06b6d4', badge: 'Follows you' },
+    { initials: 'RG', name: 'River Green', handle: '@river.g', color: '#10b981', badge: 'Following' },
+  ];
+
+  people.forEach(p => {
+    communityList.innerHTML += `
+      <div class="community-person">
+        <div class="community-avatar" style="background: ${p.color}">${p.initials}</div>
+        <div class="community-info">
+          <div class="community-name">${p.name}</div>
+          <div class="community-handle">${p.handle}</div>
+        </div>
+        <span class="community-badge">${p.badge}</span>
+      </div>`;
+  });
+})();
+
+// Dismiss overlays when scrolling + hide/show top bar
+let lastScrollY = 0;
+const topBar = document.querySelector('.top-bar');
+
+feed.addEventListener('scroll', () => {
+  document.querySelectorAll('.card.active').forEach(c => c.classList.remove('active'));
+
+  const currentY = feed.scrollTop;
+  if (currentY > lastScrollY && currentY > 50) {
+    // Scrolling up (content moving up = swiping up) — hide top bar
+    topBar.classList.add('hidden');
+  } else {
+    // Scrolling down (pulling back) — show top bar
+    topBar.classList.remove('hidden');
+  }
+  lastScrollY = currentY;
+}, { passive: true });
+</script>
+</body>
+</html>
