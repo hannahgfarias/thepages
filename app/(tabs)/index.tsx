@@ -20,6 +20,7 @@ import * as Haptics from 'expo-haptics';
 import { FlyerCard } from '../../components/FlyerCard';
 import { useFlyers } from '../../hooks/useFlyers';
 import { useOverlay } from './_layout';
+import { useAuth } from '../../hooks/useAuth';
 import { FONTS } from '../../constants/fonts';
 import { COLORS } from '../../constants/colors';
 import type { Post } from '../../types';
@@ -195,9 +196,16 @@ export default function FeedScreen() {
     };
   }, [hintOpacity, hintTranslateY]);
 
+  const { isAuthenticated } = useAuth();
+  const { setShowAuthPrompt } = useOverlay();
+
   const handleSave = useCallback((id: string) => {
+    if (!isAuthenticated) {
+      setShowAuthPrompt(true);
+      return;
+    }
     toggleSave(id);
-  }, [toggleSave]);
+  }, [toggleSave, isAuthenticated, setShowAuthPrompt]);
 
   // Fire directional haptics
   const fireDirectionalHaptic = useCallback(

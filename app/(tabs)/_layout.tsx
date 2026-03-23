@@ -13,6 +13,7 @@ import Svg, { Path, Rect, Circle } from 'react-native-svg';
 import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { FONTS } from '../../constants/fonts';
 import { COLORS } from '../../constants/colors';
+import { useAuth as useAuthContext } from '../../hooks/useAuth';
 
 /* ─── Overlay Components ─── */
 import { SearchOverlay } from '../../components/SearchOverlay';
@@ -157,7 +158,8 @@ function ProfileIcon({ active }: { active: boolean }) {
 
 function CustomTabBar({ state }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const { showProfile, setShowAddEvent, setShowProfile } = useOverlay();
+  const { showProfile, setShowAddEvent, setShowProfile, setShowAuthPrompt } = useOverlay();
+  const { isAuthenticated } = useAuthContext();
   const isProfileActive = showProfile;
   const isBrowseActive = !isProfileActive;
 
@@ -195,7 +197,13 @@ function CustomTabBar({ state }: BottomTabBarProps) {
       <TouchableOpacity
         style={styles.navItemCenter}
         activeOpacity={0.8}
-        onPress={() => setShowAddEvent(true)}
+        onPress={() => {
+          if (!isAuthenticated) {
+            setShowAuthPrompt(true);
+          } else {
+            setShowAddEvent(true);
+          }
+        }}
       >
         <View style={styles.addButton}>
           <Svg width={22} height={22} viewBox="0 0 22 22" fill="none">
@@ -213,7 +221,13 @@ function CustomTabBar({ state }: BottomTabBarProps) {
       <TouchableOpacity
         style={styles.navItem}
         activeOpacity={0.7}
-        onPress={() => setShowProfile(true)}
+        onPress={() => {
+          if (!isAuthenticated) {
+            setShowAuthPrompt(true);
+          } else {
+            setShowProfile(true);
+          }
+        }}
       >
         <ProfileIcon active={isProfileActive} />
         <Text style={[styles.navLabel, { color: isProfileActive ? '#02040F' : 'rgba(2,4,15,0.35)' }]}>Profile</Text>
