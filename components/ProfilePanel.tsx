@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
 import { useFlyers } from '../hooks/useFlyers';
+import { useAuth } from '../hooks/useAuth';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
 import type { Post } from '../types';
@@ -129,6 +130,7 @@ function PinIcon() {
 
 export function ProfilePanel() {
   const { showProfile, setShowProfile, setShowCommunity } = useOverlay();
+  const { profile, isAuthenticated } = useAuth();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
 
@@ -283,36 +285,44 @@ export function ProfilePanel() {
         {/* Profile info */}
         <View style={styles.profileInfo}>
           {/* Avatar */}
-          <View style={styles.avatar}>
-            <Text style={styles.avatarInitials}>HF</Text>
+          <View style={[styles.avatar, profile?.avatar_color ? { backgroundColor: profile.avatar_color } : null]}>
+            <Text style={styles.avatarInitials}>
+              {profile?.avatar_initials || (isAuthenticated ? '?' : '?')}
+            </Text>
           </View>
 
           {/* Name */}
-          <Text style={styles.name}>Hannah</Text>
-
-          {/* Handle */}
-          <Text style={styles.handle}>@hannahfarias</Text>
-
-          {/* Bio */}
-          <Text style={styles.bio}>
-            finding things to do so you don't have to
+          <Text style={styles.name}>
+            {profile?.display_name || (isAuthenticated ? 'New User' : 'Guest')}
           </Text>
 
+          {/* Handle */}
+          <Text style={styles.handle}>
+            {profile?.handle || (isAuthenticated ? '@user' : 'Sign up to get started')}
+          </Text>
+
+          {/* Bio */}
+          {profile?.bio ? (
+            <Text style={styles.bio}>{profile.bio}</Text>
+          ) : null}
+
           {/* Location */}
-          <View style={styles.locationRow}>
-            <PinIcon />
-            <Text style={styles.locationText}>San Francisco, CA</Text>
-          </View>
+          {profile?.location ? (
+            <View style={styles.locationRow}>
+              <PinIcon />
+              <Text style={styles.locationText}>{profile.location}</Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Stats row */}
         <View style={styles.statsRow}>
           <View style={styles.stat}>
-            <Text style={styles.statNumber}>12</Text>
+            <Text style={styles.statNumber}>{yourPosts.length}</Text>
             <Text style={styles.statLabel}>POSTS</Text>
           </View>
           <View style={styles.stat}>
-            <Text style={styles.statNumber}>8</Text>
+            <Text style={styles.statNumber}>{savedPosts.length}</Text>
             <Text style={styles.statLabel}>SAVED</Text>
           </View>
           <TouchableOpacity
@@ -321,7 +331,7 @@ export function ProfilePanel() {
             onPress={() => setShowCommunity(true)}
           >
             <View style={styles.communityStatRow}>
-              <Text style={styles.statNumber}>34</Text>
+              <Text style={styles.statNumber}>0</Text>
               <Text style={styles.communityArrow}>{'\u203A'}</Text>
             </View>
             <Text style={styles.statLabel}>COMMUNITY</Text>

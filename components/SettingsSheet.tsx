@@ -242,39 +242,7 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
               }
             }}
           />
-          <SettingRow
-            label="New Events Near You"
-            trailing={
-              <Switch
-                value={notifyNewEvents}
-                onValueChange={setNotifyNewEvents}
-                trackColor={{ true: '#78B896', false: '#ddd' }}
-                thumbColor="#fff"
-              />
-            }
-          />
-          <SettingRow
-            label="When Someone Saves Your Post"
-            trailing={
-              <Switch
-                value={notifySaves}
-                onValueChange={setNotifySaves}
-                trackColor={{ true: '#78B896', false: '#ddd' }}
-                thumbColor="#fff"
-              />
-            }
-          />
-          <SettingRow
-            label="Community Updates"
-            trailing={
-              <Switch
-                value={notifyCommunity}
-                onValueChange={setNotifyCommunity}
-                trackColor={{ true: '#78B896', false: '#ddd' }}
-                thumbColor="#fff"
-              />
-            }
-          />
+          {/* No push notifications in v1 — community requests show in Profile → Community */}
         </View>
 
         {/* ─── Privacy & Safety ─── */}
