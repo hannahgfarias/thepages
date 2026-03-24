@@ -705,7 +705,7 @@ export function AddEventSheet() {
                         ))}
                       </View>
                     </View>
-                  )
+                  )}
                 </View>
               </View>
             )}
