@@ -130,7 +130,7 @@ function PinIcon() {
 
 export function ProfilePanel() {
   const { showProfile, setShowProfile, setShowCommunity } = useOverlay();
-  const { profile, isAuthenticated } = useAuth();
+  const { profile, isAuthenticated, session } = useAuth();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
 
@@ -199,10 +199,21 @@ export function ProfilePanel() {
   ).current;
 
   const { flyers: allFlyers } = useFlyers();
-  const yourPosts: Post[] = []; // Will be populated from Supabase when user posts
-  const savedPosts: Post[] = []; // Will be populated from Supabase saves
+  const userId = session?.user?.id;
 
-  const savedByDate = useMemo(() => categorizePosts(savedPosts), []);
+  // Your posts — filter all flyers by current user
+  const yourPosts = useMemo(() =>
+    allFlyers.filter((f) => f.user_id === userId),
+    [allFlyers, userId]
+  );
+
+  // Saved posts — filter all flyers that are saved
+  const savedPosts = useMemo(() =>
+    allFlyers.filter((f) => f.is_saved),
+    [allFlyers]
+  );
+
+  const savedByDate = useMemo(() => categorizePosts(savedPosts), [savedPosts]);
 
   const thumbWidth = (width - 24 * 2 - 12) / 2;
   const thumbHeight = (thumbWidth * 4) / 3;

@@ -67,6 +67,7 @@ export function AddEventSheet() {
   const [endMinute, setEndMinute] = useState<number>(0);
   const [endPeriod, setEndPeriod] = useState<'AM' | 'PM'>('PM');
   const [showEndTime, setShowEndTime] = useState(false);
+  const [showLinkField, setShowLinkField] = useState(false);
   const [locationResults, setLocationResults] = useState<Array<{ display_name: string; name: string; address: any }>>([]);
   const [showLocationResults, setShowLocationResults] = useState(false);
   const locationDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -803,17 +804,37 @@ export function AddEventSheet() {
               )}
             </View>
 
-            <View style={styles.field}>
-              <TextInput
-                style={styles.input}
-                value={link}
-                onChangeText={setLink}
-                placeholder="Link"
-                placeholderTextColor="#999"
-                autoCapitalize="none"
-                keyboardType="url"
-              />
-            </View>
+            {showLinkField ? (
+              <View style={styles.field}>
+                <View style={styles.linkFieldHeader}>
+                  <TextInput
+                    style={[styles.input, { flex: 1 }]}
+                    value={link}
+                    onChangeText={setLink}
+                    placeholder="Ticket or event link"
+                    placeholderTextColor="#999"
+                    autoCapitalize="none"
+                    keyboardType="url"
+                    autoFocus
+                  />
+                  <TouchableOpacity
+                    style={styles.removeLinkButton}
+                    onPress={() => { setShowLinkField(false); setLink(''); }}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={styles.removeLinkText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={styles.addLinkButton}
+                onPress={() => setShowLinkField(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.addLinkText}>+ Add link</Text>
+              </TouchableOpacity>
+            )}
 
             {/* Category chips */}
             <View style={styles.categorySection}>
@@ -1197,6 +1218,32 @@ const styles = StyleSheet.create({
   periodChipTextSelected: {
     color: '#02040F',
     fontFamily: FONTS.display,
+  },
+  linkFieldHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  removeLinkButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(2,4,15,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeLinkText: {
+    fontSize: 14,
+    color: 'rgba(2,4,15,0.4)',
+  },
+  addLinkButton: {
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  addLinkText: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: 'rgba(2,4,15,0.4)',
   },
   locationField: {
     zIndex: 100,
