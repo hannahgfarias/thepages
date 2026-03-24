@@ -418,9 +418,10 @@ export function AddEventSheet() {
       });
 
       if (insertError) {
-        console.log('[POST] Insert error:', insertError);
-        if (Platform.OS === 'web') window.alert('Failed to post. Please try again.');
-        else Alert.alert('Error', 'Failed to post. Please try again.');
+        console.log('[POST] Insert error:', JSON.stringify(insertError));
+        const errMsg = insertError.message || 'Failed to post. Please try again.';
+        if (Platform.OS === 'web') window.alert(`Post failed: ${errMsg}`);
+        else Alert.alert('Error', errMsg);
         setPublishing(false);
         return;
       }

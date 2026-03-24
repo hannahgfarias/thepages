@@ -47,7 +47,16 @@ function SearchIcon() {
 
 export default function FeedScreen() {
   const { flyers, loading, error, toggleSave, refetch } = useFlyers();
-  const { setShowSearch, setShowProfile, showProfile, searchFilters, setSearchFilters, setShowAuthPrompt } = useOverlay();
+  const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt } = useOverlay();
+  const prevShowAddEvent = useRef(false);
+
+  // Refetch feed when AddEventSheet closes (post was potentially added)
+  useEffect(() => {
+    if (prevShowAddEvent.current && !showAddEvent) {
+      refetch();
+    }
+    prevShowAddEvent.current = showAddEvent;
+  }, [showAddEvent, refetch]);
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const cardHeight = height - NAV_HEIGHT - insets.bottom;
