@@ -81,15 +81,69 @@ async function pickImageWeb(options?: {
         return;
       }
       try {
-        const uri = URL.createObjectURL(file);
-        const base64 = await fileToBase64(file);
-        resolve({ uri, base64 });
+        // Resize/compress on web to prevent huge payloads
+        const compressed = await compressImageWeb(file, {
+          maxWidth: 1200,
+          maxHeight: 1500,
+          quality: options?.quality || 0.8,
+        });
+        resolve(compressed);
       } catch {
         resolve(null);
       }
     };
     input.oncancel = () => resolve(null);
     input.click();
+  });
+}
+
+/**
+ * Compress/resize an image file on web using canvas.
+ * Returns a blob URL and base64 string, both as JPEG.
+ */
+async function compressImageWeb(
+  file: File,
+  opts: { maxWidth: number; maxHeight: number; quality: number }
+): Promise<PickedImage> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      let { width, height } = img;
+
+      // Scale down if larger than max dimensions
+      if (width > opts.maxWidth || height > opts.maxHeight) {
+        const ratio = Math.min(opts.maxWidth / width, opts.maxHeight / height);
+        width = Math.round(width * ratio);
+        height = Math.round(height * ratio);
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { reject(new Error('No canvas context')); return; }
+
+      ctx.drawImage(img, 0, 0, width, height);
+
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) { reject(new Error('Canvas toBlob failed')); return; }
+          const uri = URL.createObjectURL(blob);
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
+            const base64 = dataUrl.split(',')[1];
+            resolve({ uri, base64 });
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        },
+        'image/jpeg',
+        opts.quality
+      );
+    };
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
   });
 }
 

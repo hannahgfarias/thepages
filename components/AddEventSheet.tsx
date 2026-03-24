@@ -124,19 +124,20 @@ export function AddEventSheet() {
 
   const [scanError, setScanError] = useState<string | null>(null);
 
-  const handlePickResult = async (uri: string) => {
+  const handlePickResult = async (uri: string, base64?: string) => {
     setImageUri(uri);
     setScanning(true);
     setScanError(null);
 
     try {
-      const base64 = await readFileAsBase64(uri);
+      // Use pre-computed base64 if available (from pickImageFromLibrary), otherwise read from URI
+      const imageBase64 = base64 || await readFileAsBase64(uri);
 
       const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 20000)
+        setTimeout(() => reject(new Error('timeout')), 45000)
       );
       const scanPromise = supabase.functions.invoke('scan-flyer', {
-        body: { imageBase64: base64, mediaType: 'image/jpeg' },
+        body: { imageBase64, mediaType: 'image/jpeg' },
       });
 
       const { data, error } = await Promise.race([scanPromise, timeout]);
@@ -147,9 +148,11 @@ export function AddEventSheet() {
         if (data.location) setLocation(data.location);
         if (data.category) setSelectedCategory(data.category);
       } else {
+        console.log('[SCAN] Error:', error, data);
         setScanError('AI scan failed — fill in the details manually.');
       }
-    } catch {
+    } catch (e) {
+      console.log('[SCAN] Exception:', e);
       setScanError('AI scan timed out — fill in the details manually.');
     }
 
@@ -160,7 +163,8 @@ export function AddEventSheet() {
     try {
       const picked = await pickImageFromLibrary({ aspect: [4, 5], quality: 0.8 });
       if (picked) {
-        handlePickResult(picked.uri);
+        // Pass base64 directly to avoid re-reading the file
+        handlePickResult(picked.uri, picked.base64);
       }
     } catch {
       setScanError('Could not open photo picker.');
@@ -171,7 +175,7 @@ export function AddEventSheet() {
     try {
       const picked = await pickImageFromCamera();
       if (picked) {
-        handlePickResult(picked.uri);
+        handlePickResult(picked.uri, picked.base64);
       }
     } catch {
       setScanError('Could not open camera.');
