@@ -115,7 +115,7 @@ export function AuthFlow() {
       setOtpError(null);
       try {
         const timeout = new Promise<{ error: string }>((_, reject) =>
-          setTimeout(() => reject({ error: 'Request timed out. Check your connection and try again.' }), 15000)
+          setTimeout(() => reject({ error: 'Request timed out. Check your connection and try again.' }), 60000)
         );
         const result = await Promise.race([signIn(rawPhoneDigits), timeout]);
         if (result?.error) {
@@ -160,7 +160,7 @@ export function AuthFlow() {
       setOtpError(null);
       try {
         const timeout = new Promise<boolean>((_, reject) =>
-          setTimeout(() => reject(new Error('timeout')), 15000)
+          setTimeout(() => reject(new Error('timeout')), 60000)
         );
         const success = await Promise.race([verifyOTP(otpCode), timeout]);
         if (success) {
