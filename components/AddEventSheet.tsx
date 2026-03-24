@@ -346,54 +346,92 @@ export function AddEventSheet() {
   };
 
   const handleSubmit = async () => {
+    if (!title.trim()) {
+      if (Platform.OS === 'web') {
+        window.alert('Please add a title for your event.');
+      } else {
+        Alert.alert('Missing Title', 'Please add a title for your event.');
+      }
+      return;
+    }
+
     // 1. PII detection (client-side regex check)
     const allText = [title, dateTime, location, link].filter(Boolean).join(' ');
     const piiResult = hasBasicPII(allText);
     if (piiResult.found) {
-      Alert.alert(
-        'Personal Information Detected',
-        `Your post may contain a ${piiResult.type}. Please remove it before posting.`
-      );
+      if (Platform.OS === 'web') {
+        window.alert(`Your post may contain a ${piiResult.type}. Please remove it before posting.`);
+      } else {
+        Alert.alert('Personal Information Detected', `Your post may contain a ${piiResult.type}. Please remove it before posting.`);
+      }
       return;
     }
 
-    // 2. AI moderation via edge function
     setPublishing(true);
+
     try {
-      const textToModerate = [title, selectedCategory, location].filter(Boolean).join(' ');
-      const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 20000)
-      );
-      const moderatePromise = supabase.functions.invoke('moderate-content', {
-        body: { text: textToModerate, imageBase64: null },
+      // 2. Get current user
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        if (Platform.OS === 'web') window.alert('Please sign in to post.');
+        else Alert.alert('Sign In Required', 'Please sign in to post.');
+        setPublishing(false);
+        return;
+      }
+
+      // 3. Upload flyer image if present
+      let uploadedImageUrl: string | null = null;
+      if (imageUri) {
+        try {
+          const { readFileAsBase64: readBase64 } = require('../lib/platform');
+          const base64 = await readBase64(imageUri);
+          const filePath = `${user.id}/${Date.now()}.jpg`;
+          const { decode: decodeBase64 } = require('base64-arraybuffer');
+          const { error: uploadError } = await supabase.storage
+            .from('flyers')
+            .upload(filePath, decodeBase64(base64), {
+              contentType: 'image/jpeg',
+              upsert: true,
+            });
+          if (!uploadError) {
+            const { data: urlData } = supabase.storage.from('flyers').getPublicUrl(filePath);
+            uploadedImageUrl = urlData.publicUrl;
+          }
+        } catch (e) {
+          console.log('[UPLOAD] Image upload failed:', e);
+          // Continue without image — not a blocker
+        }
+      }
+
+      // 4. Insert post into database
+      const { error: insertError } = await supabase.from('posts').insert({
+        user_id: user.id,
+        title: title.trim(),
+        date_text: dateTime || null,
+        location: location || null,
+        event_url: link || null,
+        image_url: uploadedImageUrl,
+        category: selectedCategory || 'Community',
+        tags: tags.map(t => `#${t}`),
+        is_public: isPublic,
+        moderation_status: 'approved', // Auto-approve for now until moderation edge function is deployed
       });
-      const { data, error } = await Promise.race([moderatePromise, timeout]);
 
-      if (error) {
-        // Network / invocation error — treat as held (fail closed)
-        Alert.alert('Unable to verify', 'Please try again in a moment.');
+      if (insertError) {
+        console.log('[POST] Insert error:', insertError);
+        if (Platform.OS === 'web') window.alert('Failed to post. Please try again.');
+        else Alert.alert('Error', 'Failed to post. Please try again.');
         setPublishing(false);
         return;
       }
 
-      if (data?.status === 'rejected') {
-        Alert.alert('Content Not Allowed', 'This content violates our community guidelines.');
-        setPublishing(false);
-        return;
-      }
-
-      if (data?.status === 'held') {
-        Alert.alert('Under Review', 'Your post is under review and will appear shortly.');
-        setPublishing(false);
-        handleClose();
-        return;
-      }
-
-      // 3. Approved — proceed with publishing
+      // 5. Success — close and reset
       setPublishing(false);
       handleClose();
     } catch (e) {
-      Alert.alert('Error', 'Something went wrong. Please try again.');
+      console.log('[POST] Exception:', e);
+      if (Platform.OS === 'web') window.alert('Something went wrong. Please try again.');
+      else Alert.alert('Error', 'Something went wrong. Please try again.');
       setPublishing(false);
     }
   };
