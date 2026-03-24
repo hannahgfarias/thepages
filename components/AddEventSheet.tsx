@@ -409,9 +409,10 @@ export function AddEventSheet() {
         style={[
           styles.sheet,
           {
-            height: height * 0.92,
+            maxHeight: '92%',
+            height: Platform.OS === 'web' ? '92vh' : height * 0.92,
             transform: [{ translateY: slideY }],
-          },
+          } as any,
         ]}
       >
         <ScrollView
@@ -707,10 +708,19 @@ export function AddEventSheet() {
                     </View>
                   )}
                 </View>
+
+                {/* Done button to close picker */}
+                <TouchableOpacity
+                  style={styles.pickerDoneButton}
+                  activeOpacity={0.8}
+                  onPress={() => setShowDatePicker(false)}
+                >
+                  <Text style={styles.pickerDoneText}>DONE</Text>
+                </TouchableOpacity>
               </View>
             )}
 
-            <View style={styles.field}>
+            <View style={[styles.field, styles.locationField]}>
               <TextInput
                 style={styles.input}
                 value={location}
@@ -1142,18 +1152,26 @@ const styles = StyleSheet.create({
     color: '#02040F',
     fontFamily: FONTS.display,
   },
+  locationField: {
+    zIndex: 100,
+    elevation: 100,
+  },
   locationDropdown: {
     position: 'absolute',
-    top: 48,
+    top: 52,
     left: 0,
     right: 0,
     backgroundColor: '#ffffff',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#ddd',
-    zIndex: 100,
-    elevation: 100,
+    zIndex: 200,
+    elevation: 200,
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
   },
   locationResult: {
     paddingHorizontal: 14,
@@ -1171,6 +1189,19 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
     fontSize: 11,
     color: '#999',
+  },
+  pickerDoneButton: {
+    marginTop: 16,
+    backgroundColor: '#E9D25E',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  pickerDoneText: {
+    fontFamily: FONTS.display,
+    fontSize: 13,
+    letterSpacing: 2,
+    color: '#02040F',
   },
   addEndTime: {
     marginTop: 10,
