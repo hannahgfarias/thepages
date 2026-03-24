@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
-import { ActionRail } from './ActionRail';
+import { ActionRail, MoreIcon } from './ActionRail';
 import { ExternalLinkWarning } from './ExternalLinkWarning';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
@@ -425,14 +425,51 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
               <Text style={styles.ctaText}>{flyer.link}</Text>
             </TouchableOpacity>
           ) : null}
+
+          {/* Posted by + More row */}
+          <View style={styles.detailsFooter}>
+            {flyer.profile ? (
+              <TouchableOpacity
+                style={styles.postedByRow}
+                activeOpacity={0.7}
+                onPress={() => {
+                  // TODO: navigate to user profile
+                }}
+              >
+                {flyer.profile.avatar_url ? (
+                  <Image
+                    source={{ uri: flyer.profile.avatar_url }}
+                    style={styles.postedByAvatar}
+                  />
+                ) : (
+                  <View style={[styles.postedByAvatarFallback, { backgroundColor: flyer.profile.avatar_color || '#EB736C' }]}>
+                    <Text style={styles.postedByInitial}>{flyer.profile.avatar_initials || '?'}</Text>
+                  </View>
+                )}
+                <Text style={styles.postedByText}>
+                  {flyer.profile.display_name || flyer.profile.handle || 'Anonymous'}
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <View />
+            )}
+
+            {/* More/Report button — same style as save/share */}
+            <TouchableOpacity
+              style={styles.detailsMoreButton}
+              onPress={handleMore}
+              activeOpacity={0.7}
+            >
+              <MoreIcon />
+            </TouchableOpacity>
+          </View>
         </Animated.View>
 
-        {/* Layer 5: Action rail */}
+        {/* Layer 5: Action rail (save & share only) */}
         <ActionRail
-          visible={active}
+          visible={true}
           onSave={handleSave}
           onShare={handleShare}
-          onMore={handleMore}
           isSaved={saved}
         />
 
@@ -619,6 +656,51 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'uppercase',
     color: '#78B896',
+  },
+  detailsFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
+  },
+  postedByRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  postedByAvatar: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+  },
+  postedByAvatarFallback: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  postedByInitial: {
+    fontFamily: FONTS.display,
+    fontSize: 12,
+    color: '#ffffff',
+  },
+  postedByText: {
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.6)',
+  },
+  detailsMoreButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(2,4,15,0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   reportOverlay: {
     ...StyleSheet.absoluteFillObject,
