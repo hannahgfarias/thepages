@@ -414,7 +414,11 @@ export function ProfilePanel() {
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 64, // Leave room for the tab bar
     backgroundColor: '#F0ECEC',
     zIndex: 15,
   },

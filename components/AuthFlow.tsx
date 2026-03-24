@@ -894,7 +894,7 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     paddingHorizontal: 16,
     fontFamily: FONTS.mono,
-    fontSize: 14,
+    fontSize: 16,
     color: '#02040F',
     marginBottom: 16,
   },
@@ -932,7 +932,7 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     paddingHorizontal: 16,
     fontFamily: FONTS.mono,
-    fontSize: 14,
+    fontSize: 16,
     color: '#02040F',
   },
   cityRow: {

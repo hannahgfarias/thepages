@@ -63,6 +63,10 @@ export function AddEventSheet() {
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const [selectedMinute, setSelectedMinute] = useState<number>(0);
   const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>('PM');
+  const [endHour, setEndHour] = useState<number | null>(null);
+  const [endMinute, setEndMinute] = useState<number>(0);
+  const [endPeriod, setEndPeriod] = useState<'AM' | 'PM'>('PM');
+  const [showEndTime, setShowEndTime] = useState(false);
   const [locationResults, setLocationResults] = useState<Array<{ display_name: string; name: string; address: any }>>([]);
   const [showLocationResults, setShowLocationResults] = useState(false);
   const locationDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -95,12 +99,20 @@ export function AddEventSheet() {
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
-  const formatDateTime = (date: Date, hour: number | null, minute: number, period: 'AM' | 'PM') => {
-    const monthName = MONTHS[date.getMonth()].toUpperCase().slice(0, 3);
-    let result = `${monthName} ${date.getDate()}`;
-    if (hour !== null) {
-      const minStr = minute === 0 ? '' : `:${minute.toString().padStart(2, '0')}`;
-      result += ` • ${hour}${minStr}${period}`;
+  const formatTimeStr = (hour: number, minute: number, period: 'AM' | 'PM') => {
+    const minStr = minute === 0 ? '' : `:${minute.toString().padStart(2, '0')}`;
+    return `${hour}${minStr}${period}`;
+  };
+
+  const buildDateTimeString = () => {
+    if (!selectedDate) return '';
+    const monthName = MONTHS[selectedDate.getMonth()].toUpperCase().slice(0, 3);
+    let result = `${monthName} ${selectedDate.getDate()}`;
+    if (selectedHour !== null) {
+      result += ` • ${formatTimeStr(selectedHour, selectedMinute, selectedPeriod)}`;
+      if (endHour !== null) {
+        result += `-${formatTimeStr(endHour, endMinute, endPeriod)}`;
+      }
     }
     return result;
   };
@@ -108,16 +120,25 @@ export function AddEventSheet() {
   const selectDate = (day: number) => {
     const date = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day);
     setSelectedDate(date);
-    setDateTime(formatDateTime(date, selectedHour, selectedMinute, selectedPeriod));
   };
+
+  // Update dateTime string whenever any time value changes
+  useEffect(() => {
+    if (selectedDate) {
+      setDateTime(buildDateTimeString());
+    }
+  }, [selectedDate, selectedHour, selectedMinute, selectedPeriod, endHour, endMinute, endPeriod]);
 
   const selectTime = (hour: number, minute: number, period: 'AM' | 'PM') => {
     setSelectedHour(hour);
     setSelectedMinute(minute);
     setSelectedPeriod(period);
-    if (selectedDate) {
-      setDateTime(formatDateTime(selectedDate, hour, minute, period));
-    }
+  };
+
+  const selectEndTime = (hour: number, minute: number, period: 'AM' | 'PM') => {
+    setEndHour(hour);
+    setEndMinute(minute);
+    setEndPeriod(period);
   };
 
   // Location search with debounce
@@ -613,12 +634,7 @@ export function AddEventSheet() {
                           selectedPeriod === p && styles.periodChipSelected,
                         ]}
                         activeOpacity={0.7}
-                        onPress={() => {
-                          setSelectedPeriod(p);
-                          if (selectedHour !== null && selectedDate) {
-                            setDateTime(formatDateTime(selectedDate, selectedHour, selectedMinute, p));
-                          }
-                        }}
+                        onPress={() => setSelectedPeriod(p)}
                       >
                         <Text style={[
                           styles.periodChipText,
@@ -627,6 +643,69 @@ export function AddEventSheet() {
                       </TouchableOpacity>
                     ))}
                   </View>
+
+                  {/* End time toggle */}
+                  {selectedHour !== null && !showEndTime && (
+                    <TouchableOpacity
+                      style={styles.addEndTime}
+                      onPress={() => setShowEndTime(true)}
+                      activeOpacity={0.7}
+                    >
+                      <Text style={styles.addEndTimeText}>+ Add end time</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* End time picker */}
+                  {showEndTime && (
+                    <View style={styles.endTimeSection}>
+                      <View style={styles.endTimeHeader}>
+                        <Text style={styles.timePickerLabel}>END TIME</Text>
+                        <TouchableOpacity onPress={() => { setShowEndTime(false); setEndHour(null); }} activeOpacity={0.7}>
+                          <Text style={styles.removeEndTime}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <View style={styles.timePickerRow}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeScrollContent}>
+                          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => (
+                            <TouchableOpacity
+                              key={h}
+                              style={[styles.timeChip, endHour === h && styles.timeChipSelected]}
+                              activeOpacity={0.7}
+                              onPress={() => selectEndTime(h, endMinute, endPeriod)}
+                            >
+                              <Text style={[styles.timeChipText, endHour === h && styles.timeChipTextSelected]}>{h}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                      <View style={styles.timePickerRow}>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.timeScrollContent}>
+                          {[0, 15, 30, 45].map((m) => (
+                            <TouchableOpacity
+                              key={m}
+                              style={[styles.timeChip, endHour !== null && endMinute === m && styles.timeChipSelected]}
+                              activeOpacity={0.7}
+                              onPress={() => { if (endHour !== null) selectEndTime(endHour, m, endPeriod); }}
+                            >
+                              <Text style={[styles.timeChipText, endHour !== null && endMinute === m && styles.timeChipTextSelected]}>:{m.toString().padStart(2, '0')}</Text>
+                            </TouchableOpacity>
+                          ))}
+                        </ScrollView>
+                      </View>
+                      <View style={styles.periodRow}>
+                        {(['AM', 'PM'] as const).map((p) => (
+                          <TouchableOpacity
+                            key={p}
+                            style={[styles.periodChip, endPeriod === p && styles.periodChipSelected]}
+                            activeOpacity={0.7}
+                            onPress={() => setEndPeriod(p)}
+                          >
+                            <Text style={[styles.periodChipText, endPeriod === p && styles.periodChipTextSelected]}>{p}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </View>
+                  )
                 </View>
               </View>
             )}
@@ -893,7 +972,7 @@ const styles = StyleSheet.create({
   },
   input: {
     fontFamily: FONTS.body,
-    fontSize: 14,
+    fontSize: 16,
     color: '#333',
     backgroundColor: '#ffffff',
     borderWidth: 1,
@@ -1092,6 +1171,32 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
     fontSize: 11,
     color: '#999',
+  },
+  addEndTime: {
+    marginTop: 10,
+    paddingVertical: 6,
+  },
+  addEndTimeText: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: 'rgba(2,4,15,0.4)',
+  },
+  endTimeSection: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(2,4,15,0.08)',
+  },
+  endTimeHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  removeEndTime: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: '#EB736C',
   },
   categorySection: {
     marginTop: 4,

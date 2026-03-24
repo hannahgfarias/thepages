@@ -11,16 +11,21 @@ import {
   Switch,
   Alert,
   Platform,
+  Image,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../hooks/useAuth';
 import { useOverlay } from '../app/(tabs)/_layout';
+import { supabase } from '../lib/supabase';
+import { pickImageFromLibrary, readFileAsBase64 } from '../lib/platform';
+import { decode } from 'base64-arraybuffer';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
+const HANDLE_COOLDOWN_DAYS = 30;
 
 interface SettingsSheetProps {
   visible: boolean;
@@ -32,37 +37,89 @@ function SectionHeader({ title }: { title: string }) {
   return <Text style={styles.sectionHeader}>{title}</Text>;
 }
 
-/* ─── Setting Row ─── */
-function SettingRow({
+/* ─── Editable Field ─── */
+function EditableField({
   label,
   value,
-  onPress,
-  trailing,
-  destructive,
+  onSave,
+  placeholder,
+  disabled,
+  disabledMessage,
+  multiline,
+  prefix,
+  autoCapitalize,
 }: {
   label: string;
-  value?: string;
-  onPress?: () => void;
-  trailing?: React.ReactNode;
-  destructive?: boolean;
+  value: string;
+  onSave: (val: string) => void;
+  placeholder?: string;
+  disabled?: boolean;
+  disabledMessage?: string;
+  multiline?: boolean;
+  prefix?: string;
+  autoCapitalize?: 'none' | 'words' | 'sentences';
 }) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+
+  useEffect(() => { setDraft(value); }, [value]);
+
+  if (editing && !disabled) {
+    return (
+      <View style={styles.editableField}>
+        <Text style={styles.editableLabel}>{label}</Text>
+        <View style={styles.editRow}>
+          {prefix && <Text style={styles.editPrefix}>{prefix}</Text>}
+          <TextInput
+            style={[styles.editInput, multiline && styles.editInputMultiline]}
+            value={draft}
+            onChangeText={setDraft}
+            placeholder={placeholder}
+            placeholderTextColor="rgba(2,4,15,0.3)"
+            autoFocus
+            multiline={multiline}
+            autoCapitalize={autoCapitalize || 'sentences'}
+            autoCorrect={false}
+          />
+        </View>
+        <View style={styles.editActions}>
+          <TouchableOpacity
+            style={styles.editCancel}
+            onPress={() => { setDraft(value); setEditing(false); }}
+          >
+            <Text style={styles.editCancelText}>Cancel</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.editSave}
+            onPress={() => { onSave(draft); setEditing(false); }}
+          >
+            <Text style={styles.editSaveText}>Save</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <TouchableOpacity
       style={styles.settingRow}
-      activeOpacity={onPress ? 0.6 : 1}
-      onPress={onPress}
-      disabled={!onPress && !trailing}
+      activeOpacity={disabled ? 1 : 0.6}
+      onPress={() => {
+        if (disabled && disabledMessage) {
+          if (Platform.OS === 'web') {
+            window.alert(disabledMessage);
+          } else {
+            Alert.alert('Handle Change', disabledMessage);
+          }
+        } else {
+          setEditing(true);
+        }
+      }}
     >
-      <Text style={[styles.settingLabel, destructive && styles.destructiveText]}>
-        {label}
+      <Text style={styles.settingLabel}>{label}</Text>
+      <Text style={[styles.settingValue, disabled && styles.settingValueDisabled]}>
+        {value || placeholder || 'Add'}
       </Text>
-      {value ? (
-        <Text style={styles.settingValue}>{value}</Text>
-      ) : trailing ? (
-        trailing
-      ) : onPress ? (
-        <Text style={styles.chevron}>›</Text>
-      ) : null}
     </TouchableOpacity>
   );
 }
@@ -71,18 +128,20 @@ function SettingRow({
 export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const { profile, signOut, updateProfile, session } = useAuth();
+  const { profile, signOut, updateProfile, checkHandleAvailable, session, refreshProfile } = useAuth();
   const { setShowProfile } = useOverlay();
 
   // Animation
   const translateX = useRef(new Animated.Value(height)).current;
 
-  // Settings state — initialized from profile
+  // Settings state
   const [displayName, setDisplayName] = useState('');
   const [handle, setHandle] = useState('');
   const [bio, setBio] = useState('');
   const [city, setCity] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
+  const [handleLastChanged, setHandleLastChanged] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Sync state from profile when sheet opens
   useEffect(() => {
@@ -92,8 +151,20 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
       setBio(profile.bio || '');
       setCity(profile.location || '');
       setIsPrivate(!profile.is_public);
+      setSaveError(null);
+      // Fetch handle_last_changed
+      if (session?.user?.id) {
+        supabase
+          .from('profiles')
+          .select('handle_last_changed')
+          .eq('id', session.user.id)
+          .maybeSingle()
+          .then(({ data }) => {
+            setHandleLastChanged(data?.handle_last_changed || null);
+          });
+      }
     }
-  }, [visible, profile]);
+  }, [visible, profile, session]);
 
   useEffect(() => {
     if (visible) {
@@ -122,18 +193,49 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
     }).start(() => onClose());
   };
 
-  // Save a single field to Supabase
+  // Check if handle change is allowed (30-day cooldown)
+  const canChangeHandle = () => {
+    if (!handleLastChanged) return true;
+    const lastChanged = new Date(handleLastChanged);
+    const now = new Date();
+    const diffDays = (now.getTime() - lastChanged.getTime()) / (1000 * 60 * 60 * 24);
+    return diffDays >= HANDLE_COOLDOWN_DAYS;
+  };
+
+  const daysUntilHandleChange = () => {
+    if (!handleLastChanged) return 0;
+    const lastChanged = new Date(handleLastChanged);
+    const now = new Date();
+    const diffDays = (now.getTime() - lastChanged.getTime()) / (1000 * 60 * 60 * 24);
+    return Math.max(0, Math.ceil(HANDLE_COOLDOWN_DAYS - diffDays));
+  };
+
+  // Save field
   const saveField = async (field: string, value: string) => {
+    setSaveError(null);
     const data: Record<string, any> = {};
+
     if (field === 'display_name') {
       setDisplayName(value);
       data.display_name = value;
-      // Update initials too
-      data.avatar_initials = value ? value[0].toUpperCase() : '?';
+      if (!profile?.avatar_url) {
+        data.avatar_initials = value ? value[0].toUpperCase() : '?';
+      }
     } else if (field === 'handle') {
-      const formatted = value.startsWith('@') ? value : '@' + value;
+      const clean = value.replace(/^@/, '').replace(/[^a-zA-Z0-9_]/g, '');
+      if (clean.length < 2) {
+        setSaveError('Handle must be at least 2 characters');
+        return;
+      }
+      const available = await checkHandleAvailable(clean);
+      if (!available) {
+        setSaveError('That handle is taken');
+        return;
+      }
+      const formatted = `@${clean}`;
       setHandle(formatted);
       data.handle = formatted;
+      data.handle_last_changed = new Date().toISOString();
     } else if (field === 'bio') {
       setBio(value);
       data.bio = value;
@@ -141,9 +243,41 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
       setCity(value);
       data.location = value;
     }
+
     const result = await updateProfile(data);
     if (result?.error) {
-      Alert.alert('Error', result.error);
+      setSaveError(result.error);
+    }
+  };
+
+  // Avatar change
+  const changeAvatar = async () => {
+    try {
+      const picked = await pickImageFromLibrary({ aspect: [1, 1], quality: 0.8 });
+      if (!picked || !session?.user?.id) return;
+
+      const base64 = picked.base64 || await readFileAsBase64(picked.uri);
+      const filePath = `${session.user.id}/avatar.jpg`;
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(filePath, decode(base64), {
+          contentType: 'image/jpeg',
+          upsert: true,
+        });
+
+      if (uploadError) {
+        setSaveError('Photo upload failed');
+        return;
+      }
+
+      const { data: urlData } = supabase.storage
+        .from('avatars')
+        .getPublicUrl(filePath);
+
+      await updateProfile({ avatar_url: urlData.publicUrl } as any);
+      await refreshProfile();
+    } catch {
+      setSaveError('Could not change photo');
     }
   };
 
@@ -151,17 +285,16 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
     setIsPrivate(value);
     const result = await updateProfile({ is_public: !value } as any);
     if (result?.error) {
-      // Rollback on failure
       setIsPrivate(!value);
-      Alert.alert('Error', 'Failed to update privacy setting. Please try again.');
+      setSaveError('Failed to update privacy setting');
     }
   };
 
   const handleSignOut = () => {
     const doSignOut = async () => {
       await signOut();
-      handleClose();            // close settings
-      setShowProfile(false);    // close profile → go back to browse
+      handleClose();
+      setShowProfile(false);
     };
 
     if (Platform.OS === 'web') {
@@ -169,47 +302,38 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
         doSignOut();
       }
     } else {
-      Alert.alert(
-        'Sign Out',
-        'Are you sure you want to sign out?',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Sign Out',
-            style: 'destructive',
-            onPress: doSignOut,
-          },
-        ]
-      );
+      Alert.alert('Sign Out', 'Are you sure you want to sign out?', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign Out', style: 'destructive', onPress: doSignOut },
+      ]);
     }
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      'This will permanently delete your account and all your posts. This cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => {
-            // TODO: call delete account API
-            handleClose();
-          },
-        },
-      ]
-    );
-  };
-
-  const handleExportData = () => {
-    Alert.alert('Export Data', 'Your data export will be sent to your email address.');
+    if (Platform.OS === 'web') {
+      if (window.confirm('This will permanently delete your account and all your posts. This cannot be undone.')) {
+        // TODO: call delete account API
+        handleClose();
+      }
+    } else {
+      Alert.alert(
+        'Delete Account',
+        'This will permanently delete your account and all your posts. This cannot be undone.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: () => handleClose() },
+        ]
+      );
+    }
   };
 
   // Mask phone number
   const maskedPhone = session?.user?.phone
     ? '•••• ' + session.user.phone.replace(/\D/g, '').slice(-4)
     : '—';
+
+  const handleChangeable = canChangeHandle();
+  const daysLeft = daysUntilHandleChange();
 
   if (!visible) return null;
 
@@ -239,57 +363,73 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
           { paddingBottom: insets.bottom + 64 + 24 },
         ]}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
+        {/* ─── Avatar ─── */}
+        <View style={styles.avatarSection}>
+          <TouchableOpacity style={styles.avatarContainer} onPress={changeAvatar} activeOpacity={0.8}>
+            {profile?.avatar_url ? (
+              <Image source={{ uri: profile.avatar_url }} style={styles.avatarImage} />
+            ) : (
+              <View style={[styles.avatarFallback, { backgroundColor: profile?.avatar_color || '#EB736C' }]}>
+                <Text style={styles.avatarInitials}>{profile?.avatar_initials || '?'}</Text>
+              </View>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={changeAvatar} activeOpacity={0.7}>
+            <Text style={styles.changePhotoText}>Change photo</Text>
+          </TouchableOpacity>
+        </View>
+
+        {saveError && (
+          <TouchableOpacity onPress={() => setSaveError(null)} activeOpacity={0.7}>
+            <Text style={styles.errorText}>{saveError} ✕</Text>
+          </TouchableOpacity>
+        )}
+
         {/* ─── Account ─── */}
         <SectionHeader title="ACCOUNT" />
 
         <View style={styles.settingGroup}>
-          <SettingRow
+          <EditableField
             label="Display Name"
-            value={displayName || 'Add name'}
-            onPress={() => {
-              if (Platform.OS === 'ios') {
-                Alert.prompt('Display Name', 'Enter your display name', (text) => { if (text) saveField('display_name', text); }, 'plain-text', displayName);
-              }
-            }}
+            value={displayName}
+            onSave={(v) => saveField('display_name', v)}
+            placeholder="Add name"
+            autoCapitalize="words"
           />
-          <SettingRow
+          <EditableField
             label="Handle"
             value={handle}
-            onPress={() => {
-              if (Platform.OS === 'ios') {
-                Alert.prompt('Handle', 'Enter your handle (starts with @)', (text) => { if (text) saveField('handle', text); }, 'plain-text', handle);
-              }
-            }}
+            onSave={(v) => saveField('handle', v)}
+            placeholder="@username"
+            prefix="@"
+            autoCapitalize="none"
+            disabled={!handleChangeable}
+            disabledMessage={`You can change your handle in ${daysLeft} day${daysLeft === 1 ? '' : 's'}.`}
           />
-          <SettingRow
+          <EditableField
             label="Bio"
-            value={bio || 'Add a bio'}
-            onPress={() => {
-              if (Platform.OS === 'ios') {
-                Alert.prompt('Bio', 'Tell the community about yourself', (text) => saveField('bio', text || ''), 'plain-text', bio);
-              }
-            }}
+            value={bio}
+            onSave={(v) => saveField('bio', v)}
+            placeholder="Tell us about yourself"
+            multiline
           />
-          <SettingRow
-            label="Phone Number"
-            value={maskedPhone}
-            onPress={() => Alert.alert('Change Phone', 'To change your phone number, you\'ll need to verify your new number.')}
-          />
+          <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>Phone Number</Text>
+            <Text style={styles.settingValue}>{maskedPhone}</Text>
+          </View>
         </View>
 
         {/* ─── Preferences ─── */}
         <SectionHeader title="PREFERENCES" />
 
         <View style={styles.settingGroup}>
-          <SettingRow
+          <EditableField
             label="City"
-            value={city || 'Add city'}
-            onPress={() => {
-              if (Platform.OS === 'ios') {
-                Alert.prompt('City', 'Enter your city', (text) => { if (text) saveField('location', text); }, 'plain-text', city);
-              }
-            }}
+            value={city}
+            onSave={(v) => saveField('location', v)}
+            placeholder="Add city"
           />
         </View>
 
@@ -297,47 +437,35 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
         <SectionHeader title="PRIVACY & SAFETY" />
 
         <View style={styles.settingGroup}>
-          <SettingRow
-            label="Private Profile"
-            trailing={
-              <Switch
-                value={isPrivate}
-                onValueChange={togglePrivate}
-                trackColor={{ true: '#78B896', false: '#ddd' }}
-                thumbColor="#fff"
-              />
-            }
-          />
-          <SettingRow
-            label="Blocked Users"
-            onPress={() => Alert.alert('Blocked Users', 'No blocked users yet.')}
-          />
-          <SettingRow
-            label="Content Policy"
-            onPress={() => Alert.alert('Content Policy', 'The Pages is committed to a safe community. See our full policy at thepages.app/policy.')}
-          />
-          <SettingRow
-            label="Export My Data"
-            onPress={handleExportData}
-          />
+          <View style={styles.settingRow}>
+            <Text style={styles.settingLabel}>Private Profile</Text>
+            <Switch
+              value={isPrivate}
+              onValueChange={togglePrivate}
+              trackColor={{ true: '#78B896', false: '#ddd' }}
+              thumbColor="#fff"
+            />
+          </View>
+          <TouchableOpacity style={styles.settingRow} activeOpacity={0.6}>
+            <Text style={styles.settingLabel}>Content Policy</Text>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
         </View>
 
         {/* ─── Account Actions ─── */}
         <SectionHeader title="" />
 
         <View style={styles.settingGroup}>
-          <SettingRow
-            label="Sign Out"
-            onPress={handleSignOut}
-          />
-          <SettingRow
-            label="Delete Account"
-            onPress={handleDeleteAccount}
-            destructive
-          />
+          <TouchableOpacity style={styles.settingRow} onPress={handleSignOut} activeOpacity={0.6}>
+            <Text style={styles.settingLabel}>Sign Out</Text>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.settingRow} onPress={handleDeleteAccount} activeOpacity={0.6}>
+            <Text style={[styles.settingLabel, styles.destructiveText]}>Delete Account</Text>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Version */}
         <Text style={styles.versionText}>The Pages v1.0.0</Text>
       </ScrollView>
     </View>
@@ -380,6 +508,44 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 8,
   },
+
+  /* Avatar */
+  avatarSection: {
+    alignItems: 'center',
+    marginTop: 20,
+    marginBottom: 8,
+  },
+  avatarContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    overflow: 'hidden',
+    marginBottom: 8,
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  avatarFallback: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitials: {
+    fontFamily: FONTS.display,
+    fontSize: 32,
+    color: '#ffffff',
+  },
+  changePhotoText: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: 'rgba(2,4,15,0.5)',
+  },
+
+  /* Sections */
   sectionHeader: {
     fontFamily: FONTS.mono,
     fontSize: 11,
@@ -417,12 +583,93 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(2,4,15,0.4)',
     marginLeft: 12,
+    maxWidth: '50%',
+    textAlign: 'right',
+  },
+  settingValueDisabled: {
+    color: 'rgba(2,4,15,0.2)',
   },
   chevron: {
     fontFamily: FONTS.body,
     fontSize: 20,
     color: 'rgba(2,4,15,0.25)',
   },
+
+  /* Editable field */
+  editableField: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(2,4,15,0.06)',
+  },
+  editableLabel: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: 'rgba(2,4,15,0.4)',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginBottom: 6,
+  },
+  editRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editPrefix: {
+    fontFamily: FONTS.mono,
+    fontSize: 15,
+    color: 'rgba(2,4,15,0.4)',
+    marginRight: 2,
+  },
+  editInput: {
+    flex: 1,
+    fontFamily: FONTS.mono,
+    fontSize: 15,
+    color: '#02040F',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E9D25E',
+    paddingVertical: 4,
+  },
+  editInputMultiline: {
+    minHeight: 60,
+    textAlignVertical: 'top',
+  },
+  editActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 10,
+  },
+  editCancel: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+  },
+  editCancelText: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: 'rgba(2,4,15,0.4)',
+  },
+  editSave: {
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+    backgroundColor: '#E9D25E',
+    borderRadius: 8,
+  },
+  editSaveText: {
+    fontFamily: FONTS.display,
+    fontSize: 13,
+    color: '#02040F',
+  },
+
+  /* Error */
+  errorText: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: '#EB736C',
+    textAlign: 'center',
+    marginTop: 8,
+    marginBottom: 4,
+  },
+
   destructiveText: {
     color: '#EB736C',
   },
