@@ -159,18 +159,18 @@ export function AuthFlow() {
       setVerifying(true);
       setOtpError(null);
       try {
-        const timeout = new Promise<boolean>((_, reject) =>
-          setTimeout(() => reject(new Error('timeout')), 60000)
-        );
-        const success = await Promise.race([verifyOTP(otpCode), timeout]);
+        console.log('[AUTH] Verifying OTP...');
+        const success = await verifyOTP(otpCode);
+        console.log('[AUTH] verifyOTP result:', success);
         if (success) {
           setOtpError(null);
           setStep('profile');
         } else {
           setOtpError('Invalid or expired code. Try again or resend.');
         }
-      } catch {
-        setOtpError('Request timed out. Check your connection and try again.');
+      } catch (e: any) {
+        console.log('[AUTH] verifyOTP exception:', e);
+        setOtpError(e?.message || 'Something went wrong. Try again.');
       } finally {
         setVerifying(false);
       }
