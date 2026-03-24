@@ -286,9 +286,16 @@ export function ProfilePanel() {
         <View style={styles.profileInfo}>
           {/* Avatar */}
           <View style={[styles.avatar, profile?.avatar_color ? { backgroundColor: profile.avatar_color } : null]}>
-            <Text style={styles.avatarInitials}>
-              {profile?.avatar_initials || '?'}
-            </Text>
+            {profile?.avatar_url ? (
+              <Image
+                source={{ uri: profile.avatar_url }}
+                style={styles.avatarImage}
+              />
+            ) : (
+              <Text style={styles.avatarInitials}>
+                {profile?.avatar_initials || '?'}
+              </Text>
+            )}
           </View>
 
           {/* Name */}
@@ -440,6 +447,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 14,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
   },
   avatarInitials: {
     fontFamily: FONTS.display,

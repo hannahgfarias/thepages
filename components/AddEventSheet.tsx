@@ -63,6 +63,9 @@ export function AddEventSheet() {
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const [selectedMinute, setSelectedMinute] = useState<number>(0);
   const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>('PM');
+  const [locationResults, setLocationResults] = useState<Array<{ display_name: string; name: string; address: any }>>([]);
+  const [showLocationResults, setShowLocationResults] = useState(false);
+  const locationDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const addTag = () => {
     const cleaned = tagInput.trim().replace(/^#/, '');
@@ -115,6 +118,51 @@ export function AddEventSheet() {
     if (selectedDate) {
       setDateTime(formatDateTime(selectedDate, hour, minute, period));
     }
+  };
+
+  // Location search with debounce
+  const searchLocation = (query: string) => {
+    setLocation(query);
+    if (locationDebounce.current) clearTimeout(locationDebounce.current);
+    if (query.length < 3) {
+      setLocationResults([]);
+      setShowLocationResults(false);
+      return;
+    }
+    locationDebounce.current = setTimeout(async () => {
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`,
+          { headers: { 'User-Agent': 'ThePages/1.0' } }
+        );
+        const data = await res.json();
+        setLocationResults(data);
+        setShowLocationResults(data.length > 0);
+      } catch {
+        setLocationResults([]);
+        setShowLocationResults(false);
+      }
+    }, 300);
+  };
+
+  const selectLocation = (result: { display_name: string; name: string; address: any }) => {
+    // Build a clean location string: "Venue Name, City, State" or "Address, City, State"
+    const parts: string[] = [];
+    if (result.name && result.name !== result.address?.road) parts.push(result.name);
+    if (result.address?.road) {
+      const road = result.address.house_number
+        ? `${result.address.house_number} ${result.address.road}`
+        : result.address.road;
+      parts.push(road);
+    }
+    if (result.address?.city || result.address?.town || result.address?.village) {
+      parts.push(result.address.city || result.address.town || result.address.village);
+    }
+    if (result.address?.state) parts.push(result.address.state);
+
+    setLocation(parts.length > 0 ? parts.join(', ') : result.display_name);
+    setShowLocationResults(false);
+    setLocationResults([]);
   };
 
   const slideY = useRef(new Animated.Value(height)).current;
@@ -587,10 +635,37 @@ export function AddEventSheet() {
               <TextInput
                 style={styles.input}
                 value={location}
-                onChangeText={setLocation}
-                placeholder="Location"
+                onChangeText={searchLocation}
+                placeholder="Search venue or address"
                 placeholderTextColor="#999"
+                onFocus={() => {
+                  if (locationResults.length > 0) setShowLocationResults(true);
+                }}
+                onBlur={() => {
+                  // Delay hiding so tap on result registers
+                  setTimeout(() => setShowLocationResults(false), 200);
+                }}
               />
+              {showLocationResults && (
+                <View style={styles.locationDropdown}>
+                  {locationResults.map((result, i) => {
+                    // Show a clean short name
+                    const shortName = result.name || result.display_name.split(',')[0];
+                    const subText = result.display_name.split(',').slice(1, 3).join(',').trim();
+                    return (
+                      <TouchableOpacity
+                        key={i}
+                        style={styles.locationResult}
+                        activeOpacity={0.7}
+                        onPress={() => selectLocation(result)}
+                      >
+                        <Text style={styles.locationResultName} numberOfLines={1}>{shortName}</Text>
+                        <Text style={styles.locationResultSub} numberOfLines={1}>{subText}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
             </View>
 
             <View style={styles.field}>
@@ -813,6 +888,8 @@ const styles = StyleSheet.create({
   },
   field: {
     marginBottom: 12,
+    position: 'relative',
+    zIndex: 1,
   },
   input: {
     fontFamily: FONTS.body,
@@ -985,6 +1062,36 @@ const styles = StyleSheet.create({
   periodChipTextSelected: {
     color: '#02040F',
     fontFamily: FONTS.display,
+  },
+  locationDropdown: {
+    position: 'absolute',
+    top: 48,
+    left: 0,
+    right: 0,
+    backgroundColor: '#ffffff',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    zIndex: 100,
+    elevation: 100,
+    overflow: 'hidden',
+  },
+  locationResult: {
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  locationResultName: {
+    fontFamily: FONTS.display,
+    fontSize: 14,
+    color: '#02040F',
+    marginBottom: 2,
+  },
+  locationResultSub: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: '#999',
   },
   categorySection: {
     marginTop: 4,

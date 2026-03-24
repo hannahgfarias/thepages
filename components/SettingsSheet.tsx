@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../hooks/useAuth';
+import { useOverlay } from '../app/(tabs)/_layout';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
 
@@ -71,6 +72,7 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const { profile, signOut, updateProfile, session } = useAuth();
+  const { setShowProfile } = useOverlay();
 
   // Animation
   const translateX = useRef(new Animated.Value(height)).current;
@@ -156,10 +158,15 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
   };
 
   const handleSignOut = () => {
+    const doSignOut = async () => {
+      await signOut();
+      handleClose();            // close settings
+      setShowProfile(false);    // close profile → go back to browse
+    };
+
     if (Platform.OS === 'web') {
-      // Alert.alert callbacks don't work reliably on web
       if (window.confirm('Are you sure you want to sign out?')) {
-        signOut().then(() => handleClose());
+        doSignOut();
       }
     } else {
       Alert.alert(
@@ -170,10 +177,7 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
           {
             text: 'Sign Out',
             style: 'destructive',
-            onPress: async () => {
-              await signOut();
-              handleClose();
-            },
+            onPress: doSignOut,
           },
         ]
       );
