@@ -215,15 +215,15 @@ export function AddEventSheet() {
 
   const handlePickResult = async (uri: string, base64?: string) => {
     setImageUri(uri);
-    setScanning(true);
     setScanError(null);
 
+    // Try AI scan in the background — don't block the user
+    setScanning(true);
     try {
-      // Use pre-computed base64 if available (from pickImageFromLibrary), otherwise read from URI
       const imageBase64 = base64 || await readFileAsBase64(uri);
 
       const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 45000)
+        setTimeout(() => reject(new Error('timeout')), 30000)
       );
       const scanPromise = supabase.functions.invoke('scan-flyer', {
         body: { imageBase64, mediaType: 'image/jpeg' },
@@ -231,18 +231,18 @@ export function AddEventSheet() {
 
       const { data, error } = await Promise.race([scanPromise, timeout]);
 
-      if (data && !error) {
+      if (data && !error && !data.error) {
         if (data.title) setTitle(data.title);
         if (data.date) setDateTime(data.date);
         if (data.location) setLocation(data.location);
         if (data.category) setSelectedCategory(data.category);
       } else {
-        console.log('[SCAN] Error:', error, data);
-        setScanError('AI scan failed — fill in the details manually.');
+        console.log('[SCAN] Error:', error || data?.error);
+        // Don't show error prominently — user can fill in manually
       }
     } catch (e) {
       console.log('[SCAN] Exception:', e);
-      setScanError('AI scan timed out — fill in the details manually.');
+      // Silent fail — form is already visible for manual entry
     }
 
     setScanning(false);

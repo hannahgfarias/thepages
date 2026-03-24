@@ -70,30 +70,195 @@ async function pickImageWeb(options?: {
   aspect?: [number, number];
   quality?: number;
 }): Promise<PickedImage | null> {
-  return new Promise((resolve) => {
+  // Step 1: Pick file
+  const file = await new Promise<File | null>((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
     input.accept = 'image/*';
-    input.onchange = async (e: any) => {
-      const file = e.target?.files?.[0];
-      if (!file) {
-        resolve(null);
-        return;
-      }
-      try {
-        // Resize/compress on web to prevent huge payloads
-        const compressed = await compressImageWeb(file, {
-          maxWidth: 1200,
-          maxHeight: 1500,
-          quality: options?.quality || 0.8,
-        });
-        resolve(compressed);
-      } catch {
-        resolve(null);
-      }
-    };
+    input.onchange = (e: any) => resolve(e.target?.files?.[0] || null);
     input.oncancel = () => resolve(null);
     input.click();
+  });
+
+  if (!file) return null;
+
+  // Step 2: Show crop modal
+  const aspect = options?.aspect || [1, 1];
+  const quality = options?.quality || 0.8;
+
+  return showWebCropModal(file, aspect, quality);
+}
+
+/**
+ * Show a fullscreen crop modal on web.
+ * User drags to position the image within a fixed aspect-ratio frame, then confirms.
+ */
+function showWebCropModal(
+  file: File,
+  aspect: [number, number],
+  quality: number
+): Promise<PickedImage | null> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    Object.assign(overlay.style, {
+      position: 'fixed', top: '0', left: '0', right: '0', bottom: '0',
+      backgroundColor: 'rgba(0,0,0,0.85)', zIndex: '99999',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+    });
+
+    // Title
+    const title = document.createElement('div');
+    title.textContent = 'Crop Image';
+    Object.assign(title.style, {
+      color: '#fff', fontSize: '18px', fontWeight: '700', marginBottom: '16px',
+      letterSpacing: '2px', textTransform: 'uppercase',
+    });
+    overlay.appendChild(title);
+
+    // Crop container
+    const containerSize = Math.min(window.innerWidth - 48, 360);
+    const cropHeight = containerSize * (aspect[1] / aspect[0]);
+    const container = document.createElement('div');
+    Object.assign(container.style, {
+      width: `${containerSize}px`, height: `${cropHeight}px`,
+      overflow: 'hidden', position: 'relative', borderRadius: '12px',
+      border: '2px solid rgba(255,255,255,0.3)', backgroundColor: '#111',
+    });
+
+    const img = document.createElement('img');
+    img.src = URL.createObjectURL(file);
+    Object.assign(img.style, {
+      position: 'absolute', cursor: 'grab', userSelect: 'none',
+      WebkitUserDrag: 'none',
+    } as any);
+
+    let imgX = 0, imgY = 0, scale = 1;
+    let dragStartX = 0, dragStartY = 0, dragging = false;
+
+    img.onload = () => {
+      // Fit image to cover the crop area
+      const imgAspect = img.naturalWidth / img.naturalHeight;
+      const cropAspect = containerSize / cropHeight;
+
+      if (imgAspect > cropAspect) {
+        // Image is wider — fit height
+        scale = cropHeight / img.naturalHeight;
+      } else {
+        // Image is taller — fit width
+        scale = containerSize / img.naturalWidth;
+      }
+
+      const scaledW = img.naturalWidth * scale;
+      const scaledH = img.naturalHeight * scale;
+      img.style.width = `${scaledW}px`;
+      img.style.height = `${scaledH}px`;
+
+      // Center
+      imgX = (containerSize - scaledW) / 2;
+      imgY = (cropHeight - scaledH) / 2;
+      img.style.left = `${imgX}px`;
+      img.style.top = `${imgY}px`;
+    };
+
+    // Drag to reposition
+    const onPointerDown = (e: PointerEvent) => {
+      dragging = true;
+      dragStartX = e.clientX - imgX;
+      dragStartY = e.clientY - imgY;
+      img.style.cursor = 'grabbing';
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      if (!dragging) return;
+      imgX = e.clientX - dragStartX;
+      imgY = e.clientY - dragStartY;
+      img.style.left = `${imgX}px`;
+      img.style.top = `${imgY}px`;
+    };
+    const onPointerUp = () => {
+      dragging = false;
+      img.style.cursor = 'grab';
+    };
+
+    img.addEventListener('pointerdown', onPointerDown);
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+
+    container.appendChild(img);
+    overlay.appendChild(container);
+
+    // Hint
+    const hint = document.createElement('div');
+    hint.textContent = 'Drag to reposition';
+    Object.assign(hint.style, {
+      color: 'rgba(255,255,255,0.5)', fontSize: '13px', marginTop: '12px',
+    });
+    overlay.appendChild(hint);
+
+    // Buttons
+    const btnRow = document.createElement('div');
+    Object.assign(btnRow.style, {
+      display: 'flex', gap: '12px', marginTop: '20px',
+    });
+
+    const cancelBtn = document.createElement('button');
+    cancelBtn.textContent = 'Cancel';
+    Object.assign(cancelBtn.style, {
+      padding: '12px 32px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.3)',
+      backgroundColor: 'transparent', color: '#fff', fontSize: '15px', cursor: 'pointer',
+      fontFamily: 'inherit',
+    });
+
+    const confirmBtn = document.createElement('button');
+    confirmBtn.textContent = 'Use Photo';
+    Object.assign(confirmBtn.style, {
+      padding: '12px 32px', borderRadius: '12px', border: 'none',
+      backgroundColor: '#E9D25E', color: '#02040F', fontSize: '15px',
+      fontWeight: '700', cursor: 'pointer', fontFamily: 'inherit',
+    });
+
+    const cleanup = () => {
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      document.body.removeChild(overlay);
+    };
+
+    cancelBtn.onclick = () => { cleanup(); resolve(null); };
+
+    confirmBtn.onclick = () => {
+      // Render crop to canvas
+      const canvas = document.createElement('canvas');
+      canvas.width = containerSize * 2; // 2x for retina
+      canvas.height = cropHeight * 2;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) { cleanup(); resolve(null); return; }
+
+      // Draw image at current position (scaled to 2x)
+      const sx = imgX * 2;
+      const sy = imgY * 2;
+      const sw = parseFloat(img.style.width) * 2;
+      const sh = parseFloat(img.style.height) * 2;
+      ctx.drawImage(img, sx, sy, sw, sh);
+
+      canvas.toBlob((blob) => {
+        cleanup();
+        if (!blob) { resolve(null); return; }
+        const uri = URL.createObjectURL(blob);
+        const reader = new FileReader();
+        reader.onload = () => {
+          const base64 = (reader.result as string).split(',')[1];
+          resolve({ uri, base64 });
+        };
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', quality);
+    };
+
+    btnRow.appendChild(cancelBtn);
+    btnRow.appendChild(confirmBtn);
+    overlay.appendChild(btnRow);
+
+    document.body.appendChild(overlay);
   });
 }
 
