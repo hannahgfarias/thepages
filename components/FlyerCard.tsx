@@ -426,52 +426,81 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
             </TouchableOpacity>
           ) : null}
 
-          {/* Posted by + More row */}
-          <View style={styles.detailsFooter}>
-            {flyer.profile ? (
-              <TouchableOpacity
-                style={styles.postedByRow}
-                activeOpacity={0.7}
-                onPress={() => {
-                  // TODO: navigate to user profile
-                }}
-              >
-                {flyer.profile.avatar_url ? (
-                  <Image
-                    source={{ uri: flyer.profile.avatar_url }}
-                    style={styles.postedByAvatar}
-                  />
-                ) : (
-                  <View style={[styles.postedByAvatarFallback, { backgroundColor: flyer.profile.avatar_color || '#EB736C' }]}>
-                    <Text style={styles.postedByInitial}>{flyer.profile.avatar_initials || '?'}</Text>
-                  </View>
-                )}
-                <Text style={styles.postedByText}>
-                  {flyer.profile.display_name || flyer.profile.handle || 'Anonymous'}
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <View />
-            )}
-
-            {/* More/Report button — same style as save/share */}
+          {/* Posted by */}
+          {flyer.profile ? (
             <TouchableOpacity
-              style={styles.detailsMoreButton}
+              style={styles.postedByRow}
+              activeOpacity={0.7}
+              onPress={() => {
+                // TODO: navigate to user profile
+              }}
+            >
+              {flyer.profile.avatar_url ? (
+                <Image
+                  source={{ uri: flyer.profile.avatar_url }}
+                  style={styles.postedByAvatar}
+                />
+              ) : (
+                <View style={[styles.postedByAvatarFallback, { backgroundColor: flyer.profile.avatar_color || '#EB736C' }]}>
+                  <Text style={styles.postedByInitial}>{flyer.profile.avatar_initials || '?'}</Text>
+                </View>
+              )}
+              <Text style={styles.postedByText}>
+                {flyer.profile.display_name || flyer.profile.handle || 'Anonymous'}
+              </Text>
+            </TouchableOpacity>
+          ) : null}
+
+          {/* Actions row inside details */}
+          <View style={styles.detailsActions}>
+            <TouchableOpacity
+              style={[styles.detailsActionButton, saved && styles.detailsActionButtonSaved]}
+              onPress={handleSave}
+              activeOpacity={0.7}
+            >
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M5 2h14a1 1 0 011 1v19.143a.5.5 0 01-.766.424L12 18.03l-7.234 4.537A.5.5 0 014 22.143V3a1 1 0 011-1z"
+                  stroke="#fff" strokeWidth={1.5} fill={saved ? '#fff' : 'none'}
+                />
+              </Svg>
+              <Text style={styles.detailsActionText}>{saved ? 'Saved' : 'Save'}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.detailsActionButton}
+              onPress={handleShare}
+              activeOpacity={0.7}
+            >
+              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
+                <Path
+                  d="M12 3v12M12 3l4 4M12 3L8 7M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"
+                  stroke="#fff" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"
+                />
+              </Svg>
+              <Text style={styles.detailsActionText}>Share</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.detailsActionButton}
               onPress={handleMore}
               activeOpacity={0.7}
             >
               <MoreIcon />
+              <Text style={styles.detailsActionText}>Report</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
 
-        {/* Layer 5: Action rail (save & share only) */}
-        <ActionRail
-          visible={true}
-          onSave={handleSave}
-          onShare={handleShare}
-          isSaved={saved}
-        />
+        {/* Layer 5: Action rail — only when details are closed */}
+        {!active && (
+          <ActionRail
+            visible={true}
+            onSave={handleSave}
+            onShare={handleShare}
+            isSaved={saved}
+          />
+        )}
 
         {/* Report modal */}
         {showReport && (
@@ -657,20 +686,14 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: '#78B896',
   },
-  detailsFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 16,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-  },
   postedByRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    flex: 1,
+    marginTop: 14,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.1)',
   },
   postedByAvatar: {
     width: 28,
@@ -694,13 +717,29 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(255,255,255,0.6)',
   },
-  detailsMoreButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(2,4,15,0.4)',
+  detailsActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 16,
+  },
+  detailsActionButton: {
+    flex: 1,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+  },
+  detailsActionButtonSaved: {
+    backgroundColor: '#EB736C',
+  },
+  detailsActionText: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.8)',
+    letterSpacing: 0.5,
   },
   reportOverlay: {
     ...StyleSheet.absoluteFillObject,
