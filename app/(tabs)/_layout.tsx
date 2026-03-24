@@ -297,7 +297,8 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.navBg,
     borderTopWidth: 1,
     borderTopColor: COLORS.navBorder,
-    zIndex: 50,
+    zIndex: 200,
+    elevation: 200,
   },
   navBarWeb: {
     // @ts-ignore — web-only CSS property

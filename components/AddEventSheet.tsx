@@ -16,10 +16,8 @@ import {
   ActionSheetIOS,
   Switch,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
-import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
 import { supabase } from '../lib/supabase';
+import { pickImageFromLibrary, pickImageFromCamera, readFileAsBase64 } from '../lib/platform';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
@@ -132,9 +130,7 @@ export function AddEventSheet() {
     setScanError(null);
 
     try {
-      const base64 = await FileSystem.readAsStringAsync(uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
+      const base64 = await readFileAsBase64(uri);
 
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('timeout')), 20000)
@@ -161,40 +157,36 @@ export function AddEventSheet() {
   };
 
   const pickFromPhotos = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow access to your photos to upload a flyer.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: [4, 5],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      handlePickResult(result.assets[0].uri);
+    try {
+      const picked = await pickImageFromLibrary({ aspect: [4, 5], quality: 0.8 });
+      if (picked) {
+        handlePickResult(picked.uri);
+      }
+    } catch {
+      setScanError('Could not open photo picker.');
     }
   };
 
   const pickFromCamera = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Please allow camera access to take a photo of a flyer.');
-      return;
-    }
-    const result = await ImagePicker.launchCameraAsync({
-      allowsEditing: true,
-      aspect: [4, 5],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      handlePickResult(result.assets[0].uri);
+    try {
+      const picked = await pickImageFromCamera();
+      if (picked) {
+        handlePickResult(picked.uri);
+      }
+    } catch {
+      setScanError('Could not open camera.');
     }
   };
 
   const pickFromFiles = async () => {
+    // On web, pickFromPhotos already opens a file picker
+    // On native, use document picker
+    if (Platform.OS === 'web') {
+      pickFromPhotos();
+      return;
+    }
     try {
+      const DocumentPicker = require('expo-document-picker');
       const result = await DocumentPicker.getDocumentAsync({
         type: 'image/*',
         copyToCacheDirectory: true,
@@ -208,7 +200,10 @@ export function AddEventSheet() {
   };
 
   const pickImage = () => {
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === 'web') {
+      // On web, just open the file picker directly
+      pickFromPhotos();
+    } else if (Platform.OS === 'ios') {
       ActionSheetIOS.showActionSheetWithOptions(
         {
           options: ['Cancel', 'Take Photo', 'Choose from Photos', 'Browse Files'],
@@ -221,7 +216,7 @@ export function AddEventSheet() {
         }
       );
     } else {
-      // Android / web — show alert-based picker
+      // Android — show alert-based picker
       Alert.alert('Upload Flyer', 'Choose a source', [
         { text: 'Take Photo', onPress: pickFromCamera },
         { text: 'Photos', onPress: pickFromPhotos },

@@ -14,13 +14,11 @@ import {
   Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as Location from 'expo-location';
-import * as ImagePicker from 'expo-image-picker';
-import * as FileSystem from 'expo-file-system';
 import { decode } from 'base64-arraybuffer';
 import { useOverlay } from '../app/(tabs)/_layout';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
+import { detectCity, pickImageFromLibrary } from '../lib/platform';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
 
@@ -187,19 +185,9 @@ export function AuthFlow() {
         if (!cancelled) setLoadingCity(false);
       }, 10000);
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== 'granted') {
-          clearTimeout(timer);
-          if (!cancelled) setLoadingCity(false);
-          return;
-        }
-        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-        const [place] = await Location.reverseGeocodeAsync({
-          latitude: loc.coords.latitude,
-          longitude: loc.coords.longitude,
-        });
-        if (place?.city && !cancelled) {
-          setCity(place.city);
+        const detected = await detectCity();
+        if (detected && !cancelled) {
+          setCity(detected);
         }
       } catch {
         // User can type manually
@@ -215,20 +203,15 @@ export function AuthFlow() {
     signIn(rawPhoneDigits);
   };
 
-  // Pick avatar photo
+  // Pick avatar photo (works on web + native)
   const pickAvatar = async () => {
-    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'Allow photo access to set your avatar.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setAvatarUri(result.assets[0].uri);
+    try {
+      const picked = await pickImageFromLibrary({ aspect: [1, 1], quality: 0.8 });
+      if (picked) {
+        setAvatarUri(picked.uri);
+      }
+    } catch {
+      setProfileError('Could not open photo picker.');
     }
   };
 
@@ -277,9 +260,8 @@ export function AuthFlow() {
       // Avatar
       if (avatarUri) {
         try {
-          const base64 = await FileSystem.readAsStringAsync(avatarUri, {
-            encoding: FileSystem.EncodingType.Base64,
-          });
+          const { readFileAsBase64 } = require('../lib/platform');
+          const base64 = await readFileAsBase64(avatarUri);
           const userId = session?.user?.id;
           if (userId) {
             const filePath = `${userId}/avatar.jpg`;
