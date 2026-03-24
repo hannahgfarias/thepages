@@ -157,18 +157,29 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
 
   const handleShare = useCallback(async () => {
     try {
+      const pagesUrl = `https://thepages.app/event/${flyer.id}`;
       const message = [
         flyer.title,
-        flyer.subtitle,
         flyer.date_text,
         flyer.location,
-        flyer.event_url,
-      ].filter(Boolean).join('\n');
+        '',
+        pagesUrl,
+      ].filter((s) => s !== undefined && s !== null).join('\n');
 
-      await Share.share({
-        message: `${message}\n\nFound on The Pages`,
-        url: flyer.event_url || undefined,
-      });
+      if (Platform.OS === 'web' && navigator?.share) {
+        await navigator.share({
+          title: flyer.title,
+          text: message,
+          url: pagesUrl,
+        });
+      } else if (Platform.OS === 'web') {
+        await navigator.clipboard.writeText(message);
+      } else {
+        await Share.share({
+          message,
+          url: pagesUrl,
+        });
+      }
     } catch {
       // User cancelled or error
     }
