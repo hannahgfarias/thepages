@@ -124,27 +124,37 @@ export function AddEventSheet() {
     }
   }, [showAddEvent, slideY, scrimOpacity, height]);
 
+  const [scanError, setScanError] = useState<string | null>(null);
+
   const handlePickResult = async (uri: string) => {
     setImageUri(uri);
     setScanning(true);
+    setScanError(null);
 
     try {
       const base64 = await FileSystem.readAsStringAsync(uri, {
         encoding: FileSystem.EncodingType.Base64,
       });
 
-      const { data, error } = await supabase.functions.invoke('scan-flyer', {
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 20000)
+      );
+      const scanPromise = supabase.functions.invoke('scan-flyer', {
         body: { imageBase64: base64, mediaType: 'image/jpeg' },
       });
+
+      const { data, error } = await Promise.race([scanPromise, timeout]);
 
       if (data && !error) {
         if (data.title) setTitle(data.title);
         if (data.date) setDateTime(data.date);
         if (data.location) setLocation(data.location);
         if (data.category) setSelectedCategory(data.category);
+      } else {
+        setScanError('AI scan failed — fill in the details manually.');
       }
-    } catch (e) {
-      console.warn('AI scan failed, user can fill manually');
+    } catch {
+      setScanError('AI scan timed out — fill in the details manually.');
     }
 
     setScanning(false);
@@ -256,9 +266,13 @@ export function AddEventSheet() {
     setPublishing(true);
     try {
       const textToModerate = [title, selectedCategory, location].filter(Boolean).join(' ');
-      const { data, error } = await supabase.functions.invoke('moderate-content', {
+      const timeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 20000)
+      );
+      const moderatePromise = supabase.functions.invoke('moderate-content', {
         body: { text: textToModerate, imageBase64: null },
       });
+      const { data, error } = await Promise.race([moderatePromise, timeout]);
 
       if (error) {
         // Network / invocation error — treat as held (fail closed)
@@ -366,6 +380,19 @@ export function AddEventSheet() {
                 </>
               )}
             </TouchableOpacity>
+
+            {/* Scan error (dismissible) */}
+            {scanError && (
+              <TouchableOpacity
+                style={{ marginBottom: 12 }}
+                activeOpacity={0.7}
+                onPress={() => setScanError(null)}
+              >
+                <Text style={{ fontFamily: FONTS.body, fontSize: 12, color: '#EB736C', textAlign: 'center' }}>
+                  {scanError} ✕
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {/* Form fields */}
             <View style={styles.field}>

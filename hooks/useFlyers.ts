@@ -168,12 +168,19 @@ export function useFlyers() {
     const flyer = flyers.find((f) => f.id === postId);
     if (!flyer) return;
 
-    if (flyer.is_saved) {
-      // Unsave
-      await supabase.from('saves').delete().match({ user_id: userId, post_id: postId });
-    } else {
-      // Save
-      await supabase.from('saves').insert({ user_id: userId, post_id: postId });
+    try {
+      if (flyer.is_saved) {
+        const { error } = await supabase.from('saves').delete().match({ user_id: userId, post_id: postId });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('saves').insert({ user_id: userId, post_id: postId });
+        if (error) throw error;
+      }
+    } catch {
+      // Rollback optimistic update on failure
+      setFlyers((prev) =>
+        prev.map((f) => (f.id === postId ? { ...f, is_saved: !f.is_saved } : f))
+      );
     }
   }, [flyers]);
 

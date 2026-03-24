@@ -11,7 +11,7 @@ interface AuthContextValue {
   loading: boolean;
   signIn: (phone: string) => Promise<{ error?: string }>;
   verifyOTP: (code: string) => Promise<boolean>;
-  updateProfile: (data: Partial<Pick<Profile, 'display_name' | 'handle' | 'bio' | 'location' | 'avatar_url' | 'avatar_initials' | 'avatar_color'>>) => Promise<{ error?: string }>;
+  updateProfile: (data: Partial<Pick<Profile, 'display_name' | 'handle' | 'bio' | 'location' | 'avatar_url' | 'avatar_initials' | 'avatar_color' | 'is_public'>>) => Promise<{ error?: string }>;
   setPreferences: (prefs: { categories: string[] }) => Promise<void>;
   signOut: () => Promise<void>;
   skip: () => void;
@@ -56,12 +56,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setProfile(null);
       return;
     }
-    const { data } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', session.user.id)
-      .single();
-    if (data) setProfile(data as Profile);
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', session.user.id)
+        .single();
+      if (error) {
+        console.warn('Profile fetch error:', error.message);
+        return;
+      }
+      if (data) setProfile(data as Profile);
+    } catch (e) {
+      console.warn('Profile fetch failed:', e);
+    }
   }, [session]);
 
   // Listen for auth state changes
@@ -145,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [session]);
 
   // Update profile fields (display name, handle, bio, location, avatar)
-  const updateProfile = useCallback(async (data: Partial<Pick<Profile, 'display_name' | 'handle' | 'bio' | 'location' | 'avatar_url' | 'avatar_initials' | 'avatar_color'>>) => {
+  const updateProfile = useCallback(async (data: Partial<Pick<Profile, 'display_name' | 'handle' | 'bio' | 'location' | 'avatar_url' | 'avatar_initials' | 'avatar_color' | 'is_public'>>) => {
     if (!session?.user?.id) return { error: 'Not authenticated' };
 
     // Ensure handle has @ prefix
@@ -172,7 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const setPreferences = useCallback(async (prefs: { categories: string[] }) => {
     if (!session?.user?.id) return;
 
-    await supabase
+    const { error } = await supabase
       .from('profiles')
       .update({
         preferences: {
@@ -182,6 +190,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         },
       })
       .eq('id', session.user.id);
+
+    if (error) {
+      console.warn('Preferences save error:', error.message);
+    }
     await refreshProfile();
   }, [session, refreshProfile]);
 

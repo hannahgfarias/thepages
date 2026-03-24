@@ -14,7 +14,7 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { useAuth } from '../hooks/useAuth';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
@@ -70,22 +70,28 @@ function SettingRow({
 export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const { signOut } = useAuth();
+  const { profile, signOut, updateProfile, session } = useAuth();
 
   // Animation
   const translateX = useRef(new Animated.Value(height)).current;
 
-  // Settings state
-  const [displayName, setDisplayName] = useState('Hannah');
-  const [handle, setHandle] = useState('@hannahgfarias');
+  // Settings state — initialized from profile
+  const [displayName, setDisplayName] = useState('');
+  const [handle, setHandle] = useState('');
   const [bio, setBio] = useState('');
-  const [city, setCity] = useState('San Francisco, CA');
+  const [city, setCity] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
-  const [notifyNewEvents, setNotifyNewEvents] = useState(true);
-  const [notifySaves, setNotifySaves] = useState(true);
-  const [notifyCommunity, setNotifyCommunity] = useState(false);
-  const [darkMode, setDarkMode] = useState(false);
-  const [editingField, setEditingField] = useState<string | null>(null);
+
+  // Sync state from profile when sheet opens
+  useEffect(() => {
+    if (visible && profile) {
+      setDisplayName(profile.display_name || '');
+      setHandle(profile.handle || '');
+      setBio(profile.bio || '');
+      setCity(profile.location || '');
+      setIsPrivate(!profile.is_public);
+    }
+  }, [visible, profile]);
 
   useEffect(() => {
     if (visible) {
@@ -112,6 +118,41 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
       easing: EASING,
       useNativeDriver: true,
     }).start(() => onClose());
+  };
+
+  // Save a single field to Supabase
+  const saveField = async (field: string, value: string) => {
+    const data: Record<string, any> = {};
+    if (field === 'display_name') {
+      setDisplayName(value);
+      data.display_name = value;
+      // Update initials too
+      data.avatar_initials = value ? value[0].toUpperCase() : '?';
+    } else if (field === 'handle') {
+      const formatted = value.startsWith('@') ? value : '@' + value;
+      setHandle(formatted);
+      data.handle = formatted;
+    } else if (field === 'bio') {
+      setBio(value);
+      data.bio = value;
+    } else if (field === 'location') {
+      setCity(value);
+      data.location = value;
+    }
+    const result = await updateProfile(data);
+    if (result?.error) {
+      Alert.alert('Error', result.error);
+    }
+  };
+
+  const togglePrivate = async (value: boolean) => {
+    setIsPrivate(value);
+    const result = await updateProfile({ is_public: !value } as any);
+    if (result?.error) {
+      // Rollback on failure
+      setIsPrivate(!value);
+      Alert.alert('Error', 'Failed to update privacy setting. Please try again.');
+    }
   };
 
   const handleSignOut = () => {
@@ -154,6 +195,11 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
     Alert.alert('Export Data', 'Your data export will be sent to your email address.');
   };
 
+  // Mask phone number
+  const maskedPhone = session?.user?.phone
+    ? '•••• ' + session.user.phone.replace(/\D/g, '').slice(-4)
+    : '—';
+
   if (!visible) return null;
 
   return (
@@ -189,12 +235,10 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
         <View style={styles.settingGroup}>
           <SettingRow
             label="Display Name"
-            value={displayName}
+            value={displayName || 'Add name'}
             onPress={() => {
               if (Platform.OS === 'ios') {
-                Alert.prompt('Display Name', 'Enter your display name', (text) => { if (text) setDisplayName(text); }, 'plain-text', displayName);
-              } else {
-                setEditingField('name');
+                Alert.prompt('Display Name', 'Enter your display name', (text) => { if (text) saveField('display_name', text); }, 'plain-text', displayName);
               }
             }}
           />
@@ -203,9 +247,7 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
             value={handle}
             onPress={() => {
               if (Platform.OS === 'ios') {
-                Alert.prompt('Handle', 'Enter your handle (starts with @)', (text) => { if (text) setHandle(text.startsWith('@') ? text : '@' + text); }, 'plain-text', handle);
-              } else {
-                setEditingField('handle');
+                Alert.prompt('Handle', 'Enter your handle (starts with @)', (text) => { if (text) saveField('handle', text); }, 'plain-text', handle);
               }
             }}
           />
@@ -214,15 +256,13 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
             value={bio || 'Add a bio'}
             onPress={() => {
               if (Platform.OS === 'ios') {
-                Alert.prompt('Bio', 'Tell the community about yourself', (text) => setBio(text || ''), 'plain-text', bio);
-              } else {
-                setEditingField('bio');
+                Alert.prompt('Bio', 'Tell the community about yourself', (text) => saveField('bio', text || ''), 'plain-text', bio);
               }
             }}
           />
           <SettingRow
             label="Phone Number"
-            value="•••• 8720"
+            value={maskedPhone}
             onPress={() => Alert.alert('Change Phone', 'To change your phone number, you\'ll need to verify your new number.')}
           />
         </View>
@@ -233,16 +273,13 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
         <View style={styles.settingGroup}>
           <SettingRow
             label="City"
-            value={city}
+            value={city || 'Add city'}
             onPress={() => {
               if (Platform.OS === 'ios') {
-                Alert.prompt('City', 'Enter your city', (text) => { if (text) setCity(text); }, 'plain-text', city);
-              } else {
-                setEditingField('city');
+                Alert.prompt('City', 'Enter your city', (text) => { if (text) saveField('location', text); }, 'plain-text', city);
               }
             }}
           />
-          {/* No push notifications in v1 — community requests show in Profile → Community */}
         </View>
 
         {/* ─── Privacy & Safety ─── */}
@@ -254,7 +291,7 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
             trailing={
               <Switch
                 value={isPrivate}
-                onValueChange={setIsPrivate}
+                onValueChange={togglePrivate}
                 trackColor={{ true: '#78B896', false: '#ddd' }}
                 thumbColor="#fff"
               />

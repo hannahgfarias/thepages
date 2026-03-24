@@ -207,19 +207,23 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
     }
   }, []);
 
-  const handleReport = useCallback((reason: string) => {
+  const handleReport = useCallback(async (reason: string) => {
     setReportReason(reason);
-    // Submit report to Supabase
-    supabase.from('reports').insert({
-      reporter_id: 'anonymous', // TODO: use real user ID
-      post_id: flyer.id,
-      reason,
-    }).then(() => {
-      Alert.alert('Reported', 'Thanks for helping keep The Pages safe. We\'ll review this shortly.');
-    }).catch(() => {
-      Alert.alert('Error', 'Could not submit report. Please try again.');
-    });
     setShowReport(false);
+    try {
+      const { error } = await supabase.from('reports').insert({
+        reporter_id: 'anonymous', // TODO: use real user ID
+        post_id: flyer.id,
+        reason,
+      });
+      if (error) throw error;
+      Alert.alert('Reported', 'Thanks for helping keep The Pages safe. We\'ll review this shortly.');
+    } catch {
+      Alert.alert('Error', 'Could not submit report. Please try again.', [
+        { text: 'Retry', onPress: () => handleReport(reason) },
+        { text: 'Dismiss', style: 'cancel' },
+      ]);
+    }
   }, [flyer.id]);
 
   const handleCTA = useCallback(() => {

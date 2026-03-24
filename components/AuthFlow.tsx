@@ -16,8 +16,11 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
+import { decode } from 'base64-arraybuffer';
 import { useOverlay } from '../app/(tabs)/_layout';
 import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
 
@@ -31,7 +34,7 @@ type Step = 'phone' | 'otp' | 'profile' | 'preferences';
 
 export function AuthFlow() {
   const { showAuth, setShowAuth } = useOverlay();
-  const { signIn, verifyOTP, updateProfile, setPreferences, checkHandleAvailable, skip } = useAuth();
+  const { signIn, verifyOTP, updateProfile, setPreferences, checkHandleAvailable, skip, session } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState<Step>('phone');
@@ -52,6 +55,8 @@ export function AuthFlow() {
   const [avatarColor, setAvatarColor] = useState(AVATAR_COLORS[0]);
   const [handleError, setHandleError] = useState<string | null>(null);
   const [checkingHandle, setCheckingHandle] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -108,12 +113,21 @@ export function AuthFlow() {
     if (rawPhoneDigits.length === 10) {
       setSendingCode(true);
       setOtpError(null);
-      const result = await signIn(rawPhoneDigits);
-      setSendingCode(false);
-      if (result?.error) {
-        setOtpError('Failed to send code: ' + result.error);
+      try {
+        const timeout = new Promise<{ error: string }>((_, reject) =>
+          setTimeout(() => reject({ error: 'Request timed out. Check your connection and try again.' }), 15000)
+        );
+        const result = await Promise.race([signIn(rawPhoneDigits), timeout]);
+        if (result?.error) {
+          setOtpError(result.error);
+          return;
+        }
+        setStep('otp');
+      } catch (e: any) {
+        setOtpError(e?.error || 'Something went wrong. Try again.');
+      } finally {
+        setSendingCode(false);
       }
-      setStep('otp');
     }
   };
 
@@ -144,26 +158,39 @@ export function AuthFlow() {
     if (otpCode.length === 6) {
       setVerifying(true);
       setOtpError(null);
-      const success = await verifyOTP(otpCode);
-      setVerifying(false);
-      if (success) {
-        setOtpError(null);
-        setStep('profile');
-      } else {
-        setOtpError('Invalid or expired code. Try again or resend.');
+      try {
+        const timeout = new Promise<boolean>((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), 15000)
+        );
+        const success = await Promise.race([verifyOTP(otpCode), timeout]);
+        if (success) {
+          setOtpError(null);
+          setStep('profile');
+        } else {
+          setOtpError('Invalid or expired code. Try again or resend.');
+        }
+      } catch {
+        setOtpError('Request timed out. Check your connection and try again.');
+      } finally {
+        setVerifying(false);
       }
     }
   };
 
-  // Auto-detect city when profile step is shown
+  // Auto-detect city when profile step is shown (with 10s timeout)
   useEffect(() => {
     if (step !== 'profile' || city) return;
+    let cancelled = false;
     (async () => {
       setLoadingCity(true);
+      const timer = setTimeout(() => {
+        if (!cancelled) setLoadingCity(false);
+      }, 10000);
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== 'granted') {
-          setLoadingCity(false);
+          clearTimeout(timer);
+          if (!cancelled) setLoadingCity(false);
           return;
         }
         const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
@@ -171,15 +198,17 @@ export function AuthFlow() {
           latitude: loc.coords.latitude,
           longitude: loc.coords.longitude,
         });
-        if (place?.city) {
+        if (place?.city && !cancelled) {
           setCity(place.city);
         }
       } catch {
         // User can type manually
       } finally {
-        setLoadingCity(false);
+        clearTimeout(timer);
+        if (!cancelled) setLoadingCity(false);
       }
     })();
+    return () => { cancelled = true; };
   }, [step]);
 
   const handleResend = () => {
@@ -232,29 +261,74 @@ export function AuthFlow() {
   // Save profile and move to preferences
   const handleProfileContinue = async () => {
     if (handleError) return;
+    setSavingProfile(true);
+    setProfileError(null);
 
-    const profileData: Record<string, string> = {};
-    if (displayName.trim()) profileData.display_name = displayName.trim();
-    if (handle.trim()) {
-      const clean = handle.replace(/^@/, '');
-      profileData.handle = `@${clean}`;
+    try {
+      const profileData: Record<string, string> = {};
+      if (displayName.trim()) profileData.display_name = displayName.trim();
+      if (handle.trim()) {
+        const clean = handle.replace(/^@/, '');
+        profileData.handle = `@${clean}`;
+      }
+      if (bio.trim()) profileData.bio = bio.trim();
+      if (city.trim()) profileData.location = city.trim();
+
+      // Avatar
+      if (avatarUri) {
+        try {
+          const base64 = await FileSystem.readAsStringAsync(avatarUri, {
+            encoding: FileSystem.EncodingType.Base64,
+          });
+          const userId = session?.user?.id;
+          if (userId) {
+            const filePath = `${userId}/avatar.jpg`;
+            const { error: uploadError } = await supabase.storage
+              .from('avatars')
+              .upload(filePath, decode(base64), {
+                contentType: 'image/jpeg',
+                upsert: true,
+              });
+            if (uploadError) {
+              setProfileError('Photo upload failed. Your profile will use initials instead.');
+              // Fall back to initials
+              const initial = displayName.trim() ? displayName.trim()[0].toUpperCase() : '?';
+              profileData.avatar_initials = initial;
+              profileData.avatar_color = avatarColor;
+            } else {
+              const { data: urlData } = supabase.storage
+                .from('avatars')
+                .getPublicUrl(filePath);
+              profileData.avatar_url = urlData.publicUrl;
+            }
+          }
+        } catch {
+          setProfileError('Photo upload failed. Your profile will use initials instead.');
+          const initial = displayName.trim() ? displayName.trim()[0].toUpperCase() : '?';
+          profileData.avatar_initials = initial;
+          profileData.avatar_color = avatarColor;
+        }
+      } else {
+        const initial = displayName.trim() ? displayName.trim()[0].toUpperCase() : '?';
+        profileData.avatar_initials = initial;
+        profileData.avatar_color = avatarColor;
+      }
+
+      if (Object.keys(profileData).length > 0) {
+        const result = await updateProfile(profileData);
+        if (result?.error) {
+          setProfileError('Failed to save profile. Tap Continue to retry.');
+          setSavingProfile(false);
+          return;
+        }
+      }
+
+      setSavingProfile(false);
+      setStep('preferences');
+    } catch {
+      setProfileError('Something went wrong. Tap Continue to retry.');
+      setSavingProfile(false);
     }
-    if (bio.trim()) profileData.bio = bio.trim();
-    if (city.trim()) profileData.location = city.trim();
-
-    // Avatar: if no photo, use initials + chosen color
-    if (!avatarUri) {
-      const initial = displayName.trim() ? displayName.trim()[0].toUpperCase() : '?';
-      profileData.avatar_initials = initial;
-      profileData.avatar_color = avatarColor;
-    }
-    // TODO: Upload avatarUri to Supabase Storage and set avatar_url
-
-    if (Object.keys(profileData).length > 0) {
-      await updateProfile(profileData);
-    }
-
-    setStep('preferences');
   };
 
   // Skip profile step
@@ -262,8 +336,12 @@ export function AuthFlow() {
     setStep('preferences');
   };
 
-  const handleLetsGo = () => {
-    setPreferences({ categories: selectedPrefs });
+  const handleLetsGo = async () => {
+    try {
+      await setPreferences({ categories: selectedPrefs });
+    } catch {
+      // Preferences are non-critical — user can set them later in settings
+    }
     handleClose();
   };
 
@@ -328,16 +406,22 @@ export function AuthFlow() {
                   />
                 </View>
 
+                {otpError && (
+                  <Text style={styles.errorText}>{otpError}</Text>
+                )}
+
                 <TouchableOpacity
                   style={[
                     styles.primaryButton,
-                    rawPhoneDigits.length < 10 && styles.buttonDisabled,
+                    (rawPhoneDigits.length < 10 || sendingCode) && styles.buttonDisabled,
                   ]}
                   activeOpacity={0.8}
                   onPress={handleSendCode}
-                  disabled={rawPhoneDigits.length < 10}
+                  disabled={rawPhoneDigits.length < 10 || sendingCode}
                 >
-                  <Text style={styles.primaryButtonText}>SEND CODE</Text>
+                  <Text style={styles.primaryButtonText}>
+                    {sendingCode ? 'SENDING...' : 'SEND CODE'}
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity
@@ -388,6 +472,10 @@ export function AuthFlow() {
                   ))}
                 </View>
 
+                {otpError && (
+                  <Text style={styles.errorText}>{otpError}</Text>
+                )}
+
                 <TouchableOpacity
                   style={styles.resendLink}
                   activeOpacity={0.7}
@@ -405,9 +493,11 @@ export function AuthFlow() {
                   ]}
                   activeOpacity={0.8}
                   onPress={handleVerify}
-                  disabled={otpCode.length < 6}
+                  disabled={otpCode.length < 6 || verifying}
                 >
-                  <Text style={styles.primaryButtonText}>VERIFY</Text>
+                  <Text style={styles.primaryButtonText}>
+                    {verifying ? 'VERIFYING...' : 'VERIFY'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             )}
@@ -517,16 +607,24 @@ export function AuthFlow() {
                   editable={!loadingCity}
                 />
 
+                {profileError && (
+                  <TouchableOpacity onPress={() => setProfileError(null)} activeOpacity={0.7}>
+                    <Text style={styles.errorText}>{profileError} ✕</Text>
+                  </TouchableOpacity>
+                )}
+
                 <TouchableOpacity
                   style={[
                     styles.primaryButton,
-                    !!handleError && styles.buttonDisabled,
+                    (!!handleError || savingProfile) && styles.buttonDisabled,
                   ]}
                   activeOpacity={0.8}
                   onPress={handleProfileContinue}
-                  disabled={!!handleError}
+                  disabled={!!handleError || savingProfile}
                 >
-                  <Text style={styles.primaryButtonText}>CONTINUE</Text>
+                  <Text style={styles.primaryButtonText}>
+                    {savingProfile ? 'SAVING...' : 'CONTINUE'}
+                  </Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity

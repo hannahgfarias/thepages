@@ -25,9 +25,17 @@ class LargeSecureStore {
   }
 
   async getItem(key: string): Promise<string | null> {
-    const encrypted = await AsyncStorage.getItem(key);
-    if (!encrypted) return null;
-    return this._decrypt(key, encrypted);
+    try {
+      const encrypted = await AsyncStorage.getItem(key);
+      if (!encrypted) return null;
+      return await this._decrypt(key, encrypted);
+    } catch {
+      // If decryption fails (key lost, corrupted), clear stale data and return null
+      // This forces a fresh login instead of crashing
+      await AsyncStorage.removeItem(key);
+      try { await SecureStore.deleteItemAsync(key); } catch { /* ignore */ }
+      return null;
+    }
   }
 
   async removeItem(key: string): Promise<void> {
