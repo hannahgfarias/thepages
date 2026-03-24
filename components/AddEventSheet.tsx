@@ -60,6 +60,9 @@ export function AddEventSheet() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isPublic, setIsPublic] = useState(true);
   const [publishing, setPublishing] = useState(false);
+  const [selectedHour, setSelectedHour] = useState<number | null>(null);
+  const [selectedMinute, setSelectedMinute] = useState<number>(0);
+  const [selectedPeriod, setSelectedPeriod] = useState<'AM' | 'PM'>('PM');
 
   const addTag = () => {
     const cleaned = tagInput.trim().replace(/^#/, '');
@@ -89,12 +92,29 @@ export function AddEventSheet() {
   const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
 
+  const formatDateTime = (date: Date, hour: number | null, minute: number, period: 'AM' | 'PM') => {
+    const monthName = MONTHS[date.getMonth()].toUpperCase().slice(0, 3);
+    let result = `${monthName} ${date.getDate()}`;
+    if (hour !== null) {
+      const minStr = minute === 0 ? '' : `:${minute.toString().padStart(2, '0')}`;
+      result += ` • ${hour}${minStr}${period}`;
+    }
+    return result;
+  };
+
   const selectDate = (day: number) => {
     const date = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day);
     setSelectedDate(date);
-    const monthName = MONTHS[date.getMonth()].toUpperCase().slice(0, 3);
-    setDateTime(`${monthName} ${day}`);
-    setShowDatePicker(false);
+    setDateTime(formatDateTime(date, selectedHour, selectedMinute, selectedPeriod));
+  };
+
+  const selectTime = (hour: number, minute: number, period: 'AM' | 'PM') => {
+    setSelectedHour(hour);
+    setSelectedMinute(minute);
+    setSelectedPeriod(period);
+    if (selectedDate) {
+      setDateTime(formatDateTime(selectedDate, hour, minute, period));
+    }
   };
 
   const slideY = useRef(new Animated.Value(height)).current;
@@ -476,21 +496,90 @@ export function AddEventSheet() {
                   })}
                 </View>
 
-                {/* Manual time entry */}
-                <TextInput
-                  style={[styles.input, { marginTop: 8 }]}
-                  value={dateTime.includes('•') ? dateTime.split('•')[1]?.trim() : ''}
-                  onChangeText={(t) => {
-                    if (selectedDate) {
-                      const monthName = MONTHS[selectedDate.getMonth()].toUpperCase().slice(0, 3);
-                      setDateTime(`${monthName} ${selectedDate.getDate()} • ${t}`);
-                    } else {
-                      setDateTime(t);
-                    }
-                  }}
-                  placeholder="Add time (e.g. 7PM, DOORS 10PM)"
-                  placeholderTextColor="#999"
-                />
+                {/* Time picker */}
+                <View style={styles.timePickerContainer}>
+                  <Text style={styles.timePickerLabel}>TIME</Text>
+                  <View style={styles.timePickerRow}>
+                    {/* Hour */}
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.timeScrollContent}
+                    >
+                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((h) => (
+                        <TouchableOpacity
+                          key={h}
+                          style={[
+                            styles.timeChip,
+                            selectedHour === h && styles.timeChipSelected,
+                          ]}
+                          activeOpacity={0.7}
+                          onPress={() => selectTime(h, selectedMinute, selectedPeriod)}
+                        >
+                          <Text style={[
+                            styles.timeChipText,
+                            selectedHour === h && styles.timeChipTextSelected,
+                          ]}>{h}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  {/* Minutes */}
+                  <View style={styles.timePickerRow}>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      contentContainerStyle={styles.timeScrollContent}
+                    >
+                      {[0, 15, 30, 45].map((m) => (
+                        <TouchableOpacity
+                          key={m}
+                          style={[
+                            styles.timeChip,
+                            selectedHour !== null && selectedMinute === m && styles.timeChipSelected,
+                          ]}
+                          activeOpacity={0.7}
+                          onPress={() => {
+                            if (selectedHour !== null) {
+                              selectTime(selectedHour, m, selectedPeriod);
+                            }
+                          }}
+                        >
+                          <Text style={[
+                            styles.timeChipText,
+                            selectedHour !== null && selectedMinute === m && styles.timeChipTextSelected,
+                          ]}>:{m.toString().padStart(2, '0')}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+
+                  {/* AM/PM */}
+                  <View style={styles.periodRow}>
+                    {(['AM', 'PM'] as const).map((p) => (
+                      <TouchableOpacity
+                        key={p}
+                        style={[
+                          styles.periodChip,
+                          selectedPeriod === p && styles.periodChipSelected,
+                        ]}
+                        activeOpacity={0.7}
+                        onPress={() => {
+                          setSelectedPeriod(p);
+                          if (selectedHour !== null && selectedDate) {
+                            setDateTime(formatDateTime(selectedDate, selectedHour, selectedMinute, p));
+                          }
+                        }}
+                      >
+                        <Text style={[
+                          styles.periodChipText,
+                          selectedPeriod === p && styles.periodChipTextSelected,
+                        ]}>{p}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
               </View>
             )}
 
@@ -830,6 +919,72 @@ const styles = StyleSheet.create({
   },
   calendarDayTextSelected: {
     color: '#ffffff',
+  },
+  timePickerContainer: {
+    marginTop: 12,
+    width: '100%',
+  },
+  timePickerLabel: {
+    fontFamily: FONTS.display,
+    fontSize: 11,
+    letterSpacing: 2,
+    color: 'rgba(2,4,15,0.5)',
+    marginBottom: 8,
+  },
+  timePickerRow: {
+    marginBottom: 8,
+  },
+  timeScrollContent: {
+    gap: 6,
+    paddingRight: 8,
+  },
+  timeChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 16,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 1,
+    borderColor: '#ddd',
+  },
+  timeChipSelected: {
+    backgroundColor: '#E9D25E',
+    borderColor: '#E9D25E',
+  },
+  timeChipText: {
+    fontFamily: FONTS.mono,
+    fontSize: 13,
+    color: '#333',
+  },
+  timeChipTextSelected: {
+    color: '#02040F',
+    fontFamily: FONTS.display,
+  },
+  periodRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 4,
+  },
+  periodChip: {
+    flex: 1,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    alignItems: 'center',
+  },
+  periodChipSelected: {
+    backgroundColor: '#E9D25E',
+    borderColor: '#E9D25E',
+  },
+  periodChipText: {
+    fontFamily: FONTS.mono,
+    fontSize: 14,
+    color: '#333',
+  },
+  periodChipTextSelected: {
+    color: '#02040F',
+    fontFamily: FONTS.display,
   },
   categorySection: {
     marginTop: 4,
