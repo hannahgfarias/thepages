@@ -113,20 +113,20 @@ function showWebCropModal(
   quality: number
 ): Promise<PickedImage | null> {
   return new Promise((resolve) => {
-    // ── Overlay (alabaster bg, not dark) ──
+    // ── Fullscreen overlay ──
     const overlay = document.createElement('div');
     Object.assign(overlay.style, {
       position: 'fixed', top: '0', left: '0', right: '0', bottom: '0',
       backgroundColor: DS.alabaster, zIndex: '99999',
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      padding: '24px',
+      display: 'flex', flexDirection: 'column',
     });
 
     // ── Header ──
     const header = document.createElement('div');
     Object.assign(header.style, {
-      width: '100%', maxWidth: '400px', display: 'flex',
-      justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px',
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      padding: '12px 20px', paddingTop: 'max(12px, env(safe-area-inset-top))',
+      flexShrink: '0',
     });
 
     const title = document.createElement('div');
@@ -139,38 +139,45 @@ function showWebCropModal(
     const closeBtn = document.createElement('button');
     closeBtn.textContent = '✕';
     Object.assign(closeBtn.style, {
-      background: 'none', border: 'none', fontSize: '18px', color: DS.inkMuted,
-      cursor: 'pointer', padding: '4px 8px', fontFamily: DS.fontBody,
+      background: 'none', border: 'none', fontSize: '20px', color: DS.inkMuted,
+      cursor: 'pointer', padding: '8px', fontFamily: DS.fontBody,
     });
 
     header.appendChild(title);
     header.appendChild(closeBtn);
     overlay.appendChild(header);
 
-    // ── Crop container ──
-    const containerSize = Math.min(window.innerWidth - 48, 380);
-    const cropHeight = containerSize * (aspect[1] / aspect[0]);
-    const container = document.createElement('div');
-    Object.assign(container.style, {
-      width: `${containerSize}px`, height: `${cropHeight}px`,
-      overflow: 'hidden', position: 'relative', borderRadius: '4px',
-      border: `1px solid ${DS.inkLight}`, backgroundColor: '#fff',
-      boxShadow: '0 2px 16px rgba(2,4,15,0.08)',
+    // ── Crop container (fills available space) ──
+    const containerWrapper = document.createElement('div');
+    Object.assign(containerWrapper.style, {
+      flex: '1', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: '0 16px', overflow: 'hidden',
     });
 
-    // ── Corner marks (crop guides) ──
-    const cornerSize = '20px';
-    const cornerWeight = '2px';
-    const corners = [
-      { top: '8px', left: '8px', borderTop: `${cornerWeight} solid ${DS.ink}`, borderLeft: `${cornerWeight} solid ${DS.ink}` },
-      { top: '8px', right: '8px', borderTop: `${cornerWeight} solid ${DS.ink}`, borderRight: `${cornerWeight} solid ${DS.ink}` },
-      { bottom: '8px', left: '8px', borderBottom: `${cornerWeight} solid ${DS.ink}`, borderLeft: `${cornerWeight} solid ${DS.ink}` },
-      { bottom: '8px', right: '8px', borderBottom: `${cornerWeight} solid ${DS.ink}`, borderRight: `${cornerWeight} solid ${DS.ink}` },
-    ];
-    corners.forEach((pos) => {
+    // Calculate size to fill width, constrained by aspect ratio and available height
+    const availW = window.innerWidth - 32;
+    const availH = window.innerHeight - 220; // header + controls + buttons
+    const cropW = Math.min(availW, availH * (aspect[0] / aspect[1]));
+    const cropH = cropW * (aspect[1] / aspect[0]);
+
+    const container = document.createElement('div');
+    Object.assign(container.style, {
+      width: `${cropW}px`, height: `${cropH}px`,
+      overflow: 'hidden', position: 'relative', borderRadius: '4px',
+      border: `1px solid ${DS.inkLight}`, backgroundColor: '#000',
+    });
+
+    // Corner marks
+    const cSize = '24px', cWeight = '2.5px';
+    [
+      { top: '0', left: '0', borderTop: `${cWeight} solid #fff`, borderLeft: `${cWeight} solid #fff` },
+      { top: '0', right: '0', borderTop: `${cWeight} solid #fff`, borderRight: `${cWeight} solid #fff` },
+      { bottom: '0', left: '0', borderBottom: `${cWeight} solid #fff`, borderLeft: `${cWeight} solid #fff` },
+      { bottom: '0', right: '0', borderBottom: `${cWeight} solid #fff`, borderRight: `${cWeight} solid #fff` },
+    ].forEach((pos) => {
       const corner = document.createElement('div');
       Object.assign(corner.style, {
-        position: 'absolute', width: cornerSize, height: cornerSize,
+        position: 'absolute', width: cSize, height: cSize,
         pointerEvents: 'none', zIndex: '2', ...pos,
       });
       container.appendChild(corner);
@@ -180,47 +187,55 @@ function showWebCropModal(
     img.src = URL.createObjectURL(file);
     Object.assign(img.style, {
       position: 'absolute', cursor: 'grab', userSelect: 'none',
-      WebkitUserDrag: 'none', touchAction: 'none',
+      touchAction: 'none', transformOrigin: '0 0',
     } as any);
+    img.draggable = false;
 
-    let imgX = 0, imgY = 0, scale = 1;
+    let imgX = 0, imgY = 0;
+    let baseScale = 1, userZoom = 1;
     let dragStartX = 0, dragStartY = 0, dragging = false;
+    // Pinch state
+    let pinchStartDist = 0, pinchStartZoom = 1;
 
-    img.onload = () => {
-      const imgAspect = img.naturalWidth / img.naturalHeight;
-      const cropAspect = containerSize / cropHeight;
-
-      if (imgAspect > cropAspect) {
-        scale = cropHeight / img.naturalHeight;
-      } else {
-        scale = containerSize / img.naturalWidth;
-      }
-
-      const scaledW = img.naturalWidth * scale;
-      const scaledH = img.naturalHeight * scale;
-      img.style.width = `${scaledW}px`;
-      img.style.height = `${scaledH}px`;
-
-      imgX = (containerSize - scaledW) / 2;
-      imgY = (cropHeight - scaledH) / 2;
+    const applyTransform = () => {
+      const s = baseScale * userZoom;
+      const w = img.naturalWidth * s;
+      const h = img.naturalHeight * s;
+      img.style.width = `${w}px`;
+      img.style.height = `${h}px`;
       img.style.left = `${imgX}px`;
       img.style.top = `${imgY}px`;
     };
 
-    // ── Drag to reposition ──
+    img.onload = () => {
+      const imgAspect = img.naturalWidth / img.naturalHeight;
+      const cropAspect = cropW / cropH;
+      // Cover the crop area
+      baseScale = imgAspect > cropAspect
+        ? cropH / img.naturalHeight
+        : cropW / img.naturalWidth;
+      userZoom = 1;
+      const w = img.naturalWidth * baseScale;
+      const h = img.naturalHeight * baseScale;
+      imgX = (cropW - w) / 2;
+      imgY = (cropH - h) / 2;
+      applyTransform();
+      // Set slider to match
+      slider.value = '1';
+    };
+
+    // ── Drag (single pointer) ──
     const onPointerDown = (e: PointerEvent) => {
       dragging = true;
       dragStartX = e.clientX - imgX;
       dragStartY = e.clientY - imgY;
       img.style.cursor = 'grabbing';
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
     };
     const onPointerMove = (e: PointerEvent) => {
       if (!dragging) return;
       imgX = e.clientX - dragStartX;
       imgY = e.clientY - dragStartY;
-      img.style.left = `${imgX}px`;
-      img.style.top = `${imgY}px`;
+      applyTransform();
     };
     const onPointerUp = () => {
       dragging = false;
@@ -231,22 +246,102 @@ function showWebCropModal(
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
 
-    container.appendChild(img);
-    overlay.appendChild(container);
+    // ── Pinch-to-zoom (touch) ──
+    const getTouchDist = (t: TouchList) => {
+      const dx = t[1].clientX - t[0].clientX;
+      const dy = t[1].clientY - t[0].clientY;
+      return Math.sqrt(dx * dx + dy * dy);
+    };
 
-    // ── Hint ──
-    const hint = document.createElement('div');
-    hint.textContent = 'drag to reposition';
-    Object.assign(hint.style, {
-      color: DS.inkMuted, fontSize: '12px', marginTop: '14px',
-      fontFamily: DS.fontMono, letterSpacing: '1px',
+    container.addEventListener('touchstart', (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        dragging = false;
+        pinchStartDist = getTouchDist(e.touches);
+        pinchStartZoom = userZoom;
+      }
+    }, { passive: false });
+
+    container.addEventListener('touchmove', (e) => {
+      if (e.touches.length === 2) {
+        e.preventDefault();
+        const dist = getTouchDist(e.touches);
+        const newZoom = Math.max(0.5, Math.min(4, pinchStartZoom * (dist / pinchStartDist)));
+        userZoom = newZoom;
+        slider.value = String(newZoom);
+        applyTransform();
+      }
+    }, { passive: false });
+
+    // ── Mouse wheel zoom ──
+    container.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? 0.95 : 1.05;
+      userZoom = Math.max(0.5, Math.min(4, userZoom * delta));
+      slider.value = String(userZoom);
+      applyTransform();
+    }, { passive: false });
+
+    container.appendChild(img);
+    containerWrapper.appendChild(container);
+    overlay.appendChild(containerWrapper);
+
+    // ── Controls: zoom slider + hint ──
+    const controls = document.createElement('div');
+    Object.assign(controls.style, {
+      padding: '12px 32px', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', gap: '8px', flexShrink: '0',
     });
-    overlay.appendChild(hint);
+
+    // Zoom slider
+    const sliderRow = document.createElement('div');
+    Object.assign(sliderRow.style, {
+      display: 'flex', alignItems: 'center', gap: '12px', width: '100%', maxWidth: '320px',
+    });
+
+    const zoomOut = document.createElement('span');
+    zoomOut.textContent = '−';
+    Object.assign(zoomOut.style, { color: DS.inkMuted, fontSize: '20px', cursor: 'pointer', fontFamily: DS.fontBody });
+
+    const slider = document.createElement('input');
+    slider.type = 'range';
+    slider.min = '0.5';
+    slider.max = '4';
+    slider.step = '0.05';
+    slider.value = '1';
+    Object.assign(slider.style, {
+      flex: '1', accentColor: DS.custard, height: '4px',
+    });
+    slider.addEventListener('input', () => {
+      userZoom = parseFloat(slider.value);
+      applyTransform();
+    });
+
+    const zoomIn = document.createElement('span');
+    zoomIn.textContent = '+';
+    Object.assign(zoomIn.style, { color: DS.inkMuted, fontSize: '20px', cursor: 'pointer', fontFamily: DS.fontBody });
+
+    zoomOut.onclick = () => { userZoom = Math.max(0.5, userZoom - 0.2); slider.value = String(userZoom); applyTransform(); };
+    zoomIn.onclick = () => { userZoom = Math.min(4, userZoom + 0.2); slider.value = String(userZoom); applyTransform(); };
+
+    sliderRow.appendChild(zoomOut);
+    sliderRow.appendChild(slider);
+    sliderRow.appendChild(zoomIn);
+    controls.appendChild(sliderRow);
+
+    const hint = document.createElement('div');
+    hint.textContent = 'pinch or drag to adjust';
+    Object.assign(hint.style, {
+      color: DS.inkMuted, fontSize: '11px', fontFamily: DS.fontMono, letterSpacing: '1px',
+    });
+    controls.appendChild(hint);
+    overlay.appendChild(controls);
 
     // ── Buttons ──
     const btnRow = document.createElement('div');
     Object.assign(btnRow.style, {
-      display: 'flex', gap: '12px', marginTop: '24px', width: '100%', maxWidth: '400px',
+      display: 'flex', gap: '12px', padding: '0 24px',
+      paddingBottom: 'max(16px, env(safe-area-inset-bottom))', flexShrink: '0',
     });
 
     const cancelBtn = document.createElement('button');
@@ -277,18 +372,21 @@ function showWebCropModal(
     cancelBtn.onclick = () => { cleanup(); resolve(null); };
 
     confirmBtn.onclick = () => {
-      // Render crop to canvas
+      const s = baseScale * userZoom;
       const canvas = document.createElement('canvas');
-      canvas.width = containerSize * 2;
-      canvas.height = cropHeight * 2;
+      // Output at 2x for retina, capped at 2400px
+      const outputScale = Math.min(2, 2400 / cropW);
+      canvas.width = Math.round(cropW * outputScale);
+      canvas.height = Math.round(cropH * outputScale);
       const ctx = canvas.getContext('2d');
       if (!ctx) { cleanup(); resolve(null); return; }
 
-      const sx = imgX * 2;
-      const sy = imgY * 2;
-      const sw = parseFloat(img.style.width) * 2;
-      const sh = parseFloat(img.style.height) * 2;
-      ctx.drawImage(img, sx, sy, sw, sh);
+      // Draw image at its current position, scaled to output
+      const drawX = imgX * outputScale;
+      const drawY = imgY * outputScale;
+      const drawW = img.naturalWidth * s * outputScale;
+      const drawH = img.naturalHeight * s * outputScale;
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
 
       canvas.toBlob((blob) => {
         cleanup();
