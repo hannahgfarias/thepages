@@ -10,8 +10,12 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Image,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as Location from 'expo-location';
+import * as ImagePicker from 'expo-image-picker';
 import { useOverlay } from '../app/(tabs)/_layout';
 import { useAuth } from '../hooks/useAuth';
 import { FONTS } from '../constants/fonts';
@@ -21,18 +25,33 @@ const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
 const PREFERENCE_TYPES = ['Party', 'Music', 'Community', 'Arts', 'Wellness', 'Food', 'Free', 'Theatre'];
 
-type Step = 'phone' | 'otp' | 'preferences';
+const AVATAR_COLORS = ['#EB736C', '#78B896', '#67C9E3', '#E9D25E', '#C49BDE', '#F4A261'];
+
+type Step = 'phone' | 'otp' | 'profile' | 'preferences';
 
 export function AuthFlow() {
   const { showAuth, setShowAuth } = useOverlay();
-  const { signIn, verifyOTP, setPreferences, skip } = useAuth();
+  const { signIn, verifyOTP, updateProfile, setPreferences, checkHandleAvailable, skip } = useAuth();
   const insets = useSafeAreaInsets();
 
   const [step, setStep] = useState<Step>('phone');
   const [phone, setPhone] = useState('');
   const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
   const [selectedPrefs, setSelectedPrefs] = useState<string[]>([]);
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [sendingCode, setSendingCode] = useState(false);
+  const [verifying, setVerifying] = useState(false);
+
+  // Profile step state
+  const [displayName, setDisplayName] = useState('');
+  const [handle, setHandle] = useState('');
+  const [bio, setBio] = useState('');
   const [city, setCity] = useState('');
+  const [loadingCity, setLoadingCity] = useState(false);
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [avatarColor, setAvatarColor] = useState(AVATAR_COLORS[0]);
+  const [handleError, setHandleError] = useState<string | null>(null);
+  const [checkingHandle, setCheckingHandle] = useState(false);
 
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -46,6 +65,12 @@ export function AuthFlow() {
       setOtpDigits(['', '', '', '', '', '']);
       setSelectedPrefs([]);
       setCity('');
+      setDisplayName('');
+      setHandle('');
+      setBio('');
+      setAvatarUri(null);
+      setAvatarColor(AVATAR_COLORS[0]);
+      setHandleError(null);
       Animated.timing(opacity, {
         toValue: 1,
         duration: 350,
@@ -79,9 +104,15 @@ export function AuthFlow() {
 
   const rawPhoneDigits = phone.replace(/\D/g, '');
 
-  const handleSendCode = () => {
+  const handleSendCode = async () => {
     if (rawPhoneDigits.length === 10) {
-      signIn(rawPhoneDigits);
+      setSendingCode(true);
+      setOtpError(null);
+      const result = await signIn(rawPhoneDigits);
+      setSendingCode(false);
+      if (result?.error) {
+        setOtpError('Failed to send code: ' + result.error);
+      }
       setStep('otp');
     }
   };
@@ -109,21 +140,130 @@ export function AuthFlow() {
 
   const otpCode = otpDigits.join('');
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     if (otpCode.length === 6) {
-      const success = verifyOTP(otpCode);
+      setVerifying(true);
+      setOtpError(null);
+      const success = await verifyOTP(otpCode);
+      setVerifying(false);
       if (success) {
-        setStep('preferences');
+        setOtpError(null);
+        setStep('profile');
+      } else {
+        setOtpError('Invalid or expired code. Try again or resend.');
       }
     }
   };
+
+  // Auto-detect city when profile step is shown
+  useEffect(() => {
+    if (step !== 'profile' || city) return;
+    (async () => {
+      setLoadingCity(true);
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== 'granted') {
+          setLoadingCity(false);
+          return;
+        }
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const [place] = await Location.reverseGeocodeAsync({
+          latitude: loc.coords.latitude,
+          longitude: loc.coords.longitude,
+        });
+        if (place?.city) {
+          setCity(place.city);
+        }
+      } catch {
+        // User can type manually
+      } finally {
+        setLoadingCity(false);
+      }
+    })();
+  }, [step]);
 
   const handleResend = () => {
     signIn(rawPhoneDigits);
   };
 
+  // Pick avatar photo
+  const pickAvatar = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission needed', 'Allow photo access to set your avatar.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      allowsEditing: true,
+      aspect: [1, 1],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) {
+      setAvatarUri(result.assets[0].uri);
+    }
+  };
+
+  // Validate handle uniqueness on blur
+  const validateHandle = async () => {
+    if (!handle) {
+      setHandleError(null);
+      return;
+    }
+    // Basic format check
+    const clean = handle.replace(/^@/, '');
+    if (clean.length < 2) {
+      setHandleError('Too short');
+      return;
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(clean)) {
+      setHandleError('Letters, numbers, and underscores only');
+      return;
+    }
+    setCheckingHandle(true);
+    const available = await checkHandleAvailable(clean);
+    setCheckingHandle(false);
+    if (!available) {
+      setHandleError('Handle taken');
+    } else {
+      setHandleError(null);
+    }
+  };
+
+  // Save profile and move to preferences
+  const handleProfileContinue = async () => {
+    if (handleError) return;
+
+    const profileData: Record<string, string> = {};
+    if (displayName.trim()) profileData.display_name = displayName.trim();
+    if (handle.trim()) {
+      const clean = handle.replace(/^@/, '');
+      profileData.handle = `@${clean}`;
+    }
+    if (bio.trim()) profileData.bio = bio.trim();
+    if (city.trim()) profileData.location = city.trim();
+
+    // Avatar: if no photo, use initials + chosen color
+    if (!avatarUri) {
+      const initial = displayName.trim() ? displayName.trim()[0].toUpperCase() : '?';
+      profileData.avatar_initials = initial;
+      profileData.avatar_color = avatarColor;
+    }
+    // TODO: Upload avatarUri to Supabase Storage and set avatar_url
+
+    if (Object.keys(profileData).length > 0) {
+      await updateProfile(profileData);
+    }
+
+    setStep('preferences');
+  };
+
+  // Skip profile step
+  const handleProfileSkip = () => {
+    setStep('preferences');
+  };
+
   const handleLetsGo = () => {
-    setPreferences({ categories: selectedPrefs, city });
+    setPreferences({ categories: selectedPrefs });
     handleClose();
   };
 
@@ -139,6 +279,9 @@ export function AuthFlow() {
   };
 
   if (!showAuth) return null;
+
+  // Compute avatar display
+  const avatarInitial = displayName.trim() ? displayName.trim()[0].toUpperCase() : '?';
 
   return (
     <Animated.View style={[styles.overlay, { opacity }]}>
@@ -269,7 +412,134 @@ export function AuthFlow() {
               </View>
             )}
 
-            {/* Step 3: Preferences */}
+            {/* Step 3: Profile Setup */}
+            {step === 'profile' && (
+              <View style={styles.stepContainer}>
+                <Text style={styles.prefsTitle}>Set up your profile</Text>
+
+                {/* Avatar */}
+                <TouchableOpacity
+                  style={[
+                    styles.avatarPicker,
+                    !avatarUri && { backgroundColor: avatarColor },
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={pickAvatar}
+                >
+                  {avatarUri ? (
+                    <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+                  ) : (
+                    <Text style={styles.avatarInitialText}>{avatarInitial}</Text>
+                  )}
+                </TouchableOpacity>
+                <Text style={styles.avatarHint}>tap to add photo</Text>
+
+                {/* Color presets (only if no photo) */}
+                {!avatarUri && (
+                  <View style={styles.colorRow}>
+                    {AVATAR_COLORS.map((color) => (
+                      <TouchableOpacity
+                        key={color}
+                        style={[
+                          styles.colorDot,
+                          { backgroundColor: color },
+                          avatarColor === color && styles.colorDotSelected,
+                        ]}
+                        activeOpacity={0.7}
+                        onPress={() => setAvatarColor(color)}
+                      />
+                    ))}
+                  </View>
+                )}
+
+                {/* Display Name */}
+                <Text style={styles.fieldLabel}>DISPLAY NAME</Text>
+                <TextInput
+                  style={styles.profileInput}
+                  value={displayName}
+                  onChangeText={setDisplayName}
+                  placeholder="Your name"
+                  placeholderTextColor="rgba(2,4,15,0.35)"
+                  autoCapitalize="words"
+                  returnKeyType="next"
+                />
+
+                {/* Handle */}
+                <Text style={styles.fieldLabel}>HANDLE</Text>
+                <View style={styles.handleRow}>
+                  <View style={styles.handleAt}>
+                    <Text style={styles.handleAtText}>@</Text>
+                  </View>
+                  <TextInput
+                    style={[
+                      styles.handleInput,
+                      handleError && { borderColor: '#EB736C' },
+                      handle && !handleError && !checkingHandle && { borderColor: '#78B896' },
+                    ]}
+                    value={handle.replace(/^@/, '')}
+                    onChangeText={(v) => {
+                      setHandle(v.replace(/[^a-zA-Z0-9_]/g, ''));
+                      setHandleError(null);
+                    }}
+                    onBlur={validateHandle}
+                    placeholder="username"
+                    placeholderTextColor="rgba(2,4,15,0.35)"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    returnKeyType="next"
+                  />
+                </View>
+                {handleError && (
+                  <Text style={styles.errorText}>{handleError}</Text>
+                )}
+
+                {/* Bio */}
+                <Text style={styles.fieldLabel}>BIO</Text>
+                <TextInput
+                  style={[styles.profileInput, styles.bioInput]}
+                  value={bio}
+                  onChangeText={setBio}
+                  placeholder="Tell us about yourself"
+                  placeholderTextColor="rgba(2,4,15,0.35)"
+                  multiline
+                  numberOfLines={3}
+                  textAlignVertical="top"
+                />
+
+                {/* City */}
+                <Text style={styles.fieldLabel}>CITY</Text>
+                <TextInput
+                  style={styles.profileInput}
+                  value={city}
+                  onChangeText={setCity}
+                  placeholder={loadingCity ? "Detecting your city..." : "Your city"}
+                  placeholderTextColor="rgba(2,4,15,0.35)"
+                  editable={!loadingCity}
+                />
+
+                <TouchableOpacity
+                  style={[
+                    styles.primaryButton,
+                    !!handleError && styles.buttonDisabled,
+                  ]}
+                  activeOpacity={0.8}
+                  onPress={handleProfileContinue}
+                  disabled={!!handleError}
+                >
+                  <Text style={styles.primaryButtonText}>CONTINUE</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.skipLink}
+                  activeOpacity={0.7}
+                  onPress={handleProfileSkip}
+                >
+                  <Text style={styles.skipText}>skip for now</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Step 4: Preferences */}
             {step === 'preferences' && (
               <View style={styles.stepContainer}>
                 <Text style={styles.prefsTitle}>What are you into?</Text>
@@ -297,14 +567,6 @@ export function AuthFlow() {
                     </TouchableOpacity>
                   ))}
                 </View>
-
-                <TextInput
-                  style={styles.cityInput}
-                  value={city}
-                  onChangeText={setCity}
-                  placeholder="Your city"
-                  placeholderTextColor="rgba(2,4,15,0.35)"
-                />
 
                 <TouchableOpacity
                   style={styles.primaryButton}
@@ -489,6 +751,107 @@ const styles = StyleSheet.create({
     color: 'rgba(2,4,15,0.5)',
   },
 
+  /* Profile step */
+  avatarPicker: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+  },
+  avatarInitialText: {
+    fontFamily: FONTS.display,
+    fontSize: 36,
+    color: '#ffffff',
+  },
+  avatarHint: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: 'rgba(2,4,15,0.4)',
+    marginBottom: 16,
+  },
+  colorRow: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 24,
+  },
+  colorDot: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  colorDotSelected: {
+    borderColor: '#02040F',
+    borderWidth: 2.5,
+  },
+  profileInput: {
+    width: '100%',
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    paddingHorizontal: 16,
+    fontFamily: FONTS.mono,
+    fontSize: 14,
+    color: '#02040F',
+    marginBottom: 16,
+  },
+  bioInput: {
+    height: 80,
+    paddingTop: 14,
+  },
+  handleRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 4,
+    width: '100%',
+  },
+  handleAt: {
+    width: 44,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  handleAtText: {
+    fontFamily: FONTS.mono,
+    fontSize: 16,
+    color: 'rgba(2,4,15,0.5)',
+  },
+  handleInput: {
+    flex: 1,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    paddingHorizontal: 16,
+    fontFamily: FONTS.mono,
+    fontSize: 14,
+    color: '#02040F',
+  },
+  errorText: {
+    fontFamily: FONTS.body,
+    fontSize: 12,
+    color: '#EB736C',
+    alignSelf: 'flex-start',
+    marginBottom: 12,
+    marginTop: 4,
+  },
+
   /* Preferences step */
   prefsTitle: {
     fontFamily: FONTS.display,
@@ -522,18 +885,5 @@ const styles = StyleSheet.create({
   },
   prefChipTextSelected: {
     color: '#02040F',
-  },
-  cityInput: {
-    width: '100%',
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: 'rgba(255,255,255,0.5)',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    paddingHorizontal: 16,
-    fontFamily: FONTS.mono,
-    fontSize: 14,
-    color: '#02040F',
-    marginBottom: 24,
   },
 });

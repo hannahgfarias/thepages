@@ -13,53 +13,69 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { FONTS } from '../constants/fonts';
-import { COLORS } from '../constants/colors';
 
 interface WelcomeScreenProps {
   onDismiss: () => void;
 }
 
-/* ─── Decorative Icons ─── */
+/* ─── Paper palette ─── */
+const PAPER = {
+  bg: '#E8D66C',         // warm yellow paper
+  bgLight: '#F0E08A',    // lighter yellow for subtle accents
+  brown: '#4A3728',      // deep brown for headings
+  brownLight: '#6B5744',  // lighter brown for body text
+  brownMuted: '#8B7B6B',  // muted brown for secondary text
+  divider: '#C4A84D',    // darker gold for lines
+  cardBg: 'rgba(74, 55, 40, 0.06)', // very subtle brown tint
+};
 
-function StarIcon({ size = 16, color = COLORS.gold }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill={color}>
-      <Path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
-    </Svg>
-  );
-}
+/* ─── Simple flat icons (brown, no fills) ─── */
 
-function BrowseIcon({ size = 20, color = COLORS.text70 }: { size?: number; color?: string }) {
+function BrowseIcon({ size = 18 }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 22 22" fill="none">
-      <Rect x={1} y={1} width={8} height={8} rx={2} fill={color} />
-      <Rect x={13} y={1} width={8} height={8} rx={2} fill={color} />
-      <Rect x={1} y={13} width={8} height={8} rx={2} fill={color} />
-      <Rect x={13} y={13} width={8} height={8} rx={2} fill={color} />
+      <Rect x={1} y={1} width={8} height={8} rx={1.5} stroke={PAPER.brown} strokeWidth={1.8} />
+      <Rect x={13} y={1} width={8} height={8} rx={1.5} stroke={PAPER.brown} strokeWidth={1.8} />
+      <Rect x={1} y={13} width={8} height={8} rx={1.5} stroke={PAPER.brown} strokeWidth={1.8} />
+      <Rect x={13} y={13} width={8} height={8} rx={1.5} stroke={PAPER.brown} strokeWidth={1.8} />
     </Svg>
   );
 }
 
-function SaveIcon({ size = 20, color = COLORS.text70 }: { size?: number; color?: string }) {
+function ScanIcon({ size = 18 }: { size?: number }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
+        stroke={PAPER.brown}
+        strokeWidth={1.8}
+        strokeLinejoin="round"
+      />
+      <Circle cx={12} cy={13} r={4} stroke={PAPER.brown} strokeWidth={1.8} />
+    </Svg>
+  );
+}
+
+function SaveIcon({ size = 18 }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
         d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-        stroke={color}
-        strokeWidth={2}
+        stroke={PAPER.brown}
+        strokeWidth={1.8}
         strokeLinejoin="round"
       />
     </Svg>
   );
 }
 
-function ShareIcon({ size = 20, color = COLORS.text70 }: { size?: number; color?: string }) {
+function ShareIcon({ size = 18 }: { size?: number }) {
   return (
     <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
       <Path
         d="M4 12v8a2 2 0 002 2h12a2 2 0 002-2v-8M16 6l-4-4-4 4M12 2v13"
-        stroke={color}
-        strokeWidth={2}
+        stroke={PAPER.brown}
+        strokeWidth={1.8}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -67,28 +83,12 @@ function ShareIcon({ size = 20, color = COLORS.text70 }: { size?: number; color?
   );
 }
 
-function ScanIcon({ size = 20, color = COLORS.text70 }: { size?: number; color?: string }) {
-  return (
-    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-      <Path
-        d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"
-        stroke={color}
-        strokeWidth={2}
-        strokeLinejoin="round"
-      />
-      <Circle cx={12} cy={13} r={4} stroke={color} strokeWidth={2} />
-    </Svg>
-  );
-}
-
-/* ─── Chevron Up Icon ─── */
-
 function ChevronUpIcon() {
   return (
-    <Svg width={24} height={24} viewBox="0 0 24 24" fill="none">
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
       <Path
         d="M18 15l-6-6-6 6"
-        stroke="rgba(255,255,255,0.5)"
+        stroke={PAPER.brownMuted}
         strokeWidth={2}
         strokeLinecap="round"
         strokeLinejoin="round"
@@ -124,13 +124,15 @@ const featureStyles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    paddingVertical: 10,
+    paddingVertical: 11,
   },
   iconWrap: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: COLORS.surface08,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: PAPER.cardBg,
+    borderWidth: 1,
+    borderColor: PAPER.divider,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -140,13 +142,13 @@ const featureStyles = StyleSheet.create({
   title: {
     fontFamily: FONTS.bodySemiBold,
     fontSize: 15,
-    color: COLORS.textPrimary,
+    color: PAPER.brown,
     marginBottom: 2,
   },
   desc: {
     fontFamily: FONTS.body,
     fontSize: 13,
-    color: COLORS.text60,
+    color: PAPER.brownMuted,
     lineHeight: 18,
   },
 });
@@ -159,89 +161,51 @@ export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
 
-  // Page-turn animation: rotate around the bottom edge
   const dragY = useRef(new Animated.Value(0)).current;
   const dismissed = useRef(false);
 
   // Pulse animation for the swipe hint
   const hintTranslateY = useRef(new Animated.Value(0)).current;
-  const hintOpacity = useRef(new Animated.Value(1)).current;
-
-  // Decorative star float
-  const starFloat = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    // Swipe hint pulse
     const pulse = Animated.loop(
       Animated.sequence([
         Animated.timing(hintTranslateY, {
-          toValue: -6,
-          duration: 700,
+          toValue: -5,
+          duration: 800,
           useNativeDriver: true,
         }),
         Animated.timing(hintTranslateY, {
           toValue: 0,
-          duration: 700,
+          duration: 800,
           useNativeDriver: true,
         }),
       ])
     );
     pulse.start();
-
-    // Decorative star floating
-    const floatAnim = Animated.loop(
-      Animated.sequence([
-        Animated.timing(starFloat, {
-          toValue: -10,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(starFloat, {
-          toValue: 0,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    floatAnim.start();
-
-    return () => {
-      pulse.stop();
-      floatAnim.stop();
-    };
-  }, [hintTranslateY, starFloat]);
+    return () => pulse.stop();
+  }, [hintTranslateY]);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: (_, gs) =>
-        Math.abs(gs.dy) > 10 && gs.dy < 0, // only swipe up
+        Math.abs(gs.dy) > 10 && gs.dy < 0,
       onPanResponderMove: (_, gs) => {
-        if (gs.dy < 0) {
-          dragY.setValue(gs.dy);
-        }
+        if (gs.dy < 0) dragY.setValue(gs.dy);
       },
       onPanResponderRelease: (_, gs) => {
         if (gs.dy < -SWIPE_THRESHOLD && !dismissed.current) {
           dismissed.current = true;
-
-          // Haptic feedback
           if (Platform.OS !== 'web') {
-            try {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            } catch {}
+            try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
           }
-
-          // Animate the page turn: rotate up and away
           Animated.timing(dragY, {
             toValue: -height,
             duration: 500,
             useNativeDriver: true,
-          }).start(() => {
-            onDismiss();
-          });
+          }).start(() => onDismiss());
         } else {
-          // Spring back
           Animated.spring(dragY, {
             toValue: 0,
             useNativeDriver: true,
@@ -253,8 +217,6 @@ export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
     })
   ).current;
 
-  // Page-turn transform: rotate around bottom edge
-  // As user drags up (dragY goes negative), the page rotates like turning a page
   const rotateX = dragY.interpolate({
     inputRange: [-height, 0],
     outputRange: ['-90deg', '0deg'],
@@ -273,20 +235,32 @@ export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
     extrapolate: 'clamp',
   });
 
-  // Shadow that gets stronger as page lifts
   const shadowOpacity = dragY.interpolate({
     inputRange: [-height * 0.5, 0],
-    outputRange: [0.6, 0],
+    outputRange: [0.4, 0],
     extrapolate: 'clamp',
   });
 
+  const handleDismiss = () => {
+    if (dismissed.current) return;
+    dismissed.current = true;
+    if (Platform.OS !== 'web') {
+      try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
+    }
+    Animated.timing(dragY, {
+      toValue: -height,
+      duration: 500,
+      useNativeDriver: true,
+    }).start(() => onDismiss());
+  };
+
   return (
     <View style={[StyleSheet.absoluteFill, styles.wrapper]} pointerEvents="box-none">
-      {/* Shadow underneath the turning page */}
+      {/* Shadow underneath */}
       <Animated.View
         style={[
           StyleSheet.absoluteFill,
-          { backgroundColor: 'rgba(0,0,0,0.7)', opacity: shadowOpacity },
+          { backgroundColor: 'rgba(0,0,0,0.5)', opacity: shadowOpacity },
         ]}
         pointerEvents="none"
       />
@@ -307,116 +281,73 @@ export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
           },
         ]}
       >
-        {/* Background gradient layers */}
-        <View style={styles.bgBase} />
-        <View style={styles.bgAccent} />
+        {/* Flat paper background */}
+        <View style={styles.bgPaper} />
 
-        {/* Decorative elements */}
-        <Animated.View
-          style={[
-            styles.decoStar1,
-            { transform: [{ translateY: starFloat }] },
-          ]}
-          pointerEvents="none"
-        >
-          <StarIcon size={20} color={COLORS.gold} />
-        </Animated.View>
-        <Animated.View
-          style={[
-            styles.decoStar2,
-            {
-              transform: [
-                {
-                  translateY: Animated.multiply(starFloat, -1),
-                },
-              ],
-            },
-          ]}
-          pointerEvents="none"
-        >
-          <StarIcon size={14} color={COLORS.pink} />
-        </Animated.View>
+        {/* Thin top rule line */}
+        <View style={[styles.topRule, { top: insets.top + 16 }]} />
 
         {/* Content */}
-        <View style={[styles.content, { paddingTop: insets.top + 60 }]}>
+        <View style={[styles.content, { paddingTop: insets.top + 36 }]}>
           {/* Wordmark */}
           <View style={styles.header}>
-            <Text style={styles.wordmark}>THE PAGES</Text>
+            <Text style={styles.wordmark}>the{'\n'}pages</Text>
             <View style={styles.divider} />
-            <Text style={styles.tagline}>Your community, one page at a time</Text>
+            <Text style={styles.tagline}>discover what's happening around you</Text>
           </View>
 
           {/* Description */}
           <Text style={styles.description}>
-            Discover local events through beautiful, fullscreen flyers.
-            Snap a photo of any event poster — our AI reads it and shares
-            it with your community.
+            Upload event posters and share it to the community
           </Text>
 
           {/* Features */}
           <View style={styles.features}>
             <FeatureRow
-              icon={<BrowseIcon color={COLORS.gold} />}
+              icon={<BrowseIcon />}
               title="Browse Events"
-              description="Scroll through fullscreen flyers from your community"
+              description="Flip through the bulletin from your community"
             />
             <FeatureRow
-              icon={<ScanIcon color={COLORS.gold} />}
+              icon={<ScanIcon />}
               title="AI-Powered Posting"
-              description="Upload a flyer and AI fills in all the details"
+              description="Upload a flyer, AI fills in all the details"
             />
             <FeatureRow
-              icon={<SaveIcon color={COLORS.gold} />}
-              title="Save & Share"
-              description="Bookmark events you love and share them with friends"
+              icon={<SaveIcon />}
+              title="Save"
+              description="Save events and share them with friends"
             />
             <FeatureRow
-              icon={<ShareIcon color={COLORS.gold} />}
-              title="Discovery Layer"
-              description="Surface events from Instagram, Partiful, and beyond"
+              icon={<ShareIcon />}
+              title="Discover"
+              description="Link events from Instagram, Partiful, and beyond"
             />
+          </View>
+
+          {/* CTA */}
+          <View style={styles.ctaSection}>
+            <Animated.View
+              style={[
+                styles.swipeHintInner,
+                { transform: [{ translateY: hintTranslateY }] },
+              ]}
+            >
+              <ChevronUpIcon />
+              <Text style={styles.swipeText}>Take a peek!</Text>
+            </Animated.View>
+            <TouchableOpacity
+              style={styles.tapStartBtn}
+              activeOpacity={0.7}
+              onPress={handleDismiss}
+            >
+              <Text style={styles.tapStartText}>TAP TO START</Text>
+            </TouchableOpacity>
           </View>
         </View>
 
-        {/* Swipe hint + tap to start at the bottom */}
-        <View
-          style={[
-            styles.swipeHint,
-            { bottom: insets.bottom + 40 },
-          ]}
-        >
-          <Animated.View
-            style={[
-              styles.swipeHintInner,
-              { transform: [{ translateY: hintTranslateY }] },
-            ]}
-          >
-            <ChevronUpIcon />
-            <Text style={styles.swipeText}>Swipe up to start browsing</Text>
-          </Animated.View>
-          <TouchableOpacity
-            style={styles.tapStartBtn}
-            activeOpacity={0.7}
-            onPress={() => {
-              if (!dismissed.current) {
-                dismissed.current = true;
-                if (Platform.OS !== 'web') {
-                  try { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); } catch {}
-                }
-                Animated.timing(dragY, {
-                  toValue: -height,
-                  duration: 500,
-                  useNativeDriver: true,
-                }).start(() => onDismiss());
-              }
-            }}
-          >
-            <Text style={styles.tapStartText}>Tap to start</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Page curl effect — subtle bottom edge */}
-        <View style={styles.pageCurlEdge} />
+        {/* Bottom edge line */}
+        <View style={styles.bottomRule} />
       </Animated.View>
     </View>
   );
@@ -430,123 +361,97 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     left: 0,
-    // Transform origin at the bottom: achieved via translateY offset in transform
     overflow: 'hidden',
   },
-  bgBase: {
+  bgPaper: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.ink,
+    backgroundColor: PAPER.bg,
   },
-  bgAccent: {
+  topRule: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    height: '45%',
-    backgroundColor: 'rgba(120, 184, 150, 0.15)', // subtle teal wash
+    left: 28,
+    right: 28,
+    height: 1.5,
+    backgroundColor: PAPER.divider,
   },
-  decoStar1: {
-    position: 'absolute',
-    top: '12%',
-    right: 40,
-  },
-  decoStar2: {
-    position: 'absolute',
-    top: '18%',
-    left: 30,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 32,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 28,
-  },
-  wordmark: {
-    fontFamily: FONTS.display,
-    fontSize: 36,
-    letterSpacing: 8,
-    color: COLORS.textPrimary,
-    textAlign: 'center',
-  },
-  divider: {
-    width: 40,
-    height: 3,
-    backgroundColor: COLORS.pink,
-    borderRadius: 2,
-    marginTop: 12,
-    marginBottom: 14,
-  },
-  tagline: {
-    fontFamily: FONTS.bodyItalic,
-    fontSize: 16,
-    color: COLORS.text70,
-    textAlign: 'center',
-  },
-  description: {
-    fontFamily: FONTS.body,
-    fontSize: 15,
-    color: COLORS.text60,
-    lineHeight: 22,
-    textAlign: 'center',
-    marginBottom: 32,
-    paddingHorizontal: 8,
-  },
-  features: {
-    gap: 4,
-  },
-  swipeHint: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    alignItems: 'center',
-    gap: 6,
-  },
-  swipeHintInner: {
-    alignItems: 'center',
-    gap: 6,
-  },
-  tapStartBtn: {
-    marginTop: 16,
-    paddingVertical: 10,
-    paddingHorizontal: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.2)',
-    borderRadius: 20,
-  },
-  tapStartText: {
-    fontFamily: FONTS.mono,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  swipeText: {
-    fontFamily: FONTS.mono,
-    fontSize: 12,
-    color: COLORS.text40,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-  },
-  pageCurlEdge: {
+  bottomRule: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    height: 4,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-    ...Platform.select({
-      web: {
-        boxShadow: '0 -2px 8px rgba(0,0,0,0.3)',
-      },
-      default: {
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 10,
-      },
-    }),
+    height: 2,
+    backgroundColor: PAPER.divider,
+  },
+  content: {
+    flex: 1,
+    paddingHorizontal: 36,
+  },
+  header: {
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  wordmark: {
+    fontFamily: FONTS.display,
+    fontSize: 40,
+    lineHeight: 44,
+    color: PAPER.brown,
+    textAlign: 'center',
+    textTransform: 'lowercase',
+  },
+  divider: {
+    width: 50,
+    height: 2,
+    backgroundColor: PAPER.brown,
+    marginTop: 16,
+    marginBottom: 14,
+  },
+  tagline: {
+    fontFamily: FONTS.body,
+    fontSize: 15,
+    color: PAPER.brownLight,
+    textAlign: 'center',
+    letterSpacing: 0.3,
+  },
+  description: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: PAPER.brownMuted,
+    lineHeight: 21,
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 4,
+  },
+  features: {
+    gap: 2,
+  },
+  ctaSection: {
+    alignItems: 'center',
+    marginTop: 'auto',
+    paddingBottom: 40,
+    gap: 4,
+  },
+  swipeHintInner: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  swipeText: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: PAPER.brownMuted,
+    letterSpacing: 2,
+  },
+  tapStartBtn: {
+    marginTop: 14,
+    paddingVertical: 10,
+    paddingHorizontal: 28,
+    borderWidth: 1.5,
+    borderColor: PAPER.brown,
+    borderRadius: 0,
+  },
+  tapStartText: {
+    fontFamily: FONTS.bodySemiBold,
+    fontSize: 13,
+    color: PAPER.brown,
+    letterSpacing: 2,
   },
 });

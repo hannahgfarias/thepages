@@ -287,7 +287,7 @@ export function ProfilePanel() {
           {/* Avatar */}
           <View style={[styles.avatar, profile?.avatar_color ? { backgroundColor: profile.avatar_color } : null]}>
             <Text style={styles.avatarInitials}>
-              {profile?.avatar_initials || (isAuthenticated ? '?' : '?')}
+              {profile?.avatar_initials || '?'}
             </Text>
           </View>
 

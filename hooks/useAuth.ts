@@ -11,10 +11,12 @@ interface AuthContextValue {
   loading: boolean;
   signIn: (phone: string) => Promise<{ error?: string }>;
   verifyOTP: (code: string) => Promise<boolean>;
-  setPreferences: (prefs: { categories: string[]; city: string }) => Promise<void>;
+  updateProfile: (data: Partial<Pick<Profile, 'display_name' | 'handle' | 'bio' | 'location' | 'avatar_url' | 'avatar_initials' | 'avatar_color'>>) => Promise<{ error?: string }>;
+  setPreferences: (prefs: { categories: string[] }) => Promise<void>;
   signOut: () => Promise<void>;
   skip: () => void;
   refreshProfile: () => Promise<void>;
+  checkHandleAvailable: (handle: string) => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextValue>({
@@ -25,10 +27,12 @@ const AuthContext = createContext<AuthContextValue>({
   loading: true,
   signIn: async () => ({}),
   verifyOTP: async () => false,
+  updateProfile: async () => ({}),
   setPreferences: async () => {},
   signOut: async () => {},
   skip: () => {},
   refreshProfile: async () => {},
+  checkHandleAvailable: async () => true,
 });
 
 export function useAuth() {
@@ -127,12 +131,56 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return false;
   }, [pendingPhone]);
 
-  // Save user preferences (categories + city)
-  const setPreferences = useCallback(async (prefs: { categories: string[]; city: string }) => {
+  // Check if a handle is available
+  const checkHandleAvailable = useCallback(async (handle: string) => {
+    if (!handle || handle.length < 2) return false;
+    const formatted = handle.startsWith('@') ? handle : `@${handle}`;
+    const { data } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('handle', formatted)
+      .maybeSingle();
+    // Available if no match, or if it's the current user's handle
+    return !data || data.id === session?.user?.id;
+  }, [session]);
+
+  // Update profile fields (display name, handle, bio, location, avatar)
+  const updateProfile = useCallback(async (data: Partial<Pick<Profile, 'display_name' | 'handle' | 'bio' | 'location' | 'avatar_url' | 'avatar_initials' | 'avatar_color'>>) => {
+    if (!session?.user?.id) return { error: 'Not authenticated' };
+
+    // Ensure handle has @ prefix
+    const updateData = { ...data };
+    if (updateData.handle && !updateData.handle.startsWith('@')) {
+      updateData.handle = `@${updateData.handle}`;
+    }
+
+    const { error } = await supabase
+      .from('profiles')
+      .update(updateData)
+      .eq('id', session.user.id);
+
+    if (error) {
+      console.warn('Profile update error:', error.message);
+      return { error: error.message };
+    }
+
+    await refreshProfile();
+    return {};
+  }, [session, refreshProfile]);
+
+  // Save user preferences (categories only — city is saved via updateProfile)
+  const setPreferences = useCallback(async (prefs: { categories: string[] }) => {
     if (!session?.user?.id) return;
+
     await supabase
       .from('profiles')
-      .update({ location: prefs.city })
+      .update({
+        preferences: {
+          event_types: prefs.categories,
+          notifications: true,
+          distance_miles: 25,
+        },
+      })
       .eq('id', session.user.id);
     await refreshProfile();
   }, [session, refreshProfile]);
@@ -158,12 +206,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       loading,
       signIn,
       verifyOTP,
+      updateProfile,
       setPreferences,
       signOut,
       skip,
       refreshProfile,
+      checkHandleAvailable,
     }),
-    [isAuthenticated, session, user, profile, loading, signIn, verifyOTP, setPreferences, signOut, skip, refreshProfile]
+    [isAuthenticated, session, user, profile, loading, signIn, verifyOTP, updateProfile, setPreferences, signOut, skip, refreshProfile, checkHandleAvailable]
   );
 
   return React.createElement(AuthContext.Provider, { value }, children);

@@ -28,35 +28,19 @@ security definer set search_path = public
 as $$
 declare
   user_phone   text;
-  user_email   text;
-  name_prefix  text;
-  initials     text;
   user_handle  text;
 begin
   user_phone := NEW.phone;
-  user_email := NEW.email;
 
-  -- Derive display name from phone or email
-  if user_phone is not null and user_phone != '' then
-    -- Phone signup: use last 4 digits as handle seed
-    name_prefix := 'user_' || right(regexp_replace(user_phone, '[^0-9]', '', 'g'), 4);
-    initials := '📱';
-  elsif user_email is not null and user_email != '' then
-    name_prefix := split_part(user_email, '@', 1);
-    initials := upper(substr(name_prefix, 1, 2));
-  else
-    name_prefix := 'anon';
-    initials := '??';
-  end if;
-
-  user_handle := '@' || regexp_replace(lower(name_prefix), '[^a-z0-9_]', '', 'g') || '_' || substr(NEW.id::text, 1, 4);
+  -- Generate a unique placeholder handle from the user ID
+  user_handle := '@user_' || substr(NEW.id::text, 1, 8);
 
   insert into public.profiles (id, handle, display_name, avatar_initials, phone)
   values (
     NEW.id,
     user_handle,
-    name_prefix,
-    initials,
+    null,        -- user fills this in during onboarding
+    '?',         -- placeholder until user sets up profile
     user_phone
   )
   on conflict (id) do update set

@@ -47,7 +47,7 @@ function SearchIcon() {
 
 export default function FeedScreen() {
   const { flyers, loading, error, toggleSave, refetch } = useFlyers();
-  const { setShowSearch, setShowProfile, showProfile, searchFilters, setSearchFilters } = useOverlay();
+  const { setShowSearch, setShowProfile, showProfile, searchFilters, setSearchFilters, setShowAuthPrompt } = useOverlay();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const cardHeight = height - NAV_HEIGHT - insets.bottom;
@@ -197,7 +197,6 @@ export default function FeedScreen() {
   }, [hintOpacity, hintTranslateY]);
 
   const { isAuthenticated } = useAuth();
-  const { setShowAuthPrompt } = useOverlay();
 
   const handleSave = useCallback((id: string) => {
     if (!isAuthenticated) {
@@ -432,7 +431,7 @@ export default function FeedScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.dark,
+    backgroundColor: '#F0ECEC',
   },
 
   /* Top bar */
@@ -490,9 +489,11 @@ const styles = StyleSheet.create({
 
   /* State screens (empty, error, loading) */
   stateContainer: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 40,
+    paddingTop: 80,
     gap: 12,
     backgroundColor: '#F0ECEC',
   },
