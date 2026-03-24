@@ -399,16 +399,6 @@ export function AuthFlow() {
                   </Text>
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  style={styles.skipLink}
-                  activeOpacity={0.7}
-                  onPress={handleSkip}
-                >
-                  <Text style={styles.skipText}>
-                    just browsing — skip for now
-                  </Text>
-                </TouchableOpacity>
-
                 <Text style={styles.legalText}>
                   By continuing, you agree to our Terms of Service and Privacy
                   Policy. We'll send a verification code to your phone.

@@ -6,6 +6,7 @@ import {
   StyleSheet,
   Animated,
   Easing,
+  Platform,
   useWindowDimensions,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -95,7 +96,12 @@ export function AuthPrompt({ message }: AuthPromptProps) {
 
   const handleSignUp = async () => {
     // Check if terms already accepted
-    const accepted = await AsyncStorage.getItem(TERMS_ACCEPTED_KEY);
+    let accepted: string | null = null;
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      accepted = window.localStorage.getItem(TERMS_ACCEPTED_KEY);
+    } else {
+      accepted = await AsyncStorage.getItem(TERMS_ACCEPTED_KEY);
+    }
     if (accepted === 'true') {
       proceedToAuth();
     } else {
@@ -104,7 +110,11 @@ export function AuthPrompt({ message }: AuthPromptProps) {
   };
 
   const handleTermsAccepted = () => {
-    AsyncStorage.setItem(TERMS_ACCEPTED_KEY, 'true');
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.localStorage.setItem(TERMS_ACCEPTED_KEY, 'true');
+    } else {
+      AsyncStorage.setItem(TERMS_ACCEPTED_KEY, 'true');
+    }
     setShowTerms(false);
     proceedToAuth();
   };

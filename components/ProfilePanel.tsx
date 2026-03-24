@@ -209,7 +209,8 @@ export function ProfilePanel() {
 
   const sectionOrder: DateSection[] = ['HAPPENING TODAY', 'THIS WEEK', 'UPCOMING', 'PAST'];
 
-  if (!showProfile) return null;
+  // Never show profile panel if not authenticated
+  if (!showProfile || !isAuthenticated) return null;
 
   const renderPostGrid = (posts: Post[]) => (
     <View style={styles.grid}>
