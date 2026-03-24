@@ -349,19 +349,23 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
             <Text style={styles.subtitle}>{flyer.subtitle}</Text>
           ) : null}
 
-          {/* Date row */}
+          {/* Date row — tap to add to calendar */}
           {flyer.date_text ? (
             <TouchableOpacity
               style={styles.metaRow}
               activeOpacity={0.7}
               onPress={() => {
-                const query = encodeURIComponent(flyer.date_text!);
-                const url = Platform.select({
-                  ios: `calshow:`,
-                  android: `content://com.android.calendar/time/`,
-                  default: `https://calendar.google.com/calendar/r/search?q=${query}`,
-                });
-                if (url) Linking.openURL(url);
+                // Build a Google Calendar "create event" URL
+                const title = encodeURIComponent(flyer.title || 'Event');
+                const location = encodeURIComponent(flyer.location || '');
+                const details = encodeURIComponent(
+                  [flyer.subtitle, flyer.event_url ? `Link: ${flyer.event_url}` : '', `Found on The Pages`]
+                    .filter(Boolean).join('\n')
+                );
+                // Use the date_text as-is for the event (Google Calendar will parse it)
+                const dateText = encodeURIComponent(flyer.date_text || '');
+                const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dateText}&location=${location}&details=${details}`;
+                Linking.openURL(url);
               }}
             >
               <CalendarIcon />

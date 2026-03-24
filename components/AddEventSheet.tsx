@@ -153,42 +153,73 @@ export function AddEventSheet() {
     }
     locationDebounce.current = setTimeout(async () => {
       try {
-        // Use Photon (Komoot) for better business/POI search, fall back to Nominatim
-        const res = await fetch(
-          `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en`
-        );
-        const data = await res.json();
-        const results = (data.features || []).map((f: any) => ({
-          name: f.properties.name || '',
-          street: f.properties.street || '',
-          houseNumber: f.properties.housenumber || '',
-          city: f.properties.city || f.properties.town || f.properties.village || '',
-          state: f.properties.state || '',
-          country: f.properties.country || '',
-          type: f.properties.osm_value || f.properties.type || '',
-          display: '', // built below
-        }));
-        // Build display strings
-        results.forEach((r: any) => {
-          const parts: string[] = [];
-          if (r.name) parts.push(r.name);
-          if (r.houseNumber && r.street) parts.push(`${r.houseNumber} ${r.street}`);
-          else if (r.street) parts.push(r.street);
-          if (r.city) parts.push(r.city);
-          if (r.state) parts.push(r.state);
-          r.display = parts.join(', ');
-        });
-        setLocationResults(results.filter((r: any) => r.display));
-        setShowLocationResults(results.length > 0);
+        // Search both Photon (for businesses/POIs) and Nominatim (for addresses)
+        const [photonRes, nominatimRes] = await Promise.allSettled([
+          fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=4&lang=en&osm_tag=amenity&osm_tag=shop&osm_tag=tourism&osm_tag=leisure`),
+          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=4&addressdetails=1&countrycodes=us`, { headers: { 'User-Agent': 'ThePages/1.0' } }),
+        ]);
+
+        const combined: any[] = [];
+        const seen = new Set<string>();
+
+        // Process Photon results (businesses/POIs)
+        if (photonRes.status === 'fulfilled') {
+          const photonData = await photonRes.value.json();
+          (photonData.features || []).forEach((f: any) => {
+            const p = f.properties;
+            const name = p.name || '';
+            const street = p.housenumber ? `${p.housenumber} ${p.street || ''}` : (p.street || '');
+            const city = p.city || p.town || p.village || '';
+            const state = p.state || '';
+            const addressParts = [street, city, state].filter(Boolean).join(', ');
+            const key = `${name}|${addressParts}`.toLowerCase();
+            if (!seen.has(key) && (name || street)) {
+              seen.add(key);
+              combined.push({
+                name,
+                address: addressParts,
+                display: name && addressParts ? `${name}, ${addressParts}` : (name || addressParts),
+                type: p.osm_value || '',
+              });
+            }
+          });
+        }
+
+        // Process Nominatim results (addresses)
+        if (nominatimRes.status === 'fulfilled') {
+          const nomData = await nominatimRes.value.json();
+          (nomData || []).forEach((r: any) => {
+            const a = r.address || {};
+            const name = r.name || a.amenity || a.shop || a.tourism || '';
+            const houseNum = a.house_number || '';
+            const road = a.road || '';
+            const street = houseNum ? `${houseNum} ${road}` : road;
+            const city = a.city || a.town || a.village || a.hamlet || '';
+            const state = a.state || '';
+            const addressParts = [street, city, state].filter(Boolean).join(', ');
+            const key = `${name}|${addressParts}`.toLowerCase();
+            if (!seen.has(key) && (name || street)) {
+              seen.add(key);
+              combined.push({
+                name: name && name !== road ? name : '',
+                address: addressParts,
+                display: name && name !== road && addressParts ? `${name}, ${addressParts}` : (addressParts || name),
+                type: r.type || '',
+              });
+            }
+          });
+        }
+
+        setLocationResults(combined.slice(0, 6));
+        setShowLocationResults(combined.length > 0);
       } catch {
         setLocationResults([]);
         setShowLocationResults(false);
       }
-    }, 300);
+    }, 350);
   };
 
   const selectLocation = (result: any) => {
-    // Use the full display string — preserves exact addresses and business names
     setLocation(result.display);
     setShowLocationResults(false);
     setLocationResults([]);
@@ -785,9 +816,6 @@ export function AddEventSheet() {
               {showLocationResults && (
                 <View style={styles.locationDropdown}>
                   {locationResults.map((result: any, i: number) => {
-                    const mainName = result.name || (result.houseNumber ? `${result.houseNumber} ${result.street}` : result.street);
-                    const subParts = [result.city, result.state].filter(Boolean);
-                    const subText = subParts.join(', ');
                     return (
                       <TouchableOpacity
                         key={i}
@@ -795,8 +823,14 @@ export function AddEventSheet() {
                         activeOpacity={0.7}
                         onPress={() => selectLocation(result)}
                       >
-                        <Text style={styles.locationResultName} numberOfLines={1}>{mainName}</Text>
-                        <Text style={styles.locationResultSub} numberOfLines={1}>{subText}</Text>
+                        {result.name ? (
+                          <>
+                            <Text style={styles.locationResultName} numberOfLines={1}>{result.name}</Text>
+                            <Text style={styles.locationResultSub} numberOfLines={2}>{result.address}</Text>
+                          </>
+                        ) : (
+                          <Text style={styles.locationResultName} numberOfLines={2}>{result.address}</Text>
+                        )}
                       </TouchableOpacity>
                     );
                   })}
