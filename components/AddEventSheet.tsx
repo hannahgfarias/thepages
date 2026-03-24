@@ -141,24 +141,44 @@ export function AddEventSheet() {
     setEndPeriod(period);
   };
 
-  // Location search with debounce
+  // Location search with debounce — searches businesses, addresses, and places
   const searchLocation = (query: string) => {
     setLocation(query);
     if (locationDebounce.current) clearTimeout(locationDebounce.current);
-    if (query.length < 3) {
+    if (query.length < 2) {
       setLocationResults([]);
       setShowLocationResults(false);
       return;
     }
     locationDebounce.current = setTimeout(async () => {
       try {
+        // Use Photon (Komoot) for better business/POI search, fall back to Nominatim
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&addressdetails=1`,
-          { headers: { 'User-Agent': 'ThePages/1.0' } }
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en`
         );
         const data = await res.json();
-        setLocationResults(data);
-        setShowLocationResults(data.length > 0);
+        const results = (data.features || []).map((f: any) => ({
+          name: f.properties.name || '',
+          street: f.properties.street || '',
+          houseNumber: f.properties.housenumber || '',
+          city: f.properties.city || f.properties.town || f.properties.village || '',
+          state: f.properties.state || '',
+          country: f.properties.country || '',
+          type: f.properties.osm_value || f.properties.type || '',
+          display: '', // built below
+        }));
+        // Build display strings
+        results.forEach((r: any) => {
+          const parts: string[] = [];
+          if (r.name) parts.push(r.name);
+          if (r.houseNumber && r.street) parts.push(`${r.houseNumber} ${r.street}`);
+          else if (r.street) parts.push(r.street);
+          if (r.city) parts.push(r.city);
+          if (r.state) parts.push(r.state);
+          r.display = parts.join(', ');
+        });
+        setLocationResults(results.filter((r: any) => r.display));
+        setShowLocationResults(results.length > 0);
       } catch {
         setLocationResults([]);
         setShowLocationResults(false);
@@ -166,22 +186,9 @@ export function AddEventSheet() {
     }, 300);
   };
 
-  const selectLocation = (result: { display_name: string; name: string; address: any }) => {
-    // Build a clean location string: "Venue Name, City, State" or "Address, City, State"
-    const parts: string[] = [];
-    if (result.name && result.name !== result.address?.road) parts.push(result.name);
-    if (result.address?.road) {
-      const road = result.address.house_number
-        ? `${result.address.house_number} ${result.address.road}`
-        : result.address.road;
-      parts.push(road);
-    }
-    if (result.address?.city || result.address?.town || result.address?.village) {
-      parts.push(result.address.city || result.address.town || result.address.village);
-    }
-    if (result.address?.state) parts.push(result.address.state);
-
-    setLocation(parts.length > 0 ? parts.join(', ') : result.display_name);
+  const selectLocation = (result: any) => {
+    // Use the full display string — preserves exact addresses and business names
+    setLocation(result.display);
     setShowLocationResults(false);
     setLocationResults([]);
   };
@@ -737,10 +744,10 @@ export function AddEventSheet() {
               />
               {showLocationResults && (
                 <View style={styles.locationDropdown}>
-                  {locationResults.map((result, i) => {
-                    // Show a clean short name
-                    const shortName = result.name || result.display_name.split(',')[0];
-                    const subText = result.display_name.split(',').slice(1, 3).join(',').trim();
+                  {locationResults.map((result: any, i: number) => {
+                    const mainName = result.name || (result.houseNumber ? `${result.houseNumber} ${result.street}` : result.street);
+                    const subParts = [result.city, result.state].filter(Boolean);
+                    const subText = subParts.join(', ');
                     return (
                       <TouchableOpacity
                         key={i}
@@ -748,7 +755,7 @@ export function AddEventSheet() {
                         activeOpacity={0.7}
                         onPress={() => selectLocation(result)}
                       >
-                        <Text style={styles.locationResultName} numberOfLines={1}>{shortName}</Text>
+                        <Text style={styles.locationResultName} numberOfLines={1}>{mainName}</Text>
                         <Text style={styles.locationResultSub} numberOfLines={1}>{subText}</Text>
                       </TouchableOpacity>
                     );
