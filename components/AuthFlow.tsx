@@ -175,29 +175,22 @@ export function AuthFlow() {
     }
   };
 
-  // Auto-detect city when profile step is shown (with 10s timeout)
-  useEffect(() => {
-    if (step !== 'profile' || city) return;
-    let cancelled = false;
-    (async () => {
-      setLoadingCity(true);
-      const timer = setTimeout(() => {
-        if (!cancelled) setLoadingCity(false);
-      }, 10000);
-      try {
-        const detected = await detectCity();
-        if (detected && !cancelled) {
-          setCity(detected);
-        }
-      } catch {
-        // User can type manually
-      } finally {
-        clearTimeout(timer);
-        if (!cancelled) setLoadingCity(false);
+  // Detect city on demand when user taps "Use my location"
+  const handleDetectCity = async () => {
+    setLoadingCity(true);
+    try {
+      const detected = await detectCity();
+      if (detected) {
+        setCity(detected);
+      } else {
+        setProfileError('Could not detect your city. Type it in manually.');
       }
-    })();
-    return () => { cancelled = true; };
-  }, [step]);
+    } catch {
+      setProfileError('Location access denied. Type your city manually.');
+    } finally {
+      setLoadingCity(false);
+    }
+  };
 
   const handleResend = () => {
     signIn(rawPhoneDigits);
@@ -580,14 +573,29 @@ export function AuthFlow() {
 
                 {/* City */}
                 <Text style={styles.fieldLabel}>CITY</Text>
-                <TextInput
-                  style={styles.profileInput}
-                  value={city}
-                  onChangeText={setCity}
-                  placeholder={loadingCity ? "Detecting your city..." : "Your city"}
-                  placeholderTextColor="rgba(2,4,15,0.35)"
-                  editable={!loadingCity}
-                />
+                <View style={styles.cityRow}>
+                  <TextInput
+                    style={[styles.profileInput, styles.cityInput]}
+                    value={city}
+                    onChangeText={setCity}
+                    placeholder={loadingCity ? "Detecting..." : "Your city"}
+                    placeholderTextColor="rgba(2,4,15,0.35)"
+                    editable={!loadingCity}
+                  />
+                  <TouchableOpacity
+                    style={[
+                      styles.locationButton,
+                      loadingCity && styles.buttonDisabled,
+                    ]}
+                    activeOpacity={0.7}
+                    onPress={handleDetectCity}
+                    disabled={loadingCity}
+                  >
+                    <Text style={styles.locationButtonText}>
+                      {loadingCity ? '...' : '📍'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
 
                 {profileError && (
                   <TouchableOpacity onPress={() => setProfileError(null)} activeOpacity={0.7}>
@@ -922,6 +930,27 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono,
     fontSize: 14,
     color: '#02040F',
+  },
+  cityRow: {
+    flexDirection: 'row',
+    gap: 10,
+    width: '100%',
+    marginBottom: 16,
+  },
+  cityInput: {
+    flex: 1,
+    marginBottom: 0,
+  },
+  locationButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#E9D25E',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationButtonText: {
+    fontSize: 20,
   },
   errorText: {
     fontFamily: FONTS.body,

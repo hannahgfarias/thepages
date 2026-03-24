@@ -253,14 +253,24 @@ export default function TabLayout() {
   const [showWelcome, setShowWelcome] = useState<boolean | null>(null);
 
   useEffect(() => {
-    AsyncStorage.getItem(WELCOME_SEEN_KEY).then((value) => {
-      setShowWelcome(value !== 'true');
-    });
+    // On web, try localStorage first (AsyncStorage can be flaky on web)
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      const seen = window.localStorage.getItem(WELCOME_SEEN_KEY);
+      setShowWelcome(seen !== 'true');
+    } else {
+      AsyncStorage.getItem(WELCOME_SEEN_KEY).then((value) => {
+        setShowWelcome(value !== 'true');
+      }).catch(() => setShowWelcome(true));
+    }
   }, []);
 
   const handleDismissWelcome = () => {
     setShowWelcome(false);
-    AsyncStorage.setItem(WELCOME_SEEN_KEY, 'true');
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.localStorage.setItem(WELCOME_SEEN_KEY, 'true');
+    } else {
+      AsyncStorage.setItem(WELCOME_SEEN_KEY, 'true');
+    }
   };
 
   return (

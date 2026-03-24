@@ -156,21 +156,28 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
   };
 
   const handleSignOut = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            await signOut();
-            handleClose();
+    if (Platform.OS === 'web') {
+      // Alert.alert callbacks don't work reliably on web
+      if (window.confirm('Are you sure you want to sign out?')) {
+        signOut().then(() => handleClose());
+      }
+    } else {
+      Alert.alert(
+        'Sign Out',
+        'Are you sure you want to sign out?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Sign Out',
+            style: 'destructive',
+            onPress: async () => {
+              await signOut();
+              handleClose();
+            },
           },
-        },
-      ]
-    );
+        ]
+      );
+    }
   };
 
   const handleDeleteAccount = () => {
