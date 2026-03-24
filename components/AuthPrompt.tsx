@@ -153,16 +153,16 @@ export function AuthPrompt({ message }: AuthPromptProps) {
         {/* Contextual message */}
         <Text style={styles.message}>
           {message ||
-            'Create an account to save events, post flyers, and connect with your community.'}
+            'Sign in or create an account to save events, post flyers, and connect with your community.'}
         </Text>
 
-        {/* Sign up button */}
+        {/* Sign in button */}
         <TouchableOpacity
           style={styles.signUpButton}
           activeOpacity={0.8}
           onPress={handleSignUp}
         >
-          <Text style={styles.signUpText}>SIGN UP WITH PHONE</Text>
+          <Text style={styles.signUpText}>CONTINUE WITH PHONE</Text>
         </TouchableOpacity>
 
         {/* Dismiss link */}

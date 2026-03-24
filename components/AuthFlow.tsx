@@ -162,7 +162,21 @@ export function AuthFlow() {
         console.log('[AUTH] verifyOTP result:', success);
         if (success) {
           setOtpError(null);
-          setStep('profile');
+          // Check if this is a returning user (has display_name set)
+          const { data: existingProfile } = await supabase
+            .from('profiles')
+            .select('display_name')
+            .eq('id', (await supabase.auth.getUser()).data.user?.id || '')
+            .maybeSingle();
+
+          if (existingProfile?.display_name) {
+            // Returning user — skip onboarding, go straight to feed
+            console.log('[AUTH] Returning user, closing auth flow');
+            handleClose();
+          } else {
+            // New user — go through profile setup
+            setStep('profile');
+          }
         } else {
           setOtpError('Invalid or expired code. Try again or resend.');
         }
