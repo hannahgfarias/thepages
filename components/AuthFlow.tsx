@@ -114,17 +114,17 @@ export function AuthFlow() {
       setSendingCode(true);
       setOtpError(null);
       try {
-        const timeout = new Promise<{ error: string }>((_, reject) =>
-          setTimeout(() => reject({ error: 'Request timed out. Check your connection and try again.' }), 60000)
-        );
-        const result = await Promise.race([signIn(rawPhoneDigits), timeout]);
+        console.log('[AUTH] Sending OTP to:', rawPhoneDigits);
+        const result = await signIn(rawPhoneDigits);
+        console.log('[AUTH] signIn result:', JSON.stringify(result));
         if (result?.error) {
           setOtpError(result.error);
           return;
         }
         setStep('otp');
       } catch (e: any) {
-        setOtpError(e?.error || 'Something went wrong. Try again.');
+        console.log('[AUTH] signIn exception:', e);
+        setOtpError('Something went wrong. Try again.');
       } finally {
         setSendingCode(false);
       }
