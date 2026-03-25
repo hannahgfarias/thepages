@@ -79,6 +79,11 @@ export interface OGMetadata {
   url?: string;
 }
 
+export interface ScanOccurrence {
+  date: string;
+  location: string;
+}
+
 export interface ScanResult {
   title: string;
   subtitle: string;
@@ -87,4 +92,5 @@ export interface ScanResult {
   date: string;
   category: Category;
   tags: string[];
+  occurrences?: ScanOccurrence[];
 }

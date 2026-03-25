@@ -71,6 +71,7 @@ export function AddEventSheet() {
   const [endPeriod, setEndPeriod] = useState<'AM' | 'PM'>('PM');
   const [showEndTime, setShowEndTime] = useState(false);
   const [showLinkField, setShowLinkField] = useState(false);
+  const [occurrences, setOccurrences] = useState<Array<{ date: string; location: string }>>([]);
   const [locationResults, setLocationResults] = useState<Array<{ display_name: string; name: string; address: any }>>([]);
   const [showLocationResults, setShowLocationResults] = useState(false);
   const locationDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -281,6 +282,12 @@ export function AddEventSheet() {
         if (data.tags && data.tags.length > 0) {
           setTags(data.tags.map((t: string) => t.replace(/^#/, '')));
         }
+        // If multiple dates/locations detected, store them for multi-post creation
+        if (data.occurrences && data.occurrences.length > 1) {
+          setOccurrences(data.occurrences);
+        } else {
+          setOccurrences([]);
+        }
       }
     } catch (e: any) {
       console.log('[SCAN] Exception:', e);
@@ -465,21 +472,34 @@ export function AddEventSheet() {
         moderationStatus = 'held';
       }
 
-      // 5. Insert post into database
-      const { error: insertError } = await supabase.from('posts').insert({
+      // 5. Insert post(s) into database
+      // If multiple occurrences detected, create one post per date/location
+      const postBase = {
         user_id: user.id,
         title: title.trim(),
         subtitle: subtitle.trim() || null,
         description: description.trim() || null,
-        date_text: dateTime || null,
-        location: location || null,
         event_url: link || null,
         image_url: uploadedImageUrl,
         category: selectedCategory || 'Community',
         tags: tags.map(t => `#${t}`),
         is_public: isPublic,
         moderation_status: moderationStatus,
-      });
+      };
+
+      const postsToInsert = occurrences.length > 1
+        ? occurrences.map((occ) => ({
+            ...postBase,
+            date_text: occ.date || dateTime || null,
+            location: occ.location || location || null,
+          }))
+        : [{
+            ...postBase,
+            date_text: dateTime || null,
+            location: location || null,
+          }];
+
+      const { error: insertError } = await supabase.from('posts').insert(postsToInsert);
 
       if (insertError) {
         console.log('[POST] Insert error:', JSON.stringify(insertError));
@@ -490,8 +510,14 @@ export function AddEventSheet() {
         return;
       }
 
-      // 5. Success — close and reset
+      // 6. Success — close and reset
+      const postCount = postsToInsert.length;
       setPublishing(false);
+      if (postCount > 1) {
+        const msg = `Created ${postCount} posts for each date/location.`;
+        if (Platform.OS === 'web') window.alert(msg);
+        else Alert.alert('Posted!', msg);
+      }
       handleClose();
     } catch (e) {
       console.log('[POST] Exception:', e);
@@ -891,6 +917,30 @@ export function AddEventSheet() {
                 </View>
               )}
             </View>
+
+            {/* Multiple dates/locations detected */}
+            {occurrences.length > 1 && (
+              <View style={{ backgroundColor: 'rgba(120,184,150,0.12)', borderRadius: 8, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(120,184,150,0.25)' }}>
+                <Text style={{ fontFamily: FONTS.display, fontSize: 12, letterSpacing: 1.5, color: '#78B896', marginBottom: 8 }}>
+                  {occurrences.length} DATES/LOCATIONS DETECTED — ONE POST EACH
+                </Text>
+                {occurrences.map((occ, i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: 'rgba(120,184,150,0.15)' }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: '#02040F' }}>
+                        {occ.date}{occ.date && occ.location ? '  ·  ' : ''}{occ.location}
+                      </Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setOccurrences(occurrences.filter((_, idx) => idx !== i))}
+                      style={{ padding: 4, marginLeft: 8 }}
+                    >
+                      <Text style={{ fontFamily: FONTS.mono, fontSize: 14, color: 'rgba(2,4,15,0.3)' }}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            )}
 
             {showLinkField ? (
               <View style={styles.field}>

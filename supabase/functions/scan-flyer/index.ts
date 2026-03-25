@@ -61,14 +61,18 @@ Return exactly this structure:
   "location": "Venue name and/or address as shown",
   "date": "Abbreviated format like SAT APR 5 • 7PM or just the date if no time",
   "category": "Exactly one of: Party, Music, Community, Arts, Wellness, Food, Free, Theatre, Fitness, Nightlife, Volunteer, Sports, Tech, Film, Comedy, Markets, Workshop, Other",
-  "tags": ["#relevant", "#hashtags", "#max5"]
+  "tags": ["#relevant", "#hashtags", "#max5"],
+  "occurrences": [
+    { "date": "SAT APR 5 • 7PM", "location": "Venue name" }
+  ]
 }
 
 Rules:
 - Use empty string "" for any field not visible on the flyer
 - category must be exactly one of the options listed
 - tags should start with # and relate to the event type and location
-- If the flyer shows MULTIPLE dates, times, or locations, include ALL of them in the respective fields. For example: "FRI MAR 27 • 7PM & SAT MAR 28 • 2PM" or "Downtown Gallery & Midtown Loft"
+- The "date" and "location" top-level fields should contain the FIRST date/location shown
+- The "occurrences" array should list EVERY separate date/location combination on the flyer. Each entry is one event instance. If there is only one date and one location, return a single-element array. If there are 3 dates at the same venue, return 3 entries each with that venue. If there are 2 dates at 2 different venues, return one entry per date+venue pair.
 - Return ONLY the JSON object, nothing else`,
             },
           ],
@@ -97,6 +101,7 @@ Rules:
         date: '',
         category: 'Community',
         tags: [],
+        occurrences: [],
       };
     }
 
