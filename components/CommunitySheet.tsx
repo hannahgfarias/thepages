@@ -13,9 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
 import { useAuth } from '../hooks/useAuth';
-import { supabase } from '../lib/supabase';
 import { FONTS } from '../constants/fonts';
-import { COLORS } from '../constants/colors';
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
