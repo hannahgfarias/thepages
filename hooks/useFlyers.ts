@@ -76,7 +76,7 @@ function sortByEventDate(posts: Post[]): Post[] {
  * Fetches approved public posts from Supabase.
  * Falls back to seed data if the table is empty or unreachable.
  */
-export function useFlyers() {
+export function useFlyers(userId?: string) {
   const [flyers, setFlyers] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -116,6 +116,18 @@ export function useFlyers() {
         return;
       }
 
+      // Fetch saved post IDs for the current user
+      let savedPostIds = new Set<string>();
+      if (userId) {
+        const { data: saves } = await supabase
+          .from('saves')
+          .select('post_id')
+          .eq('user_id', userId);
+        if (saves) {
+          savedPostIds = new Set(saves.map((s: any) => s.post_id));
+        }
+      }
+
       // Map DB rows to Post type
       const mapped: Post[] = data.map((row: any) => ({
         id: row.id,
@@ -139,8 +151,8 @@ export function useFlyers() {
         created_at: row.created_at,
         link: row.event_url ? 'Get Tickets' : '',
         profile: row.profile,
-        is_saved: false,
-        is_mine: false,
+        is_saved: savedPostIds.has(row.id),
+        is_mine: userId ? row.user_id === userId : false,
       }));
 
       setFlyers(sortByEventDate(mapped));
@@ -151,25 +163,29 @@ export function useFlyers() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   useEffect(() => {
     fetchFlyers();
   }, [fetchFlyers]);
 
-  const toggleSave = useCallback(async (postId: string, userId?: string) => {
-    // Optimistic UI update
+  const toggleSave = useCallback(async (postId: string) => {
+    // Read current state before optimistic update
+    let wasSaved = false;
     setFlyers((prev) =>
-      prev.map((f) => (f.id === postId ? { ...f, is_saved: !f.is_saved } : f))
+      prev.map((f) => {
+        if (f.id === postId) {
+          wasSaved = f.is_saved ?? false;
+          return { ...f, is_saved: !f.is_saved };
+        }
+        return f;
+      })
     );
 
     if (!userId) return; // Not logged in — just toggle locally
 
-    const flyer = flyers.find((f) => f.id === postId);
-    if (!flyer) return;
-
     try {
-      if (flyer.is_saved) {
+      if (wasSaved) {
         const { error } = await supabase.from('saves').delete().match({ user_id: userId, post_id: postId });
         if (error) throw error;
       } else {
@@ -182,7 +198,7 @@ export function useFlyers() {
         prev.map((f) => (f.id === postId ? { ...f, is_saved: !f.is_saved } : f))
       );
     }
-  }, [flyers]);
+  }, [userId]);
 
   return { flyers, loading, error, refetch: fetchFlyers, toggleSave };
 }

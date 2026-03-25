@@ -46,7 +46,8 @@ function SearchIcon() {
 /* ─── Feed Screen ─── */
 
 export default function FeedScreen() {
-  const { flyers, loading, error, toggleSave, refetch } = useFlyers();
+  const { user } = useAuth();
+  const { flyers, loading, error, toggleSave, refetch } = useFlyers(user?.id);
   const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt } = useOverlay();
   const prevShowAddEvent = useRef(false);
 
@@ -214,6 +215,13 @@ export default function FeedScreen() {
     }
     toggleSave(id);
   }, [toggleSave, isAuthenticated, setShowAuthPrompt]);
+
+  // Re-fetch when user logs in so saved state is loaded
+  useEffect(() => {
+    if (user?.id) {
+      refetch();
+    }
+  }, [user?.id, refetch]);
 
   // Fire directional haptics
   const fireDirectionalHaptic = useCallback(

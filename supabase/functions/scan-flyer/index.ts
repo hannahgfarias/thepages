@@ -60,14 +60,15 @@ Return exactly this structure:
   "description": "1-2 sentence description of the event",
   "location": "Venue name and/or address as shown",
   "date": "Abbreviated format like SAT APR 5 • 7PM or just the date if no time",
-  "category": "Exactly one of: Arts, Community, Wellness, Volunteer, Food",
+  "category": "Exactly one of: Party, Music, Community, Arts, Wellness, Food, Free, Theatre, Fitness, Nightlife, Volunteer, Sports, Tech, Film, Comedy, Markets, Workshop, Other",
   "tags": ["#relevant", "#hashtags", "#max5"]
 }
 
 Rules:
 - Use empty string "" for any field not visible on the flyer
-- category must be exactly one of the five options listed
+- category must be exactly one of the options listed
 - tags should start with # and relate to the event type and location
+- If the flyer shows MULTIPLE dates, times, or locations, include ALL of them in the respective fields. For example: "FRI MAR 27 • 7PM & SAT MAR 28 • 2PM" or "Downtown Gallery & Midtown Loft"
 - Return ONLY the JSON object, nothing else`,
             },
           ],

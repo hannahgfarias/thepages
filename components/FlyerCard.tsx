@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -78,6 +78,9 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
   const { width } = useWindowDimensions();
   const [active, setActive] = useState(false);
   const [saved, setSaved] = useState(flyer.is_saved ?? false);
+  useEffect(() => {
+    setSaved(flyer.is_saved ?? false);
+  }, [flyer.is_saved]);
   const [showLinkWarning, setShowLinkWarning] = useState(false);
 
   // Animation values

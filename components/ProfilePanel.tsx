@@ -198,8 +198,8 @@ export function ProfilePanel() {
     })
   ).current;
 
-  const { flyers: allFlyers } = useFlyers();
   const userId = session?.user?.id;
+  const { flyers: allFlyers } = useFlyers(userId);
 
   // Your posts — filter all flyers by current user
   const yourPosts = useMemo(() =>

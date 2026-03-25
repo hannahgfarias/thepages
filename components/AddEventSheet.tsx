@@ -17,6 +17,7 @@ import {
   Switch,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
+import { scanFlyer } from '../lib/scan';
 import { pickImageFromLibrary, pickImageFromCamera, readFileAsBase64 } from '../lib/platform';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -262,26 +263,24 @@ export function AddEventSheet() {
       const imageBase64 = base64 || await readFileAsBase64(uri);
 
       const timeout = new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 30000)
+        setTimeout(() => reject(new Error('Scan timed out — fill in details manually')), 30000)
       );
-      const scanPromise = supabase.functions.invoke('scan-flyer', {
-        body: { imageBase64, mediaType: 'image/jpeg' },
-      });
+      const scanPromise = scanFlyer(imageBase64, 'image/jpeg');
 
-      const { data, error } = await Promise.race([scanPromise, timeout]);
+      const data = await Promise.race([scanPromise, timeout]);
 
-      if (data && !error && !data.error) {
+      if (data) {
         if (data.title) setTitle(data.title);
         if (data.date) setDateTime(data.date);
         if (data.location) setLocation(data.location);
         if (data.category) setSelectedCategory(data.category);
-      } else {
-        console.log('[SCAN] Error:', error || data?.error);
-        // Don't show error prominently — user can fill in manually
+        if (data.tags && data.tags.length > 0) {
+          setTags(data.tags.map((t: string) => t.replace(/^#/, '')));
+        }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.log('[SCAN] Exception:', e);
-      // Silent fail — form is already visible for manual entry
+      setScanError(e?.message || 'AI scan failed — fill in details manually');
     }
 
     setScanning(false);
