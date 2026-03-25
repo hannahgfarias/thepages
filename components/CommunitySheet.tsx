@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -12,12 +12,14 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
-interface CommunityMember {
+export interface CommunityMember {
   id: string;
   name: string;
   handle: string;
@@ -26,32 +28,51 @@ interface CommunityMember {
   status: 'mutual' | 'following' | 'follows_you' | 'request';
 }
 
-const FOLLOW_REQUESTS: CommunityMember[] = [
-  { id: 'r1', name: 'Nadia Osei', handle: '@nadia.o', color: '#f472b6', initials: 'NO', status: 'request' },
-  { id: 'r2', name: 'Tyler Chen', handle: '@tyler_c', color: '#818cf8', initials: 'TC', status: 'request' },
-];
-
-const COMMUNITY_MEMBERS: CommunityMember[] = [
-  { id: '1', name: 'Marco Rivera', handle: '@marco_r', color: '#6366f1', initials: 'MR', status: 'mutual' },
-  { id: '2', name: 'Kai Tanaka', handle: '@kai.t', color: '#14b8a6', initials: 'KT', status: 'follows_you' },
-  { id: '3', name: 'Jasmine Lee', handle: '@jas_lee', color: '#f59e0b', initials: 'JL', status: 'mutual' },
-  { id: '4', name: 'Alex Park', handle: '@a.park', color: '#ec4899', initials: 'AP', status: 'following' },
-  { id: '5', name: 'Sam Rodriguez', handle: '@samrod', color: '#8b5cf6', initials: 'SR', status: 'mutual' },
-  { id: '6', name: 'Dana Williams', handle: '@danaw', color: '#06b6d4', initials: 'DW', status: 'follows_you' },
-  { id: '7', name: 'River Green', handle: '@river.g', color: '#10b981', initials: 'RG', status: 'following' },
-];
-
 const STATUS_LABELS: Record<string, string> = {
   mutual: 'Community',
   following: 'Following',
   follows_you: 'Follows you',
 };
 
+// Hook to fetch community data — exported so ProfilePanel can check request count
+export function useCommunityData() {
+  const { session } = useAuth();
+  const [requests, setRequests] = useState<CommunityMember[]>([]);
+  const [members, setMembers] = useState<CommunityMember[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const fetchCommunity = useCallback(async () => {
+    if (!session?.user?.id) {
+      setRequests([]);
+      setMembers([]);
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // TODO: Fetch real follow requests and community members from Supabase
+      // For now, return empty arrays until the follows table is created
+      setRequests([]);
+      setMembers([]);
+    } catch (e) {
+      console.warn('Community fetch error:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, [session]);
+
+  useEffect(() => {
+    fetchCommunity();
+  }, [fetchCommunity]);
+
+  return { requests, setRequests, members, setMembers, loading, refetch: fetchCommunity };
+}
+
 export function CommunitySheet() {
   const { showCommunity, setShowCommunity } = useOverlay();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const [requests, setRequests] = useState(FOLLOW_REQUESTS);
+  const { requests, setRequests, members } = useCommunityData();
 
   const slideY = useRef(new Animated.Value(height)).current;
   const scrimOpacity = useRef(new Animated.Value(0)).current;
@@ -111,7 +132,9 @@ export function CommunitySheet() {
     ...(requests.length > 0
       ? [{ title: 'FOLLOW REQUESTS', data: requests }]
       : []),
-    { title: 'YOUR COMMUNITY', data: COMMUNITY_MEMBERS },
+    ...(members.length > 0
+      ? [{ title: 'YOUR COMMUNITY', data: members }]
+      : []),
   ];
 
   const renderItem = ({ item }: { item: CommunityMember }) => (
@@ -214,15 +237,24 @@ export function CommunitySheet() {
         </View>
 
         {/* Sectioned list */}
-        <SectionList
-          sections={sections}
-          renderItem={renderItem}
-          renderSectionHeader={renderSectionHeader}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          stickySectionHeadersEnabled={false}
-        />
+        {sections.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyTitle}>No community yet</Text>
+            <Text style={styles.emptySubtitle}>
+              When people follow you or you follow others, they'll appear here.
+            </Text>
+          </View>
+        ) : (
+          <SectionList
+            sections={sections}
+            renderItem={renderItem}
+            renderSectionHeader={renderSectionHeader}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContent}
+            stickySectionHeadersEnabled={false}
+          />
+        )}
       </Animated.View>
     </View>
   );
@@ -403,5 +435,25 @@ const styles = StyleSheet.create({
     color: '#02040F',
     letterSpacing: 1,
     textTransform: 'uppercase',
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingTop: 40,
+    paddingBottom: 40,
+  },
+  emptyTitle: {
+    fontFamily: FONTS.display,
+    fontSize: 16,
+    color: '#02040F',
+    marginBottom: 8,
+  },
+  emptySubtitle: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: 'rgba(2,4,15,0.4)',
+    textAlign: 'center',
+    lineHeight: 20,
+    maxWidth: 260,
   },
 });
