@@ -20,6 +20,7 @@ import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
 import type { Post } from '../types';
 import { SettingsSheet } from './SettingsSheet';
+import { useCommunityData } from './CommunitySheet';
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
@@ -146,7 +147,7 @@ export function ProfilePanel() {
       translateX.setValue(width);
       Animated.timing(translateX, {
         toValue: 0,
-        duration: 400,
+        duration: 250,
         easing: EASING,
         useNativeDriver: true,
       }).start();
@@ -156,7 +157,7 @@ export function ProfilePanel() {
   const close = () => {
     Animated.timing(translateX, {
       toValue: width,
-      duration: 350,
+      duration: 220,
       easing: EASING,
       useNativeDriver: true,
     }).start(() => {
@@ -199,6 +200,7 @@ export function ProfilePanel() {
   ).current;
 
   const { flyers: allFlyers } = useFlyers();
+  const { requests: communityRequests } = useCommunityData();
   const userId = session?.user?.id;
 
   // Your posts — filter all flyers by current user
@@ -219,6 +221,13 @@ export function ProfilePanel() {
   const thumbHeight = (thumbWidth * 4) / 3;
 
   const sectionOrder: DateSection[] = ['HAPPENING TODAY', 'THIS WEEK', 'UPCOMING', 'PAST'];
+
+  // Auto-close profile panel when user signs out
+  useEffect(() => {
+    if (showProfile && !isAuthenticated) {
+      setShowProfile(false);
+    }
+  }, [isAuthenticated, showProfile, setShowProfile]);
 
   // Never show profile panel if not authenticated
   if (!showProfile || !isAuthenticated) return null;
@@ -286,8 +295,9 @@ export function ProfilePanel() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Settings gear — top right */}
+        {/* Top row — wordmark + settings gear */}
         <View style={styles.topRow}>
+          <Text style={styles.wordmark}>THE PAGES</Text>
           <View style={{ flex: 1 }} />
           <TouchableOpacity style={styles.gearButton} activeOpacity={0.7} onPress={() => setShowSettings(true)}>
             <GearIcon />
@@ -351,6 +361,11 @@ export function ProfilePanel() {
           >
             <View style={styles.communityStatRow}>
               <Text style={styles.statNumber}>0</Text>
+              {communityRequests.length > 0 && (
+                <View style={styles.requestNotifBadge}>
+                  <Text style={styles.requestNotifText}>{communityRequests.length}</Text>
+                </View>
+              )}
               <Text style={styles.communityArrow}>{'\u203A'}</Text>
             </View>
             <Text style={styles.statLabel}>COMMUNITY</Text>
@@ -443,6 +458,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
+  },
+  wordmark: {
+    fontFamily: FONTS.display,
+    fontSize: 18,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    color: '#02040F',
   },
   gearButton: {
     width: 36,
@@ -538,6 +560,20 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: 'rgba(2,4,15,0.5)',
     marginTop: -2,
+  },
+  requestNotifBadge: {
+    backgroundColor: '#E9D25E',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  requestNotifText: {
+    fontFamily: FONTS.display,
+    fontSize: 10,
+    color: '#02040F',
   },
   tabsRow: {
     flexDirection: 'row',

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -72,9 +72,13 @@ function PinIcon() {
   );
 }
 
+/* ─── Constants ─── */
+
+const EASING = Easing.bezier(0.16, 1, 0.3, 1);
+
 /* ─── FlyerCard Component ─── */
 
-export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPress }: FlyerCardProps) {
+export const FlyerCard = memo(function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPress }: FlyerCardProps) {
   const { width } = useWindowDimensions();
   const [active, setActive] = useState(false);
   const [saved, setSaved] = useState(flyer.is_saved ?? false);
@@ -85,11 +89,11 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
   const infoTranslateY = useRef(new Animated.Value(30)).current;
   const infoOpacity = useRef(new Animated.Value(0)).current;
   const imageScale = useRef(new Animated.Value(1)).current;
-
-  const easing = Easing.bezier(0.16, 1, 0.3, 1);
+  const activeRef = useRef(false);
 
   const toggleActive = useCallback(() => {
-    const nextActive = !active;
+    const nextActive = !activeRef.current;
+    activeRef.current = nextActive;
     setActive(nextActive);
     onActiveChange?.(nextActive);
 
@@ -97,26 +101,26 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
       Animated.parallel([
         Animated.timing(overlayOpacity, {
           toValue: 1,
-          duration: 350,
-          easing,
+          duration: 200,
+          easing: EASING,
           useNativeDriver: true,
         }),
         Animated.timing(infoTranslateY, {
           toValue: 0,
-          duration: 400,
-          easing,
+          duration: 250,
+          easing: EASING,
           useNativeDriver: true,
         }),
         Animated.timing(infoOpacity, {
           toValue: 1,
-          duration: 400,
-          easing,
+          duration: 250,
+          easing: EASING,
           useNativeDriver: true,
         }),
         Animated.timing(imageScale, {
           toValue: 1.02,
-          duration: 400,
-          easing,
+          duration: 250,
+          easing: EASING,
           useNativeDriver: true,
         }),
       ]).start();
@@ -124,31 +128,31 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
       Animated.parallel([
         Animated.timing(overlayOpacity, {
           toValue: 0,
-          duration: 300,
-          easing,
+          duration: 180,
+          easing: EASING,
           useNativeDriver: true,
         }),
         Animated.timing(infoTranslateY, {
           toValue: 30,
-          duration: 300,
-          easing,
+          duration: 180,
+          easing: EASING,
           useNativeDriver: true,
         }),
         Animated.timing(infoOpacity, {
           toValue: 0,
-          duration: 300,
-          easing,
+          duration: 180,
+          easing: EASING,
           useNativeDriver: true,
         }),
         Animated.timing(imageScale, {
           toValue: 1,
-          duration: 300,
-          easing,
+          duration: 180,
+          easing: EASING,
           useNativeDriver: true,
         }),
       ]).start();
     }
-  }, [active, overlayOpacity, infoTranslateY, infoOpacity, imageScale, easing]);
+  }, [overlayOpacity, infoTranslateY, infoOpacity, imageScale, onActiveChange]);
 
   const handleSave = useCallback(() => {
     setSaved((prev) => !prev);
@@ -273,7 +277,7 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
                   styles.blurImage,
                   {
                     // @ts-ignore web-only CSS
-                    filter: 'blur(40px) brightness(0.6) saturate(1.2)',
+                    filter: 'blur(30px) brightness(0.6) saturate(1.2)',
                   } as any,
                 ]}
                 resizeMode="cover"
@@ -282,7 +286,7 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
               <Image
                 source={imageSource}
                 style={styles.blurImage}
-                blurRadius={40}
+                blurRadius={15}
                 resizeMode="cover"
               />
             )}
@@ -551,7 +555,7 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
       </View>
     </TouchableWithoutFeedback>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: {

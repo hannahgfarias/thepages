@@ -137,19 +137,19 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
       Animated.parallel([
         Animated.timing(bgOpacity, {
           toValue: 1,
-          duration: 300,
+          duration: 200,
           easing: EASING,
           useNativeDriver: true,
         }),
         Animated.timing(panelTranslateY, {
           toValue: 0,
-          duration: 400,
+          duration: 250,
           easing: EASING,
           useNativeDriver: true,
         }),
         Animated.timing(panelOpacity, {
           toValue: 1,
-          duration: 400,
+          duration: 250,
           easing: EASING,
           useNativeDriver: true,
         }),

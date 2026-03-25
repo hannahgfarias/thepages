@@ -47,19 +47,34 @@ function SearchIcon() {
 
 export default function FeedScreen() {
   const { flyers, loading, error, toggleSave, refetch } = useFlyers();
-  const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt } = useOverlay();
+  const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt, scrollToTopRef } = useOverlay();
+  const flatListRef = useRef<FlatList>(null);
+
+  // Register scroll-to-top so Browse tab can trigger it
+  useEffect(() => {
+    scrollToTopRef.current = () => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    };
+    return () => { scrollToTopRef.current = null; };
+  }, [scrollToTopRef]);
+
   const prevShowAddEvent = useRef(false);
 
-  // Refetch feed when AddEventSheet closes (post was potentially added)
+  // Refetch feed and scroll to top when AddEventSheet closes (post was potentially added)
   useEffect(() => {
     if (prevShowAddEvent.current && !showAddEvent) {
-      refetch();
+      refetch().then(() => {
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      });
     }
     prevShowAddEvent.current = showAddEvent;
   }, [showAddEvent, refetch]);
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const cardHeight = height - NAV_HEIGHT - insets.bottom;
+
+  // Feed tab
+  const [feedTab, setFeedTab] = useState<'community' | 'following' | 'all'>('all');
 
   // Tag filtering
   const [activeTag, setActiveTag] = useState<string | null>(null);
@@ -142,7 +157,7 @@ export default function FeedScreen() {
     setCardActive(isActive);
     Animated.timing(topBarTranslateY, {
       toValue: isActive ? -(insets.top + 60) : 0,
-      duration: 250,
+      duration: 150,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start();
@@ -160,7 +175,7 @@ export default function FeedScreen() {
         scrollDirection.current = direction;
         Animated.timing(topBarTranslateY, {
           toValue: direction === 'down' ? -(insets.top + 60) : 0,
-          duration: 250,
+          duration: 150,
           easing: Easing.out(Easing.ease),
           useNativeDriver: true,
         }).start();
@@ -285,7 +300,7 @@ export default function FeedScreen() {
 
   return (
     <View style={styles.container} {...swipePanResponder.panHandlers}>
-      {/* Top bar — hidden when card details are active */}
+      {/* Top bar — TikTok-style centered tabs */}
       {!cardActive && (
         <Animated.View
           style={[styles.topBar, { paddingTop: insets.top + 8, transform: [{ translateY: topBarTranslateY }] }]}
@@ -293,13 +308,32 @@ export default function FeedScreen() {
         >
           <View style={styles.topBarGradient} />
           <View style={styles.topBarContent}>
-            {/* Wordmark */}
-            <Text style={styles.wordmark}>THE PAGES</Text>
+            {/* Spacer for symmetry */}
+            <View style={styles.topBarSide} />
 
-            {/* Search button */}
-            <TouchableOpacity style={styles.searchButton} activeOpacity={0.7} onPress={() => setShowSearch(true)}>
-              <SearchIcon />
-            </TouchableOpacity>
+            {/* Centered feed tabs */}
+            <View style={styles.feedTabs}>
+              {(['community', 'following', 'all'] as const).map((tab) => (
+                <TouchableOpacity
+                  key={tab}
+                  style={styles.feedTab}
+                  activeOpacity={0.7}
+                  onPress={() => setFeedTab(tab)}
+                >
+                  <Text style={[styles.feedTabText, feedTab === tab && styles.feedTabTextActive]}>
+                    {tab === 'community' ? 'Community' : tab === 'following' ? 'Following' : 'All'}
+                  </Text>
+                  {feedTab === tab && <View style={styles.feedTabIndicator} />}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Search icon */}
+            <View style={styles.topBarSide}>
+              <TouchableOpacity style={styles.searchButton} activeOpacity={0.7} onPress={() => setShowSearch(true)}>
+                <SearchIcon />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Tag filter bar */}
@@ -383,6 +417,7 @@ export default function FeedScreen() {
       {/* Feed */}
       {filteredFlyers.length > 0 && (
         <FlatList
+          ref={flatListRef}
           data={filteredFlyers}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
@@ -394,7 +429,11 @@ export default function FeedScreen() {
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           onScroll={handleScroll}
-          scrollEventThrottle={16}
+          scrollEventThrottle={32}
+          removeClippedSubviews={Platform.OS !== 'web'}
+          initialNumToRender={2}
+          maxToRenderPerBatch={2}
+          windowSize={3}
           ListFooterComponent={
             <View style={[styles.endOfFeed, { height: cardHeight }]}>
               <Text style={styles.endOfFeedEmoji}>✨</Text>
@@ -402,7 +441,11 @@ export default function FeedScreen() {
               <Text style={styles.endOfFeedSubtitle}>
                 {filteredFlyers.length} event{filteredFlyers.length !== 1 ? 's' : ''} in your feed
               </Text>
-              <TouchableOpacity style={styles.stateButton} activeOpacity={0.7} onPress={refetch}>
+              <TouchableOpacity style={styles.stateButton} activeOpacity={0.7} onPress={() => {
+                refetch().then(() => {
+                  flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+                });
+              }}>
                 <Text style={styles.stateButtonText}>REFRESH</Text>
               </TouchableOpacity>
             </View>
@@ -460,23 +503,43 @@ const styles = StyleSheet.create({
   },
   topBarContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  wordmark: {
+  topBarSide: {
+    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedTabs: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 20,
+  },
+  feedTab: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  feedTabText: {
     fontFamily: FONTS.display,
-    fontSize: 18,
-    letterSpacing: 3,
-    textTransform: 'uppercase',
+    fontSize: 15,
+    letterSpacing: 0.5,
+    color: 'rgba(2,4,15,0.35)',
+  },
+  feedTabTextActive: {
     color: '#02040F',
+  },
+  feedTabIndicator: {
+    width: 20,
+    height: 2.5,
+    borderRadius: 2,
+    backgroundColor: '#02040F',
+    marginTop: 4,
   },
   searchButton: {
     width: 36,
     height: 36,
-    borderRadius: 0,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(2,4,15,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
