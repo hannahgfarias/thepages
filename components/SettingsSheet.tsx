@@ -310,10 +310,30 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
   };
 
   const handleDeleteAccount = () => {
+    const doDelete = async () => {
+      try {
+        const userId = session?.user?.id;
+        if (!userId) return;
+
+        // Delete user's posts (cascade will clean up saves, reports, etc.)
+        await supabase.from('posts').delete().eq('user_id', userId);
+        // Delete user's profile
+        await supabase.from('profiles').delete().eq('id', userId);
+        // Sign out (Supabase auth account deletion requires admin API,
+        // but clearing the profile + posts + signing out effectively removes the user)
+        await signOut();
+        handleClose();
+        setShowProfile(false);
+      } catch {
+        const msg = 'Could not delete account. Please try again or contact support.';
+        if (Platform.OS === 'web') window.alert(msg);
+        else Alert.alert('Error', msg);
+      }
+    };
+
     if (Platform.OS === 'web') {
       if (window.confirm('This will permanently delete your account and all your posts. This cannot be undone.')) {
-        // TODO: call delete account API
-        handleClose();
+        doDelete();
       }
     } else {
       Alert.alert(
@@ -321,7 +341,7 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
         'This will permanently delete your account and all your posts. This cannot be undone.',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: () => handleClose() },
+          { text: 'Delete', style: 'destructive', onPress: doDelete },
         ]
       );
     }

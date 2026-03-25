@@ -31,9 +31,12 @@ export interface Post {
   image: ImageSourcePropType | null;
   image_url: string | null;
   og_image_url: string | null;
-  // Blur background dominant color
+  // Styling
   bgColor: string;
-  category: string; // e.g. "PARTY", "MUSIC", "FREE · FITNESS"
+  accent_color: string;
+  text_color: string;
+  pattern: string;
+  category: string;
   tags: string[];
   is_public: boolean;
   is_anonymous: boolean;

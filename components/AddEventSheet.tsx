@@ -531,6 +531,23 @@ export function AddEventSheet() {
       }
 
       // 5. Build post data
+      // Pick a random color preset for new posts
+      const COLOR_PRESETS = [
+        { bg: '#1a1a2e', accent: '#E63946', text: '#ffffff' },
+        { bg: '#d8f3dc', accent: '#2d6a4f', text: '#1a1a1a' },
+        { bg: '#ff6b6b', accent: '#ffd93d', text: '#ffffff' },
+        { bg: '#003566', accent: '#ffd166', text: '#ffffff' },
+        { bg: '#10002b', accent: '#c77dff', text: '#ffffff' },
+        { bg: '#fff8f0', accent: '#ff6b35', text: '#1a1a1a' },
+        { bg: '#0d1b2a', accent: '#00b4d8', text: '#ffffff' },
+        { bg: '#1a0a00', accent: '#fb8500', text: '#ffffff' },
+      ];
+      const PATTERNS = ['stripes', 'dots', 'grid', 'zigzag', 'circles'];
+      const preset = editingPost
+        ? { bg: editingPost.bgColor || editingPost.bg_color, accent: editingPost.accent_color, text: editingPost.text_color }
+        : COLOR_PRESETS[Math.floor(Math.random() * COLOR_PRESETS.length)];
+      const pattern = editingPost?.pattern || PATTERNS[Math.floor(Math.random() * PATTERNS.length)];
+
       const postBase = {
         user_id: user.id,
         title: title.trim(),
@@ -538,6 +555,10 @@ export function AddEventSheet() {
         description: description.trim() || null,
         event_url: link || null,
         image_url: uploadedImageUrl || (editingPost?.image_url ?? null),
+        bg_color: preset.bg,
+        accent_color: preset.accent,
+        text_color: preset.text,
+        pattern,
         category: selectedCategory || 'Community',
         tags: tags.map(t => `#${t}`),
         is_public: isPublic,

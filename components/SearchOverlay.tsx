@@ -21,7 +21,11 @@ import { COLORS } from '../constants/colors';
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
-const EVENT_TYPES = ['Party', 'Music', 'Community', 'Arts', 'Wellness', 'Food', 'Free', 'Theatre'];
+const EVENT_TYPES = [
+  'Party', 'Music', 'Community', 'Arts', 'Wellness', 'Food', 'Free', 'Theatre',
+  'Fitness', 'Nightlife', 'Volunteer', 'Sports', 'Tech', 'Film', 'Comedy',
+  'Markets', 'Workshop', 'Other',
+];
 const WHEN_OPTIONS = ['Happening Now', 'Today', 'This Week', 'This Weekend', 'This Month', 'Pick a Date'];
 const LOCATIONS = ['SF', 'Oakland', 'LA', 'NYC', 'Near Me'];
 

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -84,6 +84,19 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
     setSaved(flyer.is_saved ?? false);
   }, [flyer.is_saved]);
   const [showLinkWarning, setShowLinkWarning] = useState(false);
+
+  // Age gate for 18+ content
+  const isAgeRestricted = useMemo(() => {
+    const ageTerms = ['18+', '21+', 'nightlife', 'bar', 'club', 'adults only'];
+    const allText = [
+      flyer.category,
+      ...(flyer.tags || []),
+      flyer.title,
+      flyer.subtitle,
+    ].filter(Boolean).join(' ').toLowerCase();
+    return ageTerms.some(term => allText.includes(term));
+  }, [flyer]);
+  const [ageConfirmed, setAgeConfirmed] = useState(false);
 
   // Animation values
   const overlayOpacity = useRef(new Animated.Value(0)).current;
@@ -479,13 +492,14 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
             </TouchableOpacity>
           ) : null}
 
-          {/* Posted by */}
-          {flyer.profile ? (
+          {/* Posted by — hidden for anonymous posts */}
+          {flyer.profile && !flyer.is_anonymous ? (
             <TouchableOpacity
               style={styles.postedByRow}
               activeOpacity={0.7}
               onPress={() => {
-                // TODO: navigate to user profile
+                // Open poster's profile panel
+                // For now, no-op — profile navigation requires a dedicated screen
               }}
             >
               {flyer.profile.avatar_url ? (
@@ -502,6 +516,13 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
                 {flyer.profile.display_name || flyer.profile.handle || 'Anonymous'}
               </Text>
             </TouchableOpacity>
+          ) : flyer.is_anonymous ? (
+            <View style={styles.postedByRow}>
+              <View style={[styles.postedByAvatarFallback, { backgroundColor: '#666' }]}>
+                <Text style={styles.postedByInitial}>?</Text>
+              </View>
+              <Text style={styles.postedByText}>Anonymous</Text>
+            </View>
           ) : null}
 
           {/* Actions row inside details */}
@@ -553,6 +574,37 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
             onShare={handleShare}
             isSaved={saved}
           />
+        )}
+
+        {/* Private post badge */}
+        {!flyer.is_public && (
+          <View style={styles.privateBadge}>
+            <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+              <Path
+                d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2zM7 11V7a5 5 0 0110 0v4"
+                stroke="#fff"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+            <Text style={styles.privateBadgeText}>PRIVATE</Text>
+          </View>
+        )}
+
+        {/* Age gate overlay for 18+ content */}
+        {isAgeRestricted && !ageConfirmed && (
+          <View style={styles.ageGateOverlay}>
+            <Text style={styles.ageGateTitle}>18+</Text>
+            <Text style={styles.ageGateSubtitle}>This event may contain age-restricted content</Text>
+            <TouchableOpacity
+              style={styles.ageGateButton}
+              activeOpacity={0.8}
+              onPress={() => setAgeConfirmed(true)}
+            >
+              <Text style={styles.ageGateButtonText}>I'M 18 OR OLDER</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* Web edit/delete menu for own posts */}
@@ -839,14 +891,14 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
   reportTitle: {
-    fontFamily: 'BarlowCondensed_900Black',
+    fontFamily: FONTS.display,
     fontSize: 16,
     letterSpacing: 2,
     color: '#02040F',
     marginBottom: 4,
   },
   reportSubtitle: {
-    fontFamily: 'Barlow_400Regular',
+    fontFamily: FONTS.body,
     fontSize: 13,
     color: 'rgba(2,4,15,0.5)',
     marginBottom: 20,
@@ -857,7 +909,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'rgba(2,4,15,0.06)',
   },
   reportOptionText: {
-    fontFamily: 'Barlow_400Regular',
+    fontFamily: FONTS.body,
     fontSize: 15,
     color: '#02040F',
   },
@@ -867,8 +919,61 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   reportCancelText: {
-    fontFamily: 'Barlow_400Regular',
+    fontFamily: FONTS.body,
     fontSize: 14,
     color: 'rgba(2,4,15,0.4)',
+  },
+  privateBadge: {
+    position: 'absolute',
+    top: 16,
+    left: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 4,
+    zIndex: 5,
+  },
+  privateBadgeText: {
+    fontFamily: FONTS.mono,
+    fontSize: 10,
+    letterSpacing: 1,
+    color: '#fff',
+  },
+  ageGateOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    zIndex: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 40,
+  },
+  ageGateTitle: {
+    fontFamily: FONTS.display,
+    fontSize: 48,
+    color: '#fff',
+    marginBottom: 12,
+  },
+  ageGateSubtitle: {
+    fontFamily: FONTS.body,
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    marginBottom: 24,
+  },
+  ageGateButton: {
+    borderWidth: 1,
+    borderColor: '#fff',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 0,
+  },
+  ageGateButtonText: {
+    fontFamily: FONTS.display,
+    fontSize: 14,
+    letterSpacing: 2,
+    color: '#fff',
   },
 });
