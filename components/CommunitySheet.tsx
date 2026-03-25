@@ -7,6 +7,7 @@ import {
   Animated,
   Easing,
   SectionList,
+  Alert,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -148,7 +149,14 @@ export function CommunitySheet() {
           </TouchableOpacity>
         </View>
       ) : item.status === 'follows_you' ? (
-        <TouchableOpacity style={styles.followBackButton} activeOpacity={0.7}>
+        <TouchableOpacity
+          style={styles.followBackButton}
+          activeOpacity={0.7}
+          onPress={() => {
+            // TODO: Supabase update follow status to mutual
+            Alert.alert('Following', `You're now following ${item.name}`);
+          }}
+        >
           <Text style={styles.followBackText}>FOLLOW BACK</Text>
         </TouchableOpacity>
       ) : (

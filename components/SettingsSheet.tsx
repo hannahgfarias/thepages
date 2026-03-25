@@ -446,7 +446,18 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
               thumbColor="#fff"
             />
           </View>
-          <TouchableOpacity style={styles.settingRow} activeOpacity={0.6}>
+          <TouchableOpacity
+            style={styles.settingRow}
+            activeOpacity={0.6}
+            onPress={() => {
+              const message = 'The Pages is a community event flyer app. All posts go through AI moderation before appearing publicly.\n\nProhibited content:\n• Graphic violence or dangerous content\n• Adult or sexually explicit material\n• Hate speech or discrimination\n• Content sexualizing minors\n• Personal information (addresses, phone numbers, SSNs)\n• Spam or fake events\n\nPosts with 3+ community reports are automatically hidden pending review.\n\nTo report a DMCA takedown, contact: dmca@thepages.app';
+              if (Platform.OS === 'web') {
+                window.alert(message);
+              } else {
+                Alert.alert('Content Policy', message);
+              }
+            }}
+          >
             <Text style={styles.settingLabel}>Content Policy</Text>
             <Text style={styles.chevron}>›</Text>
           </TouchableOpacity>
