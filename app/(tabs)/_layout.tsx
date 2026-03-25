@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -54,6 +54,7 @@ interface OverlayState {
   setShowAuthPrompt: (v: boolean) => void;
   searchFilters: SearchFilters | null;
   setSearchFilters: (f: SearchFilters | null) => void;
+  scrollToTopRef: React.MutableRefObject<(() => void) | null>;
 }
 
 export const OverlayContext = createContext<OverlayState>({
@@ -73,6 +74,7 @@ export const OverlayContext = createContext<OverlayState>({
   setShowAuthPrompt: () => {},
   searchFilters: null,
   setSearchFilters: () => {},
+  scrollToTopRef: { current: null },
 });
 
 export function useOverlay() {
@@ -88,6 +90,7 @@ function OverlayProvider({ children }: { children: React.ReactNode }) {
   const [showAuth, setShowAuth] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [searchFilters, setSearchFilters] = useState<SearchFilters | null>(null);
+  const scrollToTopRef = useRef<(() => void) | null>(null);
 
   const value = useMemo(
     () => ({
@@ -107,6 +110,7 @@ function OverlayProvider({ children }: { children: React.ReactNode }) {
       setShowAuthPrompt,
       searchFilters,
       setSearchFilters,
+      scrollToTopRef,
     }),
     [
       showSearch,
@@ -158,7 +162,7 @@ function ProfileIcon({ active }: { active: boolean }) {
 
 function CustomTabBar({ state }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const { showProfile, setShowAddEvent, setShowProfile, setShowAuthPrompt } = useOverlay();
+  const { showProfile, setShowAddEvent, setShowProfile, setShowAuthPrompt, scrollToTopRef } = useOverlay();
   const { isAuthenticated } = useAuthContext();
   const isProfileActive = showProfile;
   const isBrowseActive = !isProfileActive;
@@ -179,7 +183,11 @@ function CustomTabBar({ state }: BottomTabBarProps) {
         style={styles.navItem}
         activeOpacity={0.7}
         onPress={() => {
-          if (isProfileActive) setShowProfile(false);
+          if (isProfileActive) {
+            setShowProfile(false);
+          }
+          // Scroll feed to top
+          scrollToTopRef.current?.();
         }}
       >
         <BrowseIcon active={isBrowseActive} />

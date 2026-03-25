@@ -47,13 +47,25 @@ function SearchIcon() {
 
 export default function FeedScreen() {
   const { flyers, loading, error, toggleSave, refetch } = useFlyers();
-  const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt } = useOverlay();
+  const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt, scrollToTopRef } = useOverlay();
+  const flatListRef = useRef<FlatList>(null);
+
+  // Register scroll-to-top so Browse tab can trigger it
+  useEffect(() => {
+    scrollToTopRef.current = () => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    };
+    return () => { scrollToTopRef.current = null; };
+  }, [scrollToTopRef]);
+
   const prevShowAddEvent = useRef(false);
 
-  // Refetch feed when AddEventSheet closes (post was potentially added)
+  // Refetch feed and scroll to top when AddEventSheet closes (post was potentially added)
   useEffect(() => {
     if (prevShowAddEvent.current && !showAddEvent) {
-      refetch();
+      refetch().then(() => {
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+      });
     }
     prevShowAddEvent.current = showAddEvent;
   }, [showAddEvent, refetch]);
@@ -383,6 +395,7 @@ export default function FeedScreen() {
       {/* Feed */}
       {filteredFlyers.length > 0 && (
         <FlatList
+          ref={flatListRef}
           data={filteredFlyers}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
@@ -402,7 +415,11 @@ export default function FeedScreen() {
               <Text style={styles.endOfFeedSubtitle}>
                 {filteredFlyers.length} event{filteredFlyers.length !== 1 ? 's' : ''} in your feed
               </Text>
-              <TouchableOpacity style={styles.stateButton} activeOpacity={0.7} onPress={refetch}>
+              <TouchableOpacity style={styles.stateButton} activeOpacity={0.7} onPress={() => {
+                refetch().then(() => {
+                  flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+                });
+              }}>
                 <Text style={styles.stateButtonText}>REFRESH</Text>
               </TouchableOpacity>
             </View>
