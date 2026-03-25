@@ -12,7 +12,7 @@ interface AuthContextValue {
   signIn: (phone: string) => Promise<{ error?: string }>;
   verifyOTP: (code: string) => Promise<boolean>;
   updateProfile: (data: Partial<Pick<Profile, 'display_name' | 'handle' | 'bio' | 'location' | 'avatar_url' | 'avatar_initials' | 'avatar_color' | 'is_public'>>) => Promise<{ error?: string }>;
-  setPreferences: (prefs: { categories: string[] }) => Promise<void>;
+  setPreferences: (prefs: { categories: string[]; is_over_18?: boolean }) => Promise<void>;
   signOut: () => Promise<void>;
   skip: () => void;
   refreshProfile: () => Promise<void>;
@@ -177,7 +177,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [session, refreshProfile]);
 
   // Save user preferences (categories only — city is saved via updateProfile)
-  const setPreferences = useCallback(async (prefs: { categories: string[] }) => {
+  const setPreferences = useCallback(async (prefs: { categories: string[]; is_over_18?: boolean }) => {
     if (!session?.user?.id) return;
 
     const { error } = await supabase
@@ -185,6 +185,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .update({
         preferences: {
           event_types: prefs.categories,
+          is_over_18: prefs.is_over_18 ?? false,
           notifications: true,
           distance_miles: 25,
         },

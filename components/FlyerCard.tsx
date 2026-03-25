@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -84,19 +84,6 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
     setSaved(flyer.is_saved ?? false);
   }, [flyer.is_saved]);
   const [showLinkWarning, setShowLinkWarning] = useState(false);
-
-  // Age gate for 18+ content
-  const isAgeRestricted = useMemo(() => {
-    const ageTerms = ['18+', '21+', 'nightlife', 'bar', 'club', 'adults only'];
-    const allText = [
-      flyer.category,
-      ...(flyer.tags || []),
-      flyer.title,
-      flyer.subtitle,
-    ].filter(Boolean).join(' ').toLowerCase();
-    return ageTerms.some(term => allText.includes(term));
-  }, [flyer]);
-  const [ageConfirmed, setAgeConfirmed] = useState(false);
 
   // Animation values
   const overlayOpacity = useRef(new Animated.Value(0)).current;
@@ -592,21 +579,6 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
           </View>
         )}
 
-        {/* Age gate overlay for 18+ content */}
-        {isAgeRestricted && !ageConfirmed && (
-          <View style={styles.ageGateOverlay}>
-            <Text style={styles.ageGateTitle}>18+</Text>
-            <Text style={styles.ageGateSubtitle}>This event may contain age-restricted content</Text>
-            <TouchableOpacity
-              style={styles.ageGateButton}
-              activeOpacity={0.8}
-              onPress={() => setAgeConfirmed(true)}
-            >
-              <Text style={styles.ageGateButtonText}>I'M 18 OR OLDER</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
         {/* Web edit/delete menu for own posts */}
         {showWebMenu && (
           <View style={styles.reportOverlay}>
@@ -940,40 +912,6 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono,
     fontSize: 10,
     letterSpacing: 1,
-    color: '#fff',
-  },
-  ageGateOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.85)',
-    zIndex: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 40,
-  },
-  ageGateTitle: {
-    fontFamily: FONTS.display,
-    fontSize: 48,
-    color: '#fff',
-    marginBottom: 12,
-  },
-  ageGateSubtitle: {
-    fontFamily: FONTS.body,
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.6)',
-    textAlign: 'center',
-    marginBottom: 24,
-  },
-  ageGateButton: {
-    borderWidth: 1,
-    borderColor: '#fff',
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 0,
-  },
-  ageGateButtonText: {
-    fontFamily: FONTS.display,
-    fontSize: 14,
-    letterSpacing: 2,
     color: '#fff',
   },
 });

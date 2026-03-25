@@ -55,6 +55,7 @@ export function AuthFlow() {
   const [checkingHandle, setCheckingHandle] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [isOver18, setIsOver18] = useState(false);
 
   const opacity = useRef(new Animated.Value(0)).current;
 
@@ -327,7 +328,7 @@ export function AuthFlow() {
 
   const handleLetsGo = async () => {
     try {
-      await setPreferences({ categories: selectedPrefs });
+      await setPreferences({ categories: selectedPrefs, is_over_18: isOver18 });
     } catch {
       // Preferences are non-critical — user can set them later in settings
     }
@@ -600,6 +601,21 @@ export function AuthFlow() {
                     </Text>
                   </TouchableOpacity>
                 </View>
+
+                {/* Age confirmation */}
+                <TouchableOpacity
+                  style={styles.ageCheckRow}
+                  activeOpacity={0.7}
+                  onPress={() => setIsOver18(!isOver18)}
+                >
+                  <View style={[styles.checkbox, isOver18 && styles.checkboxChecked]}>
+                    {isOver18 && <Text style={styles.checkmark}>✓</Text>}
+                  </View>
+                  <Text style={styles.ageCheckText}>I'm 18 or older</Text>
+                </TouchableOpacity>
+                <Text style={styles.ageCheckHint}>
+                  Check this to see nightlife and 18+ events
+                </Text>
 
                 {profileError && (
                   <TouchableOpacity onPress={() => setProfileError(null)} activeOpacity={0.7}>
@@ -998,5 +1014,47 @@ const styles = StyleSheet.create({
   },
   prefChipTextSelected: {
     color: '#02040F',
+  },
+
+  /* Age gate checkbox */
+  ageCheckRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 12,
+    marginBottom: 4,
+    marginTop: 8,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: 'rgba(2,4,15,0.25)',
+    backgroundColor: 'rgba(255,255,255,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: '#78B896',
+    borderColor: '#78B896',
+  },
+  checkmark: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  ageCheckText: {
+    fontFamily: FONTS.body,
+    fontSize: 15,
+    color: '#02040F',
+  },
+  ageCheckHint: {
+    fontFamily: FONTS.body,
+    fontSize: 11,
+    color: 'rgba(2,4,15,0.4)',
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+    marginLeft: 36,
   },
 });
