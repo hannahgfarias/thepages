@@ -47,7 +47,7 @@ function SearchIcon() {
 
 export default function FeedScreen() {
   const { user } = useAuth();
-  const { flyers, loading, error, toggleSave, refetch } = useFlyers(user?.id);
+  const { flyers, loading, error, toggleSave, recordShare, refetch } = useFlyers(user?.id);
   const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt, setEditingPost, setShowAddEvent } = useOverlay();
   const prevShowAddEvent = useRef(false);
 
@@ -265,6 +265,10 @@ export default function FeedScreen() {
     toggleSave(id);
   }, [toggleSave, isAuthenticated, setShowAuthPrompt]);
 
+  const handleShare = useCallback((id: string) => {
+    recordShare(id);
+  }, [recordShare]);
+
   const handleEdit = useCallback((post: Post) => {
     setEditingPost(post);
     setShowAddEvent(true);
@@ -335,9 +339,9 @@ export default function FeedScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: Post }) => (
-      <FlyerCard flyer={item} cardHeight={cardHeight} onSave={handleSave} onActiveChange={handleCardActiveChange} onTagPress={handleTagPress} onEdit={handleEdit} onDelete={handleDelete} />
+      <FlyerCard flyer={item} cardHeight={cardHeight} onSave={handleSave} onShare={handleShare} onActiveChange={handleCardActiveChange} onTagPress={handleTagPress} onEdit={handleEdit} onDelete={handleDelete} />
     ),
-    [cardHeight, handleSave, handleCardActiveChange, handleTagPress, handleEdit, handleDelete]
+    [cardHeight, handleSave, handleShare, handleCardActiveChange, handleTagPress, handleEdit, handleDelete]
   );
 
   const getItemLayout = useCallback(
