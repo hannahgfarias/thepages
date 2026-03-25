@@ -220,15 +220,15 @@ export default function FeedScreen() {
     };
   }, [hintOpacity, hintTranslateY]);
 
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, session } = useAuth();
 
   const handleSave = useCallback((id: string) => {
     if (!isAuthenticated) {
       setShowAuthPrompt(true);
       return;
     }
-    toggleSave(id);
-  }, [toggleSave, isAuthenticated, setShowAuthPrompt]);
+    toggleSave(id, session?.user?.id);
+  }, [toggleSave, isAuthenticated, session, setShowAuthPrompt]);
 
   // Fire directional haptics
   const fireDirectionalHaptic = useCallback(

@@ -81,7 +81,7 @@ const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 export const FlyerCard = memo(function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPress }: FlyerCardProps) {
   const { width } = useWindowDimensions();
   const [active, setActive] = useState(false);
-  const [saved, setSaved] = useState(flyer.is_saved ?? false);
+  const saved = flyer.is_saved ?? false;
   const [showLinkWarning, setShowLinkWarning] = useState(false);
 
   // Animation values
@@ -155,7 +155,6 @@ export const FlyerCard = memo(function FlyerCard({ flyer, cardHeight, onSave, on
   }, [overlayOpacity, infoTranslateY, infoOpacity, imageScale, onActiveChange]);
 
   const handleSave = useCallback(() => {
-    setSaved((prev) => !prev);
     onSave?.(flyer.id);
   }, [flyer.id, onSave]);
 
