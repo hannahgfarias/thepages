@@ -368,6 +368,36 @@ export function AddEventSheet() {
     }
   };
 
+  const resetForm = () => {
+    setImageUri(null);
+    setScanning(false);
+    setTitle('');
+    setSubtitle('');
+    setDescription('');
+    setDateTime('');
+    setLocation('');
+    setLink('');
+    setSelectedCategory(null);
+    setTags([]);
+    setTagInput('');
+    setShowDatePicker(false);
+    setSelectedDate(null);
+    setSelectedHour(null);
+    setSelectedMinute(0);
+    setSelectedPeriod('PM');
+    setEndHour(null);
+    setEndMinute(0);
+    setEndPeriod('PM');
+    setShowEndTime(false);
+    setShowLinkField(false);
+    setOccurrences([]);
+    setIsPublic(true);
+    setPublishing(false);
+    setScanError(null);
+    setLocationResults([]);
+    setShowLocationResults(false);
+  };
+
   const handleClose = () => {
     Animated.parallel([
       Animated.timing(slideY, {
@@ -383,6 +413,7 @@ export function AddEventSheet() {
         useNativeDriver: true,
       }),
     ]).start(() => {
+      resetForm();
       setShowAddEvent(false);
     });
   };
@@ -490,8 +521,8 @@ export function AddEventSheet() {
       const postsToInsert = occurrences.length > 1
         ? occurrences.map((occ) => ({
             ...postBase,
-            date_text: occ.date || dateTime || null,
-            location: occ.location || location || null,
+            date_text: (occ.date != null && occ.date !== '') ? occ.date : dateTime || null,
+            location: (occ.location != null && occ.location !== '') ? occ.location : location || null,
           }))
         : [{
             ...postBase,

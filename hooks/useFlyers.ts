@@ -21,7 +21,7 @@ const MONTH_MAP: Record<string, number> = {
  * Parse a date_text field like "MARCH 19", "SAT APR 5 • 7PM", "FEB 14, 2025"
  * into a Date object. Assumes current year if none specified.
  */
-function parseEventDate(dateText: string): Date | null {
+export function parseEventDate(dateText: string): Date | null {
   if (!dateText) return null;
   const upper = dateText.toUpperCase().replace(/[,•·|–—-]/g, ' ').trim();
 

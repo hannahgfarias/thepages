@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { FlyerCard } from '../../components/FlyerCard';
-import { useFlyers } from '../../hooks/useFlyers';
+import { useFlyers, parseEventDate } from '../../hooks/useFlyers';
 import { useOverlay } from './_layout';
 import { useAuth } from '../../hooks/useAuth';
 import { FONTS } from '../../constants/fonts';
@@ -93,17 +93,66 @@ export default function FeedScreen() {
       // Location filter
       const locs = searchFilters.locations;
       if (locs) {
-        const locArray = Array.isArray(locs) ? locs : [locs];
-        if (locArray.length > 0) {
-          const locMatch = locArray.some(
-            (loc: string) => f.location?.toLowerCase().includes(loc.toLowerCase())
-          );
+        const loc = (Array.isArray(locs) ? locs[0] : locs)?.toLowerCase() || '';
+        if (loc && loc !== 'near me') {
+          const flyerLoc = (f.location || '').toLowerCase();
+          const locAliases: Record<string, string[]> = {
+            sf: ['sf', 'san francisco', 's.f.'],
+            oakland: ['oakland'],
+            la: ['los angeles', 'la', 'l.a.'],
+            nyc: ['new york', 'nyc', 'ny', 'brooklyn', 'manhattan', 'queens', 'bronx'],
+          };
+          const aliases = locAliases[loc] || [loc];
+          const locMatch = aliases.some((a) => flyerLoc.includes(a));
           if (!locMatch) return false;
         }
       }
 
-      // When filter — "Happening Now" shows all upcoming/today, others are informational
-      // (with real data this would filter by actual dates)
+      // When filter
+      if (searchFilters.when) {
+        const eventDate = parseEventDate(f.date_text || '');
+        if (eventDate) {
+          const now = new Date();
+          const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          const todayEnd = new Date(todayStart.getTime() + 86400000);
+          const weekEnd = new Date(todayStart.getTime() + 7 * 86400000);
+          const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+
+          // Find next weekend (Saturday start)
+          const dayOfWeek = todayStart.getDay();
+          const satStart = new Date(todayStart.getTime() + ((6 - dayOfWeek) % 7) * 86400000);
+          const sunEnd = new Date(satStart.getTime() + 2 * 86400000);
+
+          switch (searchFilters.when) {
+            case 'Happening Now':
+            case 'Today':
+              if (eventDate < todayStart || eventDate >= todayEnd) return false;
+              break;
+            case 'This Week':
+              if (eventDate < todayStart || eventDate >= weekEnd) return false;
+              break;
+            case 'This Weekend':
+              if (eventDate < satStart || eventDate >= sunEnd) return false;
+              break;
+            case 'This Month':
+              if (eventDate < todayStart || eventDate >= monthEnd) return false;
+              break;
+            case 'Pick a Date':
+              if (searchFilters.customDate) {
+                const custom = new Date(searchFilters.customDate);
+                if (!isNaN(custom.getTime())) {
+                  const customStart = new Date(custom.getFullYear(), custom.getMonth(), custom.getDate());
+                  const customEnd = new Date(customStart.getTime() + 86400000);
+                  if (eventDate < customStart || eventDate >= customEnd) return false;
+                }
+              }
+              break;
+          }
+        } else {
+          // No parseable date — exclude from date-filtered results
+          return false;
+        }
+      }
     }
 
     return true;
@@ -330,6 +379,8 @@ export default function FeedScreen() {
               <Text style={styles.tagFilterLabel}>
                 Filtered{searchFilters.query ? `: "${searchFilters.query}"` : ''}
                 {searchFilters.types.length > 0 ? ` · ${searchFilters.types.join(', ')}` : ''}
+                {searchFilters.when ? ` · ${searchFilters.when}` : ''}
+                {searchFilters.locations ? ` · ${Array.isArray(searchFilters.locations) ? searchFilters.locations[0] : searchFilters.locations}` : ''}
               </Text>
               <TouchableOpacity
                 style={styles.tagFilterReset}

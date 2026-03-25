@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
-import { useFlyers } from '../hooks/useFlyers';
+import { useFlyers, parseEventDate } from '../hooks/useFlyers';
 import type { Post } from '../types';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
@@ -92,12 +92,60 @@ function filterFlyers(filters: SearchFilters, allFlyers: Post[]) {
     // Location filter
     if (filters.locations) {
       const loc = (Array.isArray(filters.locations) ? filters.locations[0] : filters.locations)?.toLowerCase() || '';
-      const flyerLoc = (flyer.location || '').toLowerCase();
-      if (loc === 'sf' && !flyerLoc.includes('sf') && !flyerLoc.includes('san francisco')) return false;
-      if (loc === 'oakland' && !flyerLoc.includes('oakland')) return false;
-      if (loc === 'la' && !flyerLoc.includes('los angeles') && !flyerLoc.includes('la')) return false;
-      if (loc === 'nyc' && !flyerLoc.includes('new york') && !flyerLoc.includes('ny') && !flyerLoc.includes('ridgewood')) return false;
-      // "Near Me" passes all
+      if (loc && loc !== 'near me') {
+        const flyerLoc = (flyer.location || '').toLowerCase();
+        const locAliases: Record<string, string[]> = {
+          sf: ['sf', 'san francisco', 's.f.'],
+          oakland: ['oakland'],
+          la: ['los angeles', 'la', 'l.a.'],
+          nyc: ['new york', 'nyc', 'ny', 'brooklyn', 'manhattan', 'queens', 'bronx'],
+        };
+        const aliases = locAliases[loc] || [loc];
+        if (!aliases.some((a) => flyerLoc.includes(a))) return false;
+      }
+    }
+
+    // When filter
+    if (filters.when) {
+      const eventDate = parseEventDate(flyer.date_text || '');
+      if (eventDate) {
+        const now = new Date();
+        const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        const todayEnd = new Date(todayStart.getTime() + 86400000);
+        const weekEnd = new Date(todayStart.getTime() + 7 * 86400000);
+        const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+        const dayOfWeek = todayStart.getDay();
+        const satStart = new Date(todayStart.getTime() + ((6 - dayOfWeek) % 7) * 86400000);
+        const sunEnd = new Date(satStart.getTime() + 2 * 86400000);
+
+        switch (filters.when) {
+          case 'Happening Now':
+          case 'Today':
+            if (eventDate < todayStart || eventDate >= todayEnd) return false;
+            break;
+          case 'This Week':
+            if (eventDate < todayStart || eventDate >= weekEnd) return false;
+            break;
+          case 'This Weekend':
+            if (eventDate < satStart || eventDate >= sunEnd) return false;
+            break;
+          case 'This Month':
+            if (eventDate < todayStart || eventDate >= monthEnd) return false;
+            break;
+          case 'Pick a Date':
+            if (filters.customDate) {
+              const custom = new Date(filters.customDate);
+              if (!isNaN(custom.getTime())) {
+                const customStart = new Date(custom.getFullYear(), custom.getMonth(), custom.getDate());
+                const customEnd = new Date(customStart.getTime() + 86400000);
+                if (eventDate < customStart || eventDate >= customEnd) return false;
+              }
+            }
+            break;
+        }
+      } else {
+        return false;
+      }
     }
 
     return true;
