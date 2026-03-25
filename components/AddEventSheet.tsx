@@ -62,6 +62,7 @@ export function AddEventSheet() {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isPublic, setIsPublic] = useState(true);
+  const [isAnonymous, setIsAnonymous] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
   const [selectedMinute, setSelectedMinute] = useState<number>(0);
@@ -392,6 +393,7 @@ export function AddEventSheet() {
     setShowLinkField(false);
     setOccurrences([]);
     setIsPublic(true);
+    setIsAnonymous(false);
     setPublishing(false);
     setScanError(null);
     setLocationResults([]);
@@ -515,6 +517,7 @@ export function AddEventSheet() {
         category: selectedCategory || 'Community',
         tags: tags.map(t => `#${t}`),
         is_public: isPublic,
+        is_anonymous: isAnonymous,
         moderation_status: moderationStatus,
       };
 
@@ -530,7 +533,7 @@ export function AddEventSheet() {
             location: location || null,
           }];
 
-      const { error: insertError } = await supabase.from('posts').insert(postsToInsert);
+      const { data: insertedPosts, error: insertError } = await supabase.from('posts').insert(postsToInsert).select('id');
 
       if (insertError) {
         console.log('[POST] Insert error:', JSON.stringify(insertError));
@@ -541,7 +544,24 @@ export function AddEventSheet() {
         return;
       }
 
-      // 6. Success — close and reset
+      // 6. Write moderation audit log
+      if (insertedPosts && insertedPosts.length > 0) {
+        try {
+          const logEntries = insertedPosts.map((p: any) => ({
+            post_id: p.id,
+            action: moderationStatus,
+            actor: 'ai',
+            reason_category: 'none',
+            ai_confidence: 0,
+            notes: `Auto-moderated on publish. Status: ${moderationStatus}`,
+          }));
+          await supabase.from('moderation_log').insert(logEntries);
+        } catch {
+          // Non-blocking — log failure shouldn't prevent post success
+        }
+      }
+
+      // 7. Success — close and reset
       const postCount = postsToInsert.length;
       setPublishing(false);
       if (postCount > 1) {
@@ -1085,6 +1105,24 @@ export function AddEventSheet() {
                 value={isPublic}
                 onValueChange={setIsPublic}
                 trackColor={{ true: '#78B896', false: '#ddd' }}
+                thumbColor="#fff"
+              />
+            </View>
+
+            {/* Anonymous toggle */}
+            <View style={styles.visibilityRow}>
+              <View>
+                <Text style={styles.visibilityLabel}>
+                  {isAnonymous ? 'Posting Anonymously' : 'Posting as You'}
+                </Text>
+                <Text style={styles.visibilityHint}>
+                  {isAnonymous ? 'Your name won\'t appear on this post' : 'Your handle will be shown on this post'}
+                </Text>
+              </View>
+              <Switch
+                value={isAnonymous}
+                onValueChange={setIsAnonymous}
+                trackColor={{ true: '#EB736C', false: '#ddd' }}
                 thumbColor="#fff"
               />
             </View>
