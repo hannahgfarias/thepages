@@ -44,7 +44,7 @@ function hasBasicPII(text: string): { found: boolean; type: string } {
 }
 
 export function AddEventSheet() {
-  const { showAddEvent, setShowAddEvent } = useOverlay();
+  const { showAddEvent, setShowAddEvent, editingPost, setEditingPost } = useOverlay();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
 
@@ -369,6 +369,30 @@ export function AddEventSheet() {
     }
   };
 
+  // Pre-fill form when editing an existing post
+  useEffect(() => {
+    if (editingPost && showAddEvent) {
+      setTitle(editingPost.title || '');
+      setSubtitle(editingPost.subtitle || '');
+      setDescription(editingPost.description || '');
+      setDateTime(editingPost.date_text || '');
+      setLocation(editingPost.location || '');
+      setLink(editingPost.event_url || '');
+      setSelectedCategory(editingPost.category || null);
+      setIsPublic(editingPost.is_public !== false);
+      setIsAnonymous(editingPost.is_anonymous === true);
+      if (editingPost.image_url) {
+        setImageUri(editingPost.image_url);
+      }
+      if (editingPost.tags && editingPost.tags.length > 0) {
+        setTags(editingPost.tags.map((t: string) => t.replace(/^#/, '')));
+      }
+      if (editingPost.event_url) {
+        setShowLinkField(true);
+      }
+    }
+  }, [editingPost, showAddEvent]);
+
   const resetForm = () => {
     setImageUri(null);
     setScanning(false);
@@ -416,6 +440,7 @@ export function AddEventSheet() {
       }),
     ]).start(() => {
       resetForm();
+      setEditingPost(null);
       setShowAddEvent(false);
     });
   };
@@ -505,15 +530,14 @@ export function AddEventSheet() {
         moderationStatus = 'held';
       }
 
-      // 5. Insert post(s) into database
-      // If multiple occurrences detected, create one post per date/location
+      // 5. Build post data
       const postBase = {
         user_id: user.id,
         title: title.trim(),
         subtitle: subtitle.trim() || null,
         description: description.trim() || null,
         event_url: link || null,
-        image_url: uploadedImageUrl,
+        image_url: uploadedImageUrl || (editingPost?.image_url ?? null),
         category: selectedCategory || 'Community',
         tags: tags.map(t => `#${t}`),
         is_public: isPublic,
@@ -521,55 +545,84 @@ export function AddEventSheet() {
         moderation_status: moderationStatus,
       };
 
-      const postsToInsert = occurrences.length > 1
-        ? occurrences.map((occ) => ({
-            ...postBase,
-            date_text: (occ.date != null && occ.date !== '') ? occ.date : dateTime || null,
-            location: (occ.location != null && occ.location !== '') ? occ.location : location || null,
-          }))
-        : [{
-            ...postBase,
-            date_text: dateTime || null,
-            location: location || null,
-          }];
+      if (editingPost) {
+        // UPDATE existing post
+        const updateData = {
+          ...postBase,
+          date_text: dateTime || null,
+          location: location || null,
+        };
+        // Don't overwrite user_id on update
+        delete (updateData as any).user_id;
 
-      const { data: insertedPosts, error: insertError } = await supabase.from('posts').insert(postsToInsert).select('id');
+        const { error: updateError } = await supabase
+          .from('posts')
+          .update(updateData)
+          .eq('id', editingPost.id);
 
-      if (insertError) {
-        console.log('[POST] Insert error:', JSON.stringify(insertError));
-        const errMsg = insertError.message || 'Failed to post. Please try again.';
-        if (Platform.OS === 'web') window.alert(`Post failed: ${errMsg}`);
-        else Alert.alert('Error', errMsg);
-        setPublishing(false);
-        return;
-      }
-
-      // 6. Write moderation audit log
-      if (insertedPosts && insertedPosts.length > 0) {
-        try {
-          const logEntries = insertedPosts.map((p: any) => ({
-            post_id: p.id,
-            action: moderationStatus,
-            actor: 'ai',
-            reason_category: 'none',
-            ai_confidence: 0,
-            notes: `Auto-moderated on publish. Status: ${moderationStatus}`,
-          }));
-          await supabase.from('moderation_log').insert(logEntries);
-        } catch {
-          // Non-blocking — log failure shouldn't prevent post success
+        if (updateError) {
+          console.log('[POST] Update error:', JSON.stringify(updateError));
+          const errMsg = updateError.message || 'Failed to update. Please try again.';
+          if (Platform.OS === 'web') window.alert(`Update failed: ${errMsg}`);
+          else Alert.alert('Error', errMsg);
+          setPublishing(false);
+          return;
         }
-      }
 
-      // 7. Success — close and reset
-      const postCount = postsToInsert.length;
-      setPublishing(false);
-      if (postCount > 1) {
-        const msg = `Created ${postCount} posts for each date/location.`;
-        if (Platform.OS === 'web') window.alert(msg);
-        else Alert.alert('Posted!', msg);
+        setPublishing(false);
+        handleClose();
+      } else {
+        // INSERT new post(s)
+        // If multiple occurrences detected, create one post per date/location
+        const postsToInsert = occurrences.length > 1
+          ? occurrences.map((occ) => ({
+              ...postBase,
+              date_text: (occ.date != null && occ.date !== '') ? occ.date : dateTime || null,
+              location: (occ.location != null && occ.location !== '') ? occ.location : location || null,
+            }))
+          : [{
+              ...postBase,
+              date_text: dateTime || null,
+              location: location || null,
+            }];
+
+        const { data: insertedPosts, error: insertError } = await supabase.from('posts').insert(postsToInsert).select('id');
+
+        if (insertError) {
+          console.log('[POST] Insert error:', JSON.stringify(insertError));
+          const errMsg = insertError.message || 'Failed to post. Please try again.';
+          if (Platform.OS === 'web') window.alert(`Post failed: ${errMsg}`);
+          else Alert.alert('Error', errMsg);
+          setPublishing(false);
+          return;
+        }
+
+        // Write moderation audit log
+        if (insertedPosts && insertedPosts.length > 0) {
+          try {
+            const logEntries = insertedPosts.map((p: any) => ({
+              post_id: p.id,
+              action: moderationStatus,
+              actor: 'ai',
+              reason_category: 'none',
+              ai_confidence: 0,
+              notes: `Auto-moderated on publish. Status: ${moderationStatus}`,
+            }));
+            await supabase.from('moderation_log').insert(logEntries);
+          } catch {
+            // Non-blocking — log failure shouldn't prevent post success
+          }
+        }
+
+        const postCount = postsToInsert.length;
+        setPublishing(false);
+        if (postCount > 1) {
+          const msg = `Created ${postCount} posts for each date/location.`;
+          if (Platform.OS === 'web') window.alert(msg);
+          else Alert.alert('Posted!', msg);
+        }
+        handleClose();
       }
-      handleClose();
     } catch (e) {
       console.log('[POST] Exception:', e);
       if (Platform.OS === 'web') window.alert('Something went wrong. Please try again.');
@@ -615,7 +668,7 @@ export function AddEventSheet() {
             </View>
 
             {/* Title */}
-            <Text style={styles.sheetTitle}>SHARE SOMETHING HAPPENING</Text>
+            <Text style={styles.sheetTitle}>{editingPost ? 'EDIT EVENT' : 'SHARE SOMETHING HAPPENING'}</Text>
 
             {/* Upload zone */}
             <TouchableOpacity
@@ -1137,7 +1190,7 @@ export function AddEventSheet() {
           disabled={publishing}
         >
           <Text style={styles.submitText}>
-            {publishing ? 'CHECKING CONTENT...' : 'POST TO THE PAGES'}
+            {publishing ? 'CHECKING CONTENT...' : editingPost ? 'UPDATE EVENT' : 'POST TO THE PAGES'}
           </Text>
         </TouchableOpacity>
       </Animated.View>

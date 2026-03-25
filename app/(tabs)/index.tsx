@@ -48,7 +48,7 @@ function SearchIcon() {
 export default function FeedScreen() {
   const { user } = useAuth();
   const { flyers, loading, error, toggleSave, refetch } = useFlyers(user?.id);
-  const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt } = useOverlay();
+  const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt, setEditingPost, setShowAddEvent } = useOverlay();
   const prevShowAddEvent = useRef(false);
 
   // Refetch feed when AddEventSheet closes (post was potentially added)
@@ -265,6 +265,15 @@ export default function FeedScreen() {
     toggleSave(id);
   }, [toggleSave, isAuthenticated, setShowAuthPrompt]);
 
+  const handleEdit = useCallback((post: Post) => {
+    setEditingPost(post);
+    setShowAddEvent(true);
+  }, [setEditingPost, setShowAddEvent]);
+
+  const handleDelete = useCallback((id: string) => {
+    refetch();
+  }, [refetch]);
+
   // Re-fetch when user logs in so saved state is loaded
   useEffect(() => {
     if (user?.id) {
@@ -326,9 +335,9 @@ export default function FeedScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: Post }) => (
-      <FlyerCard flyer={item} cardHeight={cardHeight} onSave={handleSave} onActiveChange={handleCardActiveChange} onTagPress={handleTagPress} />
+      <FlyerCard flyer={item} cardHeight={cardHeight} onSave={handleSave} onActiveChange={handleCardActiveChange} onTagPress={handleTagPress} onEdit={handleEdit} onDelete={handleDelete} />
     ),
-    [cardHeight, handleSave, handleCardActiveChange, handleTagPress]
+    [cardHeight, handleSave, handleCardActiveChange, handleTagPress, handleEdit, handleDelete]
   );
 
   const getItemLayout = useCallback(

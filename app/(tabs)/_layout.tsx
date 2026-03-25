@@ -54,6 +54,8 @@ interface OverlayState {
   setShowAuthPrompt: (v: boolean) => void;
   searchFilters: SearchFilters | null;
   setSearchFilters: (f: SearchFilters | null) => void;
+  editingPost: any | null;
+  setEditingPost: (p: any | null) => void;
 }
 
 export const OverlayContext = createContext<OverlayState>({
@@ -73,6 +75,8 @@ export const OverlayContext = createContext<OverlayState>({
   setShowAuthPrompt: () => {},
   searchFilters: null,
   setSearchFilters: () => {},
+  editingPost: null,
+  setEditingPost: () => {},
 });
 
 export function useOverlay() {
@@ -88,6 +92,7 @@ function OverlayProvider({ children }: { children: React.ReactNode }) {
   const [showAuth, setShowAuth] = useState(false);
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [searchFilters, setSearchFilters] = useState<SearchFilters | null>(null);
+  const [editingPost, setEditingPost] = useState<any | null>(null);
 
   const value = useMemo(
     () => ({
@@ -107,6 +112,8 @@ function OverlayProvider({ children }: { children: React.ReactNode }) {
       setShowAuthPrompt,
       searchFilters,
       setSearchFilters,
+      editingPost,
+      setEditingPost,
     }),
     [
       showSearch,
@@ -117,6 +124,7 @@ function OverlayProvider({ children }: { children: React.ReactNode }) {
       showAuth,
       showAuthPrompt,
       searchFilters,
+      editingPost,
     ]
   );
 

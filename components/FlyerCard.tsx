@@ -29,6 +29,8 @@ interface FlyerCardProps {
   onSave?: (id: string) => void;
   onActiveChange?: (active: boolean) => void;
   onTagPress?: (tag: string) => void;
+  onEdit?: (post: Post) => void;
+  onDelete?: (id: string) => void;
 }
 
 const TAG_COLORS = [
@@ -74,7 +76,7 @@ function PinIcon() {
 
 /* ─── FlyerCard Component ─── */
 
-export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPress }: FlyerCardProps) {
+export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPress, onEdit, onDelete }: FlyerCardProps) {
   const { width } = useWindowDimensions();
   const [active, setActive] = useState(false);
   const [saved, setSaved] = useState(flyer.is_saved ?? false);
@@ -190,36 +192,75 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
 
   const [showReport, setShowReport] = useState(false);
   const [reportReason, setReportReason] = useState<string | null>(null);
+  const [showWebMenu, setShowWebMenu] = useState(false);
+
+  const handleDelete = useCallback(() => {
+    const doDelete = async () => {
+      try {
+        const { error } = await supabase.from('posts').delete().eq('id', flyer.id);
+        if (error) throw error;
+        onDelete?.(flyer.id);
+      } catch {
+        if (Platform.OS === 'web') window.alert('Could not delete post. Please try again.');
+        else Alert.alert('Error', 'Could not delete post. Please try again.');
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Delete this event? This cannot be undone.')) doDelete();
+    } else {
+      Alert.alert('Delete Event', 'This cannot be undone.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: doDelete },
+      ]);
+    }
+  }, [flyer.id, onDelete]);
 
   const handleMore = useCallback(() => {
+    const isMine = flyer.is_mine === true;
+
     if (Platform.OS === 'ios') {
+      const options = isMine
+        ? ['Cancel', 'Edit Event', 'Delete Event']
+        : ['Cancel', 'Report this flyer', "Don't show me this again", "Don't show from this poster"];
+      const destructiveIndex = isMine ? 2 : 1;
+
       ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options: ['Cancel', 'Report this flyer', "Don't show me this again", "Don't show from this poster"],
-          cancelButtonIndex: 0,
-          destructiveButtonIndex: 1,
-        },
+        { options, cancelButtonIndex: 0, destructiveButtonIndex: destructiveIndex },
         (buttonIndex) => {
-          if (buttonIndex === 1) {
-            setShowReport(true);
-          } else if (buttonIndex === 2) {
-            Alert.alert('Hidden', "You won't see this event again.");
-            // TODO: Add to hidden posts list in AsyncStorage/Supabase
-          } else if (buttonIndex === 3) {
-            Alert.alert('Poster Hidden', "You won't see events from this poster anymore.");
-            // TODO: Add poster to muted list
+          if (isMine) {
+            if (buttonIndex === 1) onEdit?.(flyer);
+            else if (buttonIndex === 2) handleDelete();
+          } else {
+            if (buttonIndex === 1) setShowReport(true);
+            else if (buttonIndex === 2) Alert.alert('Hidden', "You won't see this event again.");
+            else if (buttonIndex === 3) Alert.alert('Poster Hidden', "You won't see events from this poster anymore.");
           }
         }
       );
+    } else if (Platform.OS === 'web') {
+      if (isMine) {
+        // Show a simple web menu for own posts
+        setShowWebMenu(true);
+      } else {
+        setShowReport(true);
+      }
     } else {
-      Alert.alert('Options', undefined, [
-        { text: 'Report this flyer', onPress: () => setShowReport(true), style: 'destructive' },
-        { text: "Don't show me this again", onPress: () => Alert.alert('Hidden', "You won't see this event again.") },
-        { text: "Don't show from this poster", onPress: () => Alert.alert('Poster Hidden', "You won't see events from this poster anymore.") },
-        { text: 'Cancel', style: 'cancel' },
-      ]);
+      const buttons = isMine
+        ? [
+            { text: 'Edit Event', onPress: () => onEdit?.(flyer) },
+            { text: 'Delete Event', onPress: handleDelete, style: 'destructive' as const },
+            { text: 'Cancel', style: 'cancel' as const },
+          ]
+        : [
+            { text: 'Report this flyer', onPress: () => setShowReport(true), style: 'destructive' as const },
+            { text: "Don't show me this again", onPress: () => Alert.alert('Hidden', "You won't see this event again.") },
+            { text: "Don't show from this poster", onPress: () => Alert.alert('Poster Hidden', "You won't see events from this poster anymore.") },
+            { text: 'Cancel', style: 'cancel' as const },
+          ];
+      Alert.alert('Options', undefined, buttons);
     }
-  }, []);
+  }, [flyer, onEdit, handleDelete]);
 
   const handleReport = useCallback(async (reason: string) => {
     setReportReason(reason);
@@ -512,6 +553,36 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
             onShare={handleShare}
             isSaved={saved}
           />
+        )}
+
+        {/* Web edit/delete menu for own posts */}
+        {showWebMenu && (
+          <View style={styles.reportOverlay}>
+            <View style={styles.reportSheet}>
+              <Text style={styles.reportTitle}>YOUR EVENT</Text>
+              <TouchableOpacity
+                style={styles.reportOption}
+                activeOpacity={0.7}
+                onPress={() => { setShowWebMenu(false); onEdit?.(flyer); }}
+              >
+                <Text style={styles.reportOptionText}>Edit Event</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.reportOption}
+                activeOpacity={0.7}
+                onPress={() => { setShowWebMenu(false); handleDelete(); }}
+              >
+                <Text style={[styles.reportOptionText, { color: '#EB736C' }]}>Delete Event</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.reportCancel}
+                activeOpacity={0.7}
+                onPress={() => setShowWebMenu(false)}
+              >
+                <Text style={styles.reportCancelText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
 
         {/* Report modal */}
