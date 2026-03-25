@@ -72,6 +72,8 @@ export function AddEventSheet() {
   const [endPeriod, setEndPeriod] = useState<'AM' | 'PM'>('PM');
   const [showEndTime, setShowEndTime] = useState(false);
   const [showLinkField, setShowLinkField] = useState(false);
+  const [fetchingOG, setFetchingOG] = useState(false);
+  const ogDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [occurrences, setOccurrences] = useState<Array<{ date: string; location: string }>>([]);
   const [locationResults, setLocationResults] = useState<Array<{ display_name: string; name: string; address: any }>>([]);
   const [showLocationResults, setShowLocationResults] = useState(false);
@@ -392,6 +394,41 @@ export function AddEventSheet() {
       }
     }
   }, [editingPost, showAddEvent]);
+
+  // Auto-fetch OG metadata when a URL is pasted
+  const handleLinkChange = (url: string) => {
+    setLink(url);
+    if (ogDebounce.current) clearTimeout(ogDebounce.current);
+
+    // Only fetch if it looks like a URL
+    if (url.match(/^https?:\/\/.+\..+/)) {
+      ogDebounce.current = setTimeout(async () => {
+        setFetchingOG(true);
+        try {
+          const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
+          const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
+          const res = await fetch(`${supabaseUrl}/functions/v1/og-fetch`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'apikey': supabaseKey,
+              'Authorization': `Bearer ${supabaseKey}`,
+            },
+            body: JSON.stringify({ url }),
+          });
+          if (res.ok) {
+            const og = await res.json();
+            // Only auto-fill empty fields — don't overwrite what user already typed
+            if (og.title && !title) setTitle(og.title);
+            if (og.description && !description) setDescription(og.description);
+          }
+        } catch {
+          // Silent failure — OG fetch is a nice-to-have
+        }
+        setFetchingOG(false);
+      }, 800);
+    }
+  };
 
   const resetForm = () => {
     setImageUri(null);
@@ -1073,7 +1110,7 @@ export function AddEventSheet() {
                   <TextInput
                     style={[styles.input, { flex: 1 }]}
                     value={link}
-                    onChangeText={setLink}
+                    onChangeText={handleLinkChange}
                     placeholder="Ticket or event link"
                     placeholderTextColor="#999"
                     autoCapitalize="none"

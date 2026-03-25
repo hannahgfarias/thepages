@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
-import { useFlyers } from '../hooks/useFlyers';
+import { useFlyers, parseEventDate } from '../hooks/useFlyers';
 import { useAuth } from '../hooks/useAuth';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
@@ -22,37 +22,6 @@ import type { Post } from '../types';
 import { SettingsSheet } from './SettingsSheet';
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
-
-/* ─── Date parsing helper ─── */
-
-const MONTH_MAP: Record<string, number> = {
-  JANUARY: 0, FEBRUARY: 1, MARCH: 2, APRIL: 3, MAY: 4, JUNE: 5,
-  JULY: 6, AUGUST: 7, SEPTEMBER: 8, OCTOBER: 9, NOVEMBER: 10, DECEMBER: 11,
-  JAN: 0, FEB: 1, MAR: 2, APR: 3, JUN: 5, JUL: 6, AUG: 7, SEP: 8, OCT: 9, NOV: 10, DEC: 11,
-};
-
-/**
- * Parse date_text like "MARCH 19", "SUNDAY MARCH 29 · 5PM-9ISH",
- * "MARCH 19 · DOORS 10PM", "COMING 2024" etc. into a Date object.
- * Returns null if unparseable. Assumes current year for month+day patterns.
- */
-function parseDateText(dateText: string | null): Date | null {
-  if (!dateText) return null;
-  const upper = dateText.toUpperCase();
-
-  // Try to find MONTH DAY pattern
-  for (const [monthName, monthIndex] of Object.entries(MONTH_MAP)) {
-    const regex = new RegExp(`${monthName}\\s+(\\d{1,2})`);
-    const match = upper.match(regex);
-    if (match) {
-      const day = parseInt(match[1], 10);
-      const now = new Date();
-      return new Date(now.getFullYear(), monthIndex, day);
-    }
-  }
-
-  return null;
-}
 
 type DateSection = 'HAPPENING TODAY' | 'THIS WEEK' | 'UPCOMING' | 'PAST';
 
@@ -73,7 +42,7 @@ function categorizePosts(posts: Post[]): Record<DateSection, Post[]> {
   };
 
   for (const post of posts) {
-    const eventDate = parseDateText(post.date_text);
+    const eventDate = parseEventDate(post.date_text || '');
     if (!eventDate) {
       // If we can't parse the date, put in UPCOMING
       sections['UPCOMING'].push(post);

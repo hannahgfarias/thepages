@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,15 @@ import {
   Easing,
   SectionList,
   Alert,
+  Platform,
+  ActivityIndicator,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
+import { useAuth } from '../hooks/useAuth';
+import { supabase } from '../lib/supabase';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
 
@@ -24,41 +28,82 @@ interface CommunityMember {
   handle: string;
   color: string;
   initials: string;
-  status: 'mutual' | 'following' | 'follows_you' | 'request';
+  status: 'mutual' | 'following' | 'follows_you';
 }
-
-const FOLLOW_REQUESTS: CommunityMember[] = [
-  { id: 'r1', name: 'Nadia Osei', handle: '@nadia.o', color: '#f472b6', initials: 'NO', status: 'request' },
-  { id: 'r2', name: 'Tyler Chen', handle: '@tyler_c', color: '#818cf8', initials: 'TC', status: 'request' },
-];
-
-const COMMUNITY_MEMBERS: CommunityMember[] = [
-  { id: '1', name: 'Marco Rivera', handle: '@marco_r', color: '#6366f1', initials: 'MR', status: 'mutual' },
-  { id: '2', name: 'Kai Tanaka', handle: '@kai.t', color: '#14b8a6', initials: 'KT', status: 'follows_you' },
-  { id: '3', name: 'Jasmine Lee', handle: '@jas_lee', color: '#f59e0b', initials: 'JL', status: 'mutual' },
-  { id: '4', name: 'Alex Park', handle: '@a.park', color: '#ec4899', initials: 'AP', status: 'following' },
-  { id: '5', name: 'Sam Rodriguez', handle: '@samrod', color: '#8b5cf6', initials: 'SR', status: 'mutual' },
-  { id: '6', name: 'Dana Williams', handle: '@danaw', color: '#06b6d4', initials: 'DW', status: 'follows_you' },
-  { id: '7', name: 'River Green', handle: '@river.g', color: '#10b981', initials: 'RG', status: 'following' },
-];
-
-const STATUS_LABELS: Record<string, string> = {
-  mutual: 'Community',
-  following: 'Following',
-  follows_you: 'Follows you',
-};
 
 export function CommunitySheet() {
   const { showCommunity, setShowCommunity } = useOverlay();
+  const { session } = useAuth();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
-  const [requests, setRequests] = useState(FOLLOW_REQUESTS);
+  const [members, setMembers] = useState<CommunityMember[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const slideY = useRef(new Animated.Value(height)).current;
   const scrimOpacity = useRef(new Animated.Value(0)).current;
 
+  const userId = session?.user?.id;
+
+  const fetchCommunity = useCallback(async () => {
+    if (!userId) return;
+    setLoading(true);
+    try {
+      // Fetch people I follow
+      const { data: following } = await supabase
+        .from('follows')
+        .select('following_id, profile:profiles!follows_following_id_fkey(id, handle, display_name, avatar_color, avatar_initials)')
+        .eq('follower_id', userId);
+
+      // Fetch people who follow me
+      const { data: followers } = await supabase
+        .from('follows')
+        .select('follower_id, profile:profiles!follows_follower_id_fkey(id, handle, display_name, avatar_color, avatar_initials)')
+        .eq('following_id', userId);
+
+      const followingIds = new Set((following || []).map((f: any) => f.following_id));
+      const followerIds = new Set((followers || []).map((f: any) => f.follower_id));
+
+      const allProfiles = new Map<string, any>();
+
+      // Map following
+      for (const f of (following || [])) {
+        const p = f.profile;
+        if (!p) continue;
+        const isMutual = followerIds.has(p.id);
+        allProfiles.set(p.id, {
+          id: p.id,
+          name: p.display_name || p.handle || 'User',
+          handle: p.handle || '@user',
+          color: p.avatar_color || '#EB736C',
+          initials: p.avatar_initials || '?',
+          status: isMutual ? 'mutual' : 'following',
+        });
+      }
+
+      // Map followers not already in the list
+      for (const f of (followers || [])) {
+        const p = f.profile;
+        if (!p || allProfiles.has(p.id)) continue;
+        allProfiles.set(p.id, {
+          id: p.id,
+          name: p.display_name || p.handle || 'User',
+          handle: p.handle || '@user',
+          color: p.avatar_color || '#EB736C',
+          initials: p.avatar_initials || '?',
+          status: 'follows_you',
+        });
+      }
+
+      setMembers(Array.from(allProfiles.values()));
+    } catch (e) {
+      console.warn('Community fetch error:', e);
+    }
+    setLoading(false);
+  }, [userId]);
+
   useEffect(() => {
     if (showCommunity) {
+      fetchCommunity();
       Animated.parallel([
         Animated.timing(slideY, {
           toValue: 0,
@@ -77,7 +122,7 @@ export function CommunitySheet() {
       slideY.setValue(height);
       scrimOpacity.setValue(0);
     }
-  }, [showCommunity, slideY, scrimOpacity, height]);
+  }, [showCommunity, slideY, scrimOpacity, height, fetchCommunity]);
 
   const handleClose = () => {
     Animated.parallel([
@@ -98,64 +143,91 @@ export function CommunitySheet() {
     });
   };
 
-  const handleAcceptRequest = (id: string) => {
-    setRequests((prev) => prev.filter((r) => r.id !== id));
-    // TODO: Supabase update follow status
+  const handleFollow = async (targetId: string, targetName: string) => {
+    if (!userId) return;
+    try {
+      const { error } = await supabase.from('follows').insert({
+        follower_id: userId,
+        following_id: targetId,
+      });
+      if (error) throw error;
+
+      // Update local state
+      setMembers((prev) =>
+        prev.map((m) => {
+          if (m.id === targetId) {
+            // Check if they already follow us — if so, now mutual
+            return { ...m, status: m.status === 'follows_you' ? 'mutual' : 'following' };
+          }
+          return m;
+        })
+      );
+
+      const msg = `You're now following ${targetName}`;
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Following', msg);
+    } catch {
+      const msg = 'Could not follow. Please try again.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Error', msg);
+    }
   };
 
-  const handleDeclineRequest = (id: string) => {
-    setRequests((prev) => prev.filter((r) => r.id !== id));
-    // TODO: Supabase delete follow request
+  const handleUnfollow = async (targetId: string) => {
+    if (!userId) return;
+    try {
+      const { error } = await supabase
+        .from('follows')
+        .delete()
+        .match({ follower_id: userId, following_id: targetId });
+      if (error) throw error;
+
+      // Update local state
+      setMembers((prev) =>
+        prev.map((m) => {
+          if (m.id === targetId) {
+            return { ...m, status: m.status === 'mutual' ? 'follows_you' : 'follows_you' };
+          }
+          return m;
+        }).filter((m) => m.status !== 'follows_you' || m.id === targetId)
+      );
+    } catch {
+      const msg = 'Could not unfollow. Please try again.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Error', msg);
+    }
   };
+
+  const STATUS_LABELS: Record<string, string> = {
+    mutual: 'Community',
+    following: 'Following',
+    follows_you: 'Follows you',
+  };
+
+  const mutuals = members.filter((m) => m.status === 'mutual');
+  const others = members.filter((m) => m.status !== 'mutual');
 
   const sections = [
-    ...(requests.length > 0
-      ? [{ title: 'FOLLOW REQUESTS', data: requests }]
-      : []),
-    { title: 'YOUR COMMUNITY', data: COMMUNITY_MEMBERS },
+    ...(mutuals.length > 0 ? [{ title: 'YOUR COMMUNITY', data: mutuals }] : []),
+    ...(others.length > 0 ? [{ title: 'CONNECTIONS', data: others }] : []),
   ];
 
   const renderItem = ({ item }: { item: CommunityMember }) => (
     <View style={styles.memberRow}>
-      {/* Avatar */}
       <View style={[styles.memberAvatar, { backgroundColor: item.color }]}>
         <Text style={styles.memberInitials}>{item.initials}</Text>
       </View>
 
-      {/* Info */}
       <View style={styles.memberInfo}>
         <Text style={styles.memberName}>{item.name}</Text>
         <Text style={styles.memberHandle}>{item.handle}</Text>
       </View>
 
-      {/* Actions based on status */}
-      {item.status === 'request' ? (
-        <View style={styles.requestActions}>
-          <TouchableOpacity
-            style={styles.acceptButton}
-            activeOpacity={0.7}
-            onPress={() => handleAcceptRequest(item.id)}
-          >
-            <Text style={styles.acceptText}>ACCEPT</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.declineButton}
-            activeOpacity={0.7}
-            onPress={() => handleDeclineRequest(item.id)}
-          >
-            <Svg width={14} height={14} viewBox="0 0 24 24" fill="none">
-              <Path d="M18 6L6 18M6 6l12 12" stroke="#02040F" strokeWidth={1.5} strokeLinecap="round" />
-            </Svg>
-          </TouchableOpacity>
-        </View>
-      ) : item.status === 'follows_you' ? (
+      {item.status === 'follows_you' ? (
         <TouchableOpacity
           style={styles.followBackButton}
           activeOpacity={0.7}
-          onPress={() => {
-            // TODO: Supabase update follow status to mutual
-            Alert.alert('Following', `You're now following ${item.name}`);
-          }}
+          onPress={() => handleFollow(item.id, item.name)}
         >
           <Text style={styles.followBackText}>FOLLOW BACK</Text>
         </TouchableOpacity>
@@ -170,11 +242,6 @@ export function CommunitySheet() {
   const renderSectionHeader = ({ section }: { section: { title: string } }) => (
     <View style={styles.sectionHeader}>
       <Text style={styles.sectionTitle}>{section.title}</Text>
-      {section.title === 'FOLLOW REQUESTS' && (
-        <View style={styles.requestBadge}>
-          <Text style={styles.requestBadgeText}>{requests.length}</Text>
-        </View>
-      )}
     </View>
   );
 
@@ -182,16 +249,10 @@ export function CommunitySheet() {
 
   return (
     <View style={[StyleSheet.absoluteFill, { zIndex: 200 }]}>
-      {/* Scrim */}
       <Animated.View style={[styles.scrim, { opacity: scrimOpacity }]}>
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={handleClose}
-        />
+        <TouchableOpacity style={StyleSheet.absoluteFill} activeOpacity={1} onPress={handleClose} />
       </Animated.View>
 
-      {/* Sheet */}
       <Animated.View
         style={[
           styles.sheet,
@@ -202,35 +263,39 @@ export function CommunitySheet() {
           },
         ]}
       >
-        {/* Handle bar */}
         <View style={styles.handleContainer}>
           <View style={styles.handle} />
         </View>
 
-        {/* Header with close */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>COMMUNITY</Text>
-          <TouchableOpacity
-            style={styles.closeButton}
-            activeOpacity={0.7}
-            onPress={handleClose}
-          >
+          <TouchableOpacity style={styles.closeButton} activeOpacity={0.7} onPress={handleClose}>
             <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
               <Path d="M18 6L6 18M6 6l12 12" stroke="#02040F" strokeWidth={2} strokeLinecap="round" />
             </Svg>
           </TouchableOpacity>
         </View>
 
-        {/* Sectioned list */}
-        <SectionList
-          sections={sections}
-          renderItem={renderItem}
-          renderSectionHeader={renderSectionHeader}
-          keyExtractor={(item) => item.id}
-          showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
-          stickySectionHeadersEnabled={false}
-        />
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator color="rgba(2,4,15,0.3)" />
+          </View>
+        ) : members.length === 0 ? (
+          <View style={styles.emptyContainer}>
+            <Text style={styles.emptyText}>No connections yet</Text>
+            <Text style={styles.emptySubtext}>Follow people to build your community</Text>
+          </View>
+        ) : (
+          <SectionList
+            sections={sections}
+            renderItem={renderItem}
+            renderSectionHeader={renderSectionHeader}
+            keyExtractor={(item) => item.id}
+            showsVerticalScrollIndicator={false}
+            contentContainerStyle={styles.listContent}
+            stickySectionHeadersEnabled={false}
+          />
+        )}
       </Animated.View>
     </View>
   );
@@ -290,6 +355,25 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  loadingContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyContainer: {
+    paddingVertical: 40,
+    alignItems: 'center',
+    gap: 8,
+  },
+  emptyText: {
+    fontFamily: FONTS.display,
+    fontSize: 16,
+    color: '#02040F',
+  },
+  emptySubtext: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: 'rgba(2,4,15,0.4)',
+  },
   listContent: {
     paddingHorizontal: 24,
     paddingBottom: 8,
@@ -310,19 +394,6 @@ const styles = StyleSheet.create({
     color: 'rgba(2,4,15,0.4)',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
-  },
-  requestBadge: {
-    backgroundColor: '#E9D25E',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  requestBadgeText: {
-    fontFamily: FONTS.display,
-    fontSize: 11,
-    color: '#02040F',
   },
   memberRow: {
     flexDirection: 'row',
@@ -370,33 +441,6 @@ const styles = StyleSheet.create({
     color: 'rgba(2,4,15,0.35)',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
-  },
-  requestActions: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center',
-  },
-  acceptButton: {
-    backgroundColor: '#E9D25E',
-    borderRadius: 0,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-  },
-  acceptText: {
-    fontFamily: FONTS.display,
-    fontSize: 10,
-    color: '#02040F',
-    letterSpacing: 1,
-    textTransform: 'uppercase',
-  },
-  declineButton: {
-    width: 28,
-    height: 28,
-    borderWidth: 1,
-    borderColor: 'rgba(2,4,15,0.12)',
-    borderRadius: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   followBackButton: {
     borderWidth: 1,
