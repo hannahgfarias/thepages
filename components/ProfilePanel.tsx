@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,13 @@ import {
   PanResponder,
   ScrollView,
   useWindowDimensions,
+  Alert,
+  ActionSheetIOS,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
+import { supabase } from '../lib/supabase';
 import { useOverlay } from '../app/(tabs)/_layout';
 import { useFlyers, parseEventDate } from '../hooks/useFlyers';
 import { useAuth } from '../hooks/useAuth';
@@ -98,7 +102,7 @@ function PinIcon() {
 /* ─── ProfilePanel Component ─── */
 
 export function ProfilePanel() {
-  const { showProfile, setShowProfile, setShowCommunity } = useOverlay();
+  const { showProfile, setShowProfile, setShowCommunity, setEditingPost, setShowAddEvent } = useOverlay();
   const { profile, isAuthenticated, session } = useAuth();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -168,7 +172,7 @@ export function ProfilePanel() {
   ).current;
 
   const userId = session?.user?.id;
-  const { flyers: allFlyers } = useFlyers(userId);
+  const { flyers: allFlyers, refetch } = useFlyers(userId);
 
   // Your posts — filter all flyers by current user
   const yourPosts = useMemo(() =>
@@ -192,7 +196,54 @@ export function ProfilePanel() {
   // Never show profile panel if not authenticated
   if (!showProfile || !isAuthenticated) return null;
 
-  const renderPostGrid = (posts: Post[]) => (
+  const handleEditPost = useCallback((post: Post) => {
+    setEditingPost(post);
+    setShowAddEvent(true);
+  }, [setEditingPost, setShowAddEvent]);
+
+  const handleDeletePost = useCallback(async (post: Post) => {
+    const doDelete = async () => {
+      const { error } = await supabase.from('posts').delete().eq('id', post.id);
+      if (!error) refetch();
+    };
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Delete this post? This cannot be undone.')) doDelete();
+    } else {
+      Alert.alert('Delete Post', 'Delete this post? This cannot be undone.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: doDelete },
+      ]);
+    }
+  }, [refetch]);
+
+  const handlePostLongPress = useCallback((post: Post) => {
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancel', 'Edit', 'Delete'],
+          cancelButtonIndex: 0,
+          destructiveButtonIndex: 2,
+        },
+        (buttonIndex) => {
+          if (buttonIndex === 1) handleEditPost(post);
+          else if (buttonIndex === 2) handleDeletePost(post);
+        }
+      );
+    } else if (Platform.OS === 'web') {
+      // Web: handled by state-based menu
+    } else {
+      Alert.alert('Post Options', '', [
+        { text: 'Edit', onPress: () => handleEditPost(post) },
+        { text: 'Delete', style: 'destructive', onPress: () => handleDeletePost(post) },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    }
+  }, [handleEditPost, handleDeletePost]);
+
+  const [webMenuPostId, setWebMenuPostId] = useState<string | null>(null);
+
+  const renderPostGrid = (posts: Post[], isOwnPosts: boolean = false) => (
     <View style={styles.grid}>
       {posts.map((post) => {
         const imageSource = post.image
@@ -202,12 +253,15 @@ export function ProfilePanel() {
           : null;
 
         return (
-          <View
+          <TouchableOpacity
             key={post.id}
             style={[
               styles.gridItem,
               { width: thumbWidth, height: thumbHeight },
             ]}
+            activeOpacity={0.8}
+            onLongPress={isOwnPosts ? () => handlePostLongPress(post) : undefined}
+            onPress={isOwnPosts && Platform.OS === 'web' ? () => setWebMenuPostId(webMenuPostId === post.id ? null : post.id) : undefined}
           >
             {imageSource ? (
               <Image
@@ -232,7 +286,24 @@ export function ProfilePanel() {
                 {post.date_text}
               </Text>
             </View>
-          </View>
+            {/* Web menu for edit/delete */}
+            {isOwnPosts && Platform.OS === 'web' && webMenuPostId === post.id && (
+              <View style={styles.webPostMenu}>
+                <TouchableOpacity
+                  style={styles.webPostMenuItem}
+                  onPress={() => { setWebMenuPostId(null); handleEditPost(post); }}
+                >
+                  <Text style={styles.webPostMenuText}>Edit</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.webPostMenuItem, styles.webPostMenuItemDestructive]}
+                  onPress={() => { setWebMenuPostId(null); handleDeletePost(post); }}
+                >
+                  <Text style={[styles.webPostMenuText, { color: '#E63946' }]}>Delete</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </TouchableOpacity>
         );
       })}
     </View>
@@ -364,7 +435,7 @@ export function ProfilePanel() {
         {/* Content */}
         {activeTab === 'posts' ? (
           /* Posts — flat grid */
-          renderPostGrid(yourPosts)
+          renderPostGrid(yourPosts, true)
         ) : (
           /* Saved — grouped by date */
           <View>
@@ -587,5 +658,32 @@ const styles = StyleSheet.create({
     textShadowColor: 'rgba(0,0,0,0.8)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 4,
+  },
+  webPostMenu: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 5,
+    overflow: 'hidden',
+  },
+  webPostMenuItem: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.06)',
+  },
+  webPostMenuItemDestructive: {
+    borderBottomWidth: 0,
+  },
+  webPostMenuText: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: '#02040F',
   },
 });
