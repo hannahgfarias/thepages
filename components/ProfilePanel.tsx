@@ -295,8 +295,9 @@ export function ProfilePanel() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Settings gear — top right */}
+        {/* Top row — wordmark + settings gear */}
         <View style={styles.topRow}>
+          <Text style={styles.wordmark}>THE PAGES</Text>
           <View style={{ flex: 1 }} />
           <TouchableOpacity style={styles.gearButton} activeOpacity={0.7} onPress={() => setShowSettings(true)}>
             <GearIcon />
@@ -457,6 +458,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
+  },
+  wordmark: {
+    fontFamily: FONTS.display,
+    fontSize: 18,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    color: '#02040F',
   },
   gearButton: {
     width: 36,

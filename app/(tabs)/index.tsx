@@ -73,6 +73,9 @@ export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const cardHeight = height - NAV_HEIGHT - insets.bottom;
 
+  // Feed tab
+  const [feedTab, setFeedTab] = useState<'community' | 'following' | 'all'>('all');
+
   // Tag filtering
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
@@ -297,7 +300,7 @@ export default function FeedScreen() {
 
   return (
     <View style={styles.container} {...swipePanResponder.panHandlers}>
-      {/* Top bar — hidden when card details are active */}
+      {/* Top bar — TikTok-style centered tabs */}
       {!cardActive && (
         <Animated.View
           style={[styles.topBar, { paddingTop: insets.top + 8, transform: [{ translateY: topBarTranslateY }] }]}
@@ -305,13 +308,32 @@ export default function FeedScreen() {
         >
           <View style={styles.topBarGradient} />
           <View style={styles.topBarContent}>
-            {/* Wordmark */}
-            <Text style={styles.wordmark}>THE PAGES</Text>
+            {/* Spacer for symmetry */}
+            <View style={styles.topBarSide} />
 
-            {/* Search button */}
-            <TouchableOpacity style={styles.searchButton} activeOpacity={0.7} onPress={() => setShowSearch(true)}>
-              <SearchIcon />
-            </TouchableOpacity>
+            {/* Centered feed tabs */}
+            <View style={styles.feedTabs}>
+              {(['community', 'following', 'all'] as const).map((tab) => (
+                <TouchableOpacity
+                  key={tab}
+                  style={styles.feedTab}
+                  activeOpacity={0.7}
+                  onPress={() => setFeedTab(tab)}
+                >
+                  <Text style={[styles.feedTabText, feedTab === tab && styles.feedTabTextActive]}>
+                    {tab === 'community' ? 'Community' : tab === 'following' ? 'Following' : 'All'}
+                  </Text>
+                  {feedTab === tab && <View style={styles.feedTabIndicator} />}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Search icon */}
+            <View style={styles.topBarSide}>
+              <TouchableOpacity style={styles.searchButton} activeOpacity={0.7} onPress={() => setShowSearch(true)}>
+                <SearchIcon />
+              </TouchableOpacity>
+            </View>
           </View>
 
           {/* Tag filter bar */}
@@ -477,23 +499,43 @@ const styles = StyleSheet.create({
   },
   topBarContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  wordmark: {
+  topBarSide: {
+    width: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  feedTabs: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 20,
+  },
+  feedTab: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  feedTabText: {
     fontFamily: FONTS.display,
-    fontSize: 18,
-    letterSpacing: 3,
-    textTransform: 'uppercase',
+    fontSize: 15,
+    letterSpacing: 0.5,
+    color: 'rgba(2,4,15,0.35)',
+  },
+  feedTabTextActive: {
     color: '#02040F',
+  },
+  feedTabIndicator: {
+    width: 20,
+    height: 2.5,
+    borderRadius: 2,
+    backgroundColor: '#02040F',
+    marginTop: 4,
   },
   searchButton: {
     width: 36,
     height: 36,
-    borderRadius: 0,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(2,4,15,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },
