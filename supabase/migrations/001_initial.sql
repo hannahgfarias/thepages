@@ -42,7 +42,7 @@ create table public.posts (
   accent_color          text not null default '#E63946',
   text_color            text not null default '#ffffff',
   category              text not null default 'Community'
-                          check (category in ('Arts', 'Community', 'Wellness', 'Volunteer', 'Food')),
+                          check (category in ('Party', 'Music', 'Community', 'Arts', 'Wellness', 'Food', 'Free', 'Theatre', 'Fitness', 'Nightlife', 'Volunteer', 'Sports', 'Tech', 'Film', 'Comedy', 'Markets', 'Workshop', 'Other')),
   pattern               text not null default 'dots'
                           check (pattern in ('stripes', 'dots', 'grid', 'zigzag', 'circles')),
   tags                  text[] not null default '{}',

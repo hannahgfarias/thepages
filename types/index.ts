@@ -1,6 +1,6 @@
 import type { ImageSourcePropType } from 'react-native';
 
-export type Category = 'Party' | 'Music' | 'Community' | 'Arts' | 'Wellness' | 'Food' | 'Free' | 'Theatre' | 'Fitness' | 'Nightlife';
+export type Category = 'Party' | 'Music' | 'Community' | 'Arts' | 'Wellness' | 'Food' | 'Free' | 'Theatre' | 'Fitness' | 'Nightlife' | 'Volunteer' | 'Sports' | 'Tech' | 'Film' | 'Comedy' | 'Markets' | 'Workshop' | 'Other';
 export type ModerationStatus = 'pending' | 'approved' | 'held' | 'rejected';
 export type ReportReason = 'harmful' | 'misleading' | 'inappropriate' | 'spam' | 'pii' | 'other';
 export type Visibility = 'public' | 'private';

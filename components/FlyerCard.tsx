@@ -225,8 +225,13 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
     setReportReason(reason);
     setShowReport(false);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Sign In Required', 'You need to be signed in to report content.');
+        return;
+      }
       const { error } = await supabase.from('reports').insert({
-        reporter_id: 'anonymous', // TODO: use real user ID
+        reporter_id: user.id,
         post_id: flyer.id,
         reason,
       });

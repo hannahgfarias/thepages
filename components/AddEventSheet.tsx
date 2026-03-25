@@ -17,7 +17,7 @@ import {
   Switch,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { scanFlyer } from '../lib/scan';
+import { scanFlyer, moderateContent } from '../lib/scan';
 import { pickImageFromLibrary, pickImageFromCamera, readFileAsBase64 } from '../lib/platform';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -51,6 +51,8 @@ export function AddEventSheet() {
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [title, setTitle] = useState('');
+  const [subtitle, setSubtitle] = useState('');
+  const [description, setDescription] = useState('');
   const [dateTime, setDateTime] = useState('');
   const [location, setLocation] = useState('');
   const [link, setLink] = useState('');
@@ -271,6 +273,8 @@ export function AddEventSheet() {
 
       if (data) {
         if (data.title) setTitle(data.title);
+        if (data.subtitle) setSubtitle(data.subtitle);
+        if (data.description) setDescription(data.description);
         if (data.date) setDateTime(data.date);
         if (data.location) setLocation(data.location);
         if (data.category) setSelectedCategory(data.category);
@@ -387,7 +391,7 @@ export function AddEventSheet() {
     }
 
     // 1. PII detection (client-side regex check)
-    const allText = [title, dateTime, location, link].filter(Boolean).join(' ');
+    const allText = [title, subtitle, description, dateTime, location, link].filter(Boolean).join(' ');
     const piiResult = hasBasicPII(allText);
     if (piiResult.found) {
       if (Platform.OS === 'web') {
@@ -414,8 +418,7 @@ export function AddEventSheet() {
       let uploadedImageUrl: string | null = null;
       if (imageUri) {
         try {
-          const { readFileAsBase64: readBase64 } = require('../lib/platform');
-          const base64 = await readBase64(imageUri);
+          const base64 = await readFileAsBase64(imageUri);
           const filePath = `${user.id}/${Date.now()}.jpg`;
           const { decode: decodeBase64 } = require('base64-arraybuffer');
           const { error: uploadError } = await supabase.storage
@@ -434,10 +437,40 @@ export function AddEventSheet() {
         }
       }
 
-      // 4. Insert post into database
+      // 4. Run AI moderation before publishing
+      let moderationStatus = 'pending';
+      try {
+        const allText = [title, subtitle, description, dateTime, location].filter(Boolean).join(' ');
+        let imageBase64ForMod: string | null = null;
+        if (imageUri) {
+          try {
+            imageBase64ForMod = await readFileAsBase64(imageUri);
+          } catch {
+            // Continue without image moderation
+          }
+        }
+        const modResult = await moderateContent(imageBase64ForMod, imageBase64ForMod ? 'image/jpeg' : null, allText);
+        moderationStatus = modResult.status || 'held';
+
+        if (moderationStatus === 'rejected') {
+          const msg = 'This content does not meet our community standards and cannot be posted.';
+          if (Platform.OS === 'web') window.alert(msg);
+          else Alert.alert('Content Not Allowed', msg);
+          setPublishing(false);
+          return;
+        }
+      } catch (e) {
+        console.log('[MODERATION] Error:', e);
+        // Default to held if moderation fails — never auto-approve on error
+        moderationStatus = 'held';
+      }
+
+      // 5. Insert post into database
       const { error: insertError } = await supabase.from('posts').insert({
         user_id: user.id,
         title: title.trim(),
+        subtitle: subtitle.trim() || null,
+        description: description.trim() || null,
         date_text: dateTime || null,
         location: location || null,
         event_url: link || null,
@@ -445,7 +478,7 @@ export function AddEventSheet() {
         category: selectedCategory || 'Community',
         tags: tags.map(t => `#${t}`),
         is_public: isPublic,
-        moderation_status: 'approved', // Auto-approve for now until moderation edge function is deployed
+        moderation_status: moderationStatus,
       });
 
       if (insertError) {
@@ -568,6 +601,28 @@ export function AddEventSheet() {
                 onChangeText={setTitle}
                 placeholder="Event title"
                 placeholderTextColor="#999"
+              />
+            </View>
+
+            <View style={styles.field}>
+              <TextInput
+                style={styles.input}
+                value={subtitle}
+                onChangeText={setSubtitle}
+                placeholder="Tagline or subtitle (optional)"
+                placeholderTextColor="#999"
+              />
+            </View>
+
+            <View style={styles.field}>
+              <TextInput
+                style={[styles.input, { minHeight: 60, textAlignVertical: 'top' }]}
+                value={description}
+                onChangeText={setDescription}
+                placeholder="Description (optional)"
+                placeholderTextColor="#999"
+                multiline
+                numberOfLines={3}
               />
             </View>
 
