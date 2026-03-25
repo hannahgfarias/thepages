@@ -147,7 +147,7 @@ export function ProfilePanel() {
       translateX.setValue(width);
       Animated.timing(translateX, {
         toValue: 0,
-        duration: 400,
+        duration: 250,
         easing: EASING,
         useNativeDriver: true,
       }).start();
@@ -157,7 +157,7 @@ export function ProfilePanel() {
   const close = () => {
     Animated.timing(translateX, {
       toValue: width,
-      duration: 350,
+      duration: 220,
       easing: EASING,
       useNativeDriver: true,
     }).start(() => {

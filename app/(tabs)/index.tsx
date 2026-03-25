@@ -157,7 +157,7 @@ export default function FeedScreen() {
     setCardActive(isActive);
     Animated.timing(topBarTranslateY, {
       toValue: isActive ? -(insets.top + 60) : 0,
-      duration: 250,
+      duration: 150,
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start();
@@ -175,7 +175,7 @@ export default function FeedScreen() {
         scrollDirection.current = direction;
         Animated.timing(topBarTranslateY, {
           toValue: direction === 'down' ? -(insets.top + 60) : 0,
-          duration: 250,
+          duration: 150,
           easing: Easing.out(Easing.ease),
           useNativeDriver: true,
         }).start();
@@ -429,7 +429,11 @@ export default function FeedScreen() {
           onViewableItemsChanged={onViewableItemsChanged}
           viewabilityConfig={viewabilityConfig}
           onScroll={handleScroll}
-          scrollEventThrottle={16}
+          scrollEventThrottle={32}
+          removeClippedSubviews={Platform.OS !== 'web'}
+          initialNumToRender={2}
+          maxToRenderPerBatch={2}
+          windowSize={3}
           ListFooterComponent={
             <View style={[styles.endOfFeed, { height: cardHeight }]}>
               <Text style={styles.endOfFeedEmoji}>✨</Text>
