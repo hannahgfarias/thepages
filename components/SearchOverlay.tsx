@@ -472,6 +472,13 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
             />
           </View>
 
+          {/* Debug banner — REMOVE AFTER TESTING */}
+          {query.trim().length >= 2 && (
+            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: 'red', marginBottom: 8 }}>
+              DEBUG: flyers={allFlyers.length}, withProfile={allFlyers.filter(f => f.profile).length}, userResults={userResults.length}, searching={String(searchingUsers)}, q="{query}"
+            </Text>
+          )}
+
           {/* People results — live as you type */}
           {query.trim().length >= 2 && userResults.length > 0 && (
             <View style={styles.section}>
