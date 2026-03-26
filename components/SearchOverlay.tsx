@@ -11,11 +11,14 @@ import {
   Image,
   useWindowDimensions,
   ActivityIndicator,
+  Platform,
+  Alert,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
 import { useOverlay } from '../app/(tabs)/_layout';
+import { useAuth } from '../hooks/useAuth';
 import { useSharedFlyers, parseEventDate } from '../hooks/useFlyers';
 import type { Post, Profile } from '../types';
 import { FONTS } from '../constants/fonts';
@@ -189,6 +192,12 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   const [viewingUserPosts, setViewingUserPosts] = useState<Post[]>([]);
   const [loadingUserPosts, setLoadingUserPosts] = useState(false);
 
+  // Follow state
+  const { session } = useAuth();
+  const currentUserId = session?.user?.id;
+  const [followStatus, setFollowStatus] = useState<'none' | 'following' | 'mutual'>('none');
+  const [followLoading, setFollowLoading] = useState(false);
+
   // People search — runs when in people mode and query changes
   useEffect(() => {
     if (searchMode !== 'people') return;
@@ -262,8 +271,11 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   const openUserProfile = useCallback(async (profile: Profile) => {
     setViewingUser(profile);
     setLoadingUserPosts(true);
+    setFollowStatus('none');
+
     try {
-      const { data } = await supabase
+      // Fetch posts and follow status in parallel
+      const postsPromise = supabase
         .from('posts')
         .select(`
           *,
@@ -277,7 +289,38 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
         .order('created_at', { ascending: false })
         .limit(50);
 
-      const mapped: Post[] = (data || []).map((row: any) => ({
+      // Check if I follow them and if they follow me
+      let followPromise: Promise<any> = Promise.resolve(null);
+      let followBackPromise: Promise<any> = Promise.resolve(null);
+      if (currentUserId && currentUserId !== profile.id) {
+        followPromise = supabase
+          .from('follows')
+          .select('id')
+          .eq('follower_id', currentUserId)
+          .eq('following_id', profile.id)
+          .limit(1);
+        followBackPromise = supabase
+          .from('follows')
+          .select('id')
+          .eq('follower_id', profile.id)
+          .eq('following_id', currentUserId)
+          .limit(1);
+      }
+
+      const [postsResult, followResult, followBackResult] = await Promise.all([
+        postsPromise, followPromise, followBackPromise,
+      ]);
+
+      // Set follow status
+      if (currentUserId && currentUserId !== profile.id) {
+        const iFollow = (followResult?.data?.length ?? 0) > 0;
+        const theyFollowMe = (followBackResult?.data?.length ?? 0) > 0;
+        if (iFollow && theyFollowMe) setFollowStatus('mutual');
+        else if (iFollow) setFollowStatus('following');
+        else setFollowStatus('none');
+      }
+
+      const mapped: Post[] = (postsResult.data || []).map((row: any) => ({
         id: row.id,
         user_id: row.user_id,
         title: row.title,
@@ -310,7 +353,48 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
       setViewingUserPosts([]);
     }
     setLoadingUserPosts(false);
-  }, []);
+  }, [currentUserId]);
+
+  const handleFollow = useCallback(async () => {
+    if (!currentUserId || !viewingUser || currentUserId === viewingUser.id) return;
+    setFollowLoading(true);
+    try {
+      const { error } = await supabase.from('follows').insert({
+        follower_id: currentUserId,
+        following_id: viewingUser.id,
+      });
+      if (error) throw error;
+      // Check if they follow me back — if so, mutual
+      const { data: theyFollowMe } = await supabase
+        .from('follows')
+        .select('id')
+        .eq('follower_id', viewingUser.id)
+        .eq('following_id', currentUserId)
+        .limit(1);
+      setFollowStatus((theyFollowMe?.length ?? 0) > 0 ? 'mutual' : 'following');
+    } catch {
+      if (Platform.OS === 'web') window.alert('Could not follow. Please try again.');
+      else Alert.alert('Error', 'Could not follow. Please try again.');
+    }
+    setFollowLoading(false);
+  }, [currentUserId, viewingUser]);
+
+  const handleUnfollow = useCallback(async () => {
+    if (!currentUserId || !viewingUser) return;
+    setFollowLoading(true);
+    try {
+      const { error } = await supabase
+        .from('follows')
+        .delete()
+        .match({ follower_id: currentUserId, following_id: viewingUser.id });
+      if (error) throw error;
+      setFollowStatus('none');
+    } catch {
+      if (Platform.OS === 'web') window.alert('Could not unfollow. Please try again.');
+      else Alert.alert('Error', 'Could not unfollow. Please try again.');
+    }
+    setFollowLoading(false);
+  }, [currentUserId, viewingUser]);
 
   const bgOpacity = useRef(new Animated.Value(0)).current;
   const panelTranslateY = useRef(new Animated.Value(-30)).current;
@@ -790,6 +874,38 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
                 <Text style={styles.profilePostCount}>
                   {viewingUserPosts.length} post{viewingUserPosts.length !== 1 ? 's' : ''}
                 </Text>
+
+                {/* Follow / Unfollow button */}
+                {currentUserId && viewingUser.id !== currentUserId && (
+                  followStatus === 'none' ? (
+                    <TouchableOpacity
+                      style={styles.followButton}
+                      activeOpacity={0.7}
+                      onPress={handleFollow}
+                      disabled={followLoading}
+                    >
+                      <Text style={styles.followButtonText}>
+                        {followLoading ? 'FOLLOWING...' : 'FOLLOW'}
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={styles.followStatusRow}>
+                      <View style={styles.followBadge}>
+                        <Text style={styles.followBadgeText}>
+                          {followStatus === 'mutual' ? 'Community' : 'Following'}
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={styles.unfollowButton}
+                        activeOpacity={0.7}
+                        onPress={handleUnfollow}
+                        disabled={followLoading}
+                      >
+                        <Text style={styles.unfollowButtonText}>Unfollow</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )
+                )}
               </View>
 
               {loadingUserPosts ? (
@@ -1282,5 +1398,50 @@ const styles = StyleSheet.create({
     color: 'rgba(2,4,15,0.4)',
     textAlign: 'center',
     paddingVertical: 40,
+  },
+  /* Follow button */
+  followButton: {
+    borderWidth: 1,
+    borderColor: '#02040F',
+    borderRadius: 0,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
+    marginTop: 14,
+  },
+  followButtonText: {
+    fontFamily: FONTS.display,
+    fontSize: 12,
+    color: '#02040F',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  followStatusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 14,
+  },
+  followBadge: {
+    borderWidth: 1,
+    borderColor: 'rgba(2,4,15,0.12)',
+    borderRadius: 0,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  followBadgeText: {
+    fontFamily: FONTS.mono,
+    fontSize: 10,
+    color: 'rgba(2,4,15,0.35)',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  unfollowButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  unfollowButtonText: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: 'rgba(2,4,15,0.35)',
   },
 });
