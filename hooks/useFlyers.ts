@@ -98,7 +98,8 @@ export function useFlyers(userId?: string) {
       const fiveYearsAgo = new Date();
       fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
 
-      const { data, error: fetchError } = await supabase
+      // Fetch approved public posts + user's own posts (any moderation status)
+      let query = supabase
         .from('posts')
         .select(`
           *,
@@ -106,11 +107,19 @@ export function useFlyers(userId?: string) {
             id, handle, display_name, avatar_url, avatar_color, avatar_initials
           )
         `)
-        .eq('is_public', true)
-        .eq('moderation_status', 'approved')
         .gte('created_at', fiveYearsAgo.toISOString())
         .order('created_at', { ascending: false })
         .limit(50);
+
+      // If we have a userId, fetch both approved public posts and user's own posts
+      // Using or() to combine: (is_public=true AND moderation_status=approved) OR (user_id=currentUser)
+      if (userId) {
+        query = query.or(`and(is_public.eq.true,moderation_status.eq.approved),user_id.eq.${userId}`);
+      } else {
+        query = query.eq('is_public', true).eq('moderation_status', 'approved');
+      }
+
+      const { data, error: fetchError } = await query;
 
       if (fetchError) {
         console.warn('Supabase fetch error:', fetchError.message);
