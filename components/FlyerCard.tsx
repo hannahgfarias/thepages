@@ -27,6 +27,7 @@ interface FlyerCardProps {
   flyer: Post;
   cardHeight: number;
   onSave?: (id: string) => void;
+  onShare?: (id: string) => void;
   onActiveChange?: (active: boolean) => void;
   onTagPress?: (tag: string) => void;
   onEdit?: (post: Post) => void;
@@ -74,9 +75,17 @@ function PinIcon() {
   );
 }
 
+/* ─── Helpers ─── */
+
+function formatCount(n: number): string {
+  if (n >= 1000000) return `${(n / 1000000).toFixed(1).replace(/\.0$/, '')}M`;
+  if (n >= 1000) return `${(n / 1000).toFixed(1).replace(/\.0$/, '')}K`;
+  return String(n);
+}
+
 /* ─── FlyerCard Component ─── */
 
-export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPress, onEdit, onDelete }: FlyerCardProps) {
+export function FlyerCard({ flyer, cardHeight, onSave, onShare, onActiveChange, onTagPress, onEdit, onDelete }: FlyerCardProps) {
   const { width } = useWindowDimensions();
   const [active, setActive] = useState(false);
   const [saved, setSaved] = useState(flyer.is_saved ?? false);
@@ -171,24 +180,32 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
         pagesUrl,
       ].filter((s) => s !== undefined && s !== null).join('\n');
 
+      let shared = false;
       if (Platform.OS === 'web' && navigator?.share) {
         await navigator.share({
           title: flyer.title,
           text: message,
           url: pagesUrl,
         });
+        shared = true;
       } else if (Platform.OS === 'web') {
         await navigator.clipboard.writeText(message);
+        shared = true;
       } else {
-        await Share.share({
+        const result = await Share.share({
           message,
           url: pagesUrl,
         });
+        shared = result.action === Share.sharedAction;
+      }
+
+      if (shared) {
+        onShare?.(flyer.id);
       }
     } catch {
       // User cancelled or error
     }
-  }, [flyer]);
+  }, [flyer, onShare]);
 
   const [showReport, setShowReport] = useState(false);
   const [reportReason, setReportReason] = useState<string | null>(null);
@@ -512,6 +529,25 @@ export function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPres
             </View>
           ) : null}
 
+          {/* Save & share counts — social proof / energy */}
+          {(flyer.save_count > 0 || flyer.share_count > 0) ? (
+            <View style={styles.countsRow}>
+              {flyer.save_count > 0 && (
+                <Text style={styles.countsText}>
+                  {formatCount(flyer.save_count)} {flyer.save_count === 1 ? 'save' : 'saves'}
+                </Text>
+              )}
+              {flyer.save_count > 0 && flyer.share_count > 0 && (
+                <Text style={styles.countsDot}>·</Text>
+              )}
+              {flyer.share_count > 0 && (
+                <Text style={styles.countsText}>
+                  shared {formatCount(flyer.share_count)} {flyer.share_count === 1 ? 'time' : 'times'}
+                </Text>
+              )}
+            </View>
+          ) : null}
+
           {/* Actions row inside details */}
           <View style={styles.detailsActions}>
             <TouchableOpacity
@@ -823,6 +859,23 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono,
     fontSize: 12,
     color: 'rgba(255,255,255,0.6)',
+  },
+  countsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 4,
+  },
+  countsText: {
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.5)',
+    letterSpacing: 0.3,
+  },
+  countsDot: {
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.3)',
   },
   detailsActions: {
     flexDirection: 'row',

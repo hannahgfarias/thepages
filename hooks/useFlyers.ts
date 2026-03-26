@@ -151,6 +151,8 @@ export function useFlyers(userId?: string) {
         is_anonymous: row.is_anonymous,
         moderation_status: row.moderation_status,
         report_count: row.report_count,
+        save_count: row.save_count ?? 0,
+        share_count: row.share_count ?? 0,
         created_at: row.created_at,
         link: row.event_url ? 'Get Tickets' : '',
         profile: row.profile,
@@ -179,7 +181,11 @@ export function useFlyers(userId?: string) {
       prev.map((f) => {
         if (f.id === postId) {
           wasSaved = f.is_saved ?? false;
-          return { ...f, is_saved: !f.is_saved };
+          return {
+            ...f,
+            is_saved: !f.is_saved,
+            save_count: f.is_saved ? Math.max(f.save_count - 1, 0) : f.save_count + 1,
+          };
         }
         return f;
       })
@@ -198,10 +204,34 @@ export function useFlyers(userId?: string) {
     } catch {
       // Rollback optimistic update on failure
       setFlyers((prev) =>
-        prev.map((f) => (f.id === postId ? { ...f, is_saved: !f.is_saved } : f))
+        prev.map((f) => (f.id === postId ? {
+          ...f,
+          is_saved: !f.is_saved,
+          save_count: f.is_saved ? Math.max(f.save_count - 1, 0) : f.save_count + 1,
+        } : f))
       );
     }
   }, [userId]);
 
-  return { flyers, loading, error, refetch: fetchFlyers, toggleSave };
+  const recordShare = useCallback(async (postId: string, userId?: string) => {
+    // Optimistic UI update
+    setFlyers((prev) =>
+      prev.map((f) => (f.id === postId ? { ...f, share_count: f.share_count + 1 } : f))
+    );
+
+    try {
+      const { error } = await supabase.from('shares').insert({
+        user_id: userId || null,
+        post_id: postId,
+      });
+      if (error) throw error;
+    } catch {
+      // Rollback on failure
+      setFlyers((prev) =>
+        prev.map((f) => (f.id === postId ? { ...f, share_count: Math.max(f.share_count - 1, 0) } : f))
+      );
+    }
+  }, []);
+
+  return { flyers, loading, error, refetch: fetchFlyers, toggleSave, recordShare };
 }
