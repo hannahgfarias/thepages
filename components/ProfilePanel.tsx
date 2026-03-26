@@ -102,7 +102,7 @@ function PinIcon() {
 /* ─── ProfilePanel Component ─── */
 
 export function ProfilePanel() {
-  const { showProfile, setShowProfile, setShowCommunity, setEditingPost, setShowAddEvent } = useOverlay();
+  const { showProfile, setShowProfile, setShowCommunity, setEditingPost, setShowAddEvent, setFocusPostId } = useOverlay();
   const { profile, isAuthenticated, session } = useAuth();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -238,6 +238,11 @@ export function ProfilePanel() {
     }
   }, [handleEditPost, handleDeletePost]);
 
+  const handlePostTap = useCallback((post: Post) => {
+    setFocusPostId(post.id);
+    close();
+  }, [setFocusPostId]);
+
   const [webMenuPostId, setWebMenuPostId] = useState<string | null>(null);
 
   // Never show profile panel if not authenticated
@@ -261,7 +266,13 @@ export function ProfilePanel() {
             ]}
             activeOpacity={0.8}
             onLongPress={isOwnPosts ? () => handlePostLongPress(post) : undefined}
-            onPress={isOwnPosts && Platform.OS === 'web' ? () => setWebMenuPostId(webMenuPostId === post.id ? null : post.id) : undefined}
+            onPress={() => {
+              if (isOwnPosts && Platform.OS === 'web') {
+                setWebMenuPostId(webMenuPostId === post.id ? null : post.id);
+              } else {
+                handlePostTap(post);
+              }
+            }}
           >
             {imageSource ? (
               <Image
