@@ -14,7 +14,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
-import { useFlyers, parseEventDate } from '../hooks/useFlyers';
+import { useSharedFlyers, parseEventDate } from '../hooks/useFlyers';
 import type { Post } from '../types';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
@@ -162,7 +162,7 @@ interface SearchOverlayProps {
 
 export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   const { showSearch, setShowSearch } = useOverlay();
-  const { flyers: allFlyers } = useFlyers();
+  const { flyers: allFlyers } = useSharedFlyers();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 

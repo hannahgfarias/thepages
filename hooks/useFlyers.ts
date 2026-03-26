@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useContext, createContext } from 'react';
 import { supabase } from '../lib/supabase';
 import type { Post } from '../types';
 
@@ -205,4 +205,31 @@ export function useFlyers(userId?: string) {
   }, [userId]);
 
   return { flyers, loading, error, refetch: fetchFlyers, toggleSave };
+}
+
+/* ─── Shared Flyers Context ─── */
+
+interface FlyersContextValue {
+  flyers: Post[];
+  loading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+  toggleSave: (postId: string) => Promise<void>;
+}
+
+const FlyersContext = createContext<FlyersContextValue | null>(null);
+
+export function FlyersProvider({ userId, children }: { userId?: string; children: React.ReactNode }) {
+  const value = useFlyers(userId);
+  return React.createElement(FlyersContext.Provider, { value }, children);
+}
+
+/**
+ * Use the shared flyers state from the provider.
+ * Falls back to a standalone useFlyers if no provider exists (shouldn't happen).
+ */
+export function useSharedFlyers() {
+  const ctx = useContext(FlyersContext);
+  if (!ctx) throw new Error('useSharedFlyers must be used within FlyersProvider');
+  return ctx;
 }

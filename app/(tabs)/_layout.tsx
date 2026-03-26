@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -14,6 +14,7 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { FONTS } from '../../constants/fonts';
 import { COLORS } from '../../constants/colors';
 import { useAuth as useAuthContext } from '../../hooks/useAuth';
+import { FlyersProvider } from '../../hooks/useFlyers';
 
 /* ─── Overlay Components ─── */
 import { SearchOverlay } from '../../components/SearchOverlay';
@@ -88,7 +89,20 @@ export function useOverlay() {
 function OverlayProvider({ children }: { children: React.ReactNode }) {
   const [showSearch, setShowSearch] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
-  const [showProfile, setShowProfile] = useState(false);
+  const [showProfile, setShowProfileRaw] = useState(() => {
+    // Restore profile state on web page refresh
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      return window.sessionStorage.getItem('the_pages_show_profile') === 'true';
+    }
+    return false;
+  });
+  const setShowProfile = useCallback((v: boolean) => {
+    setShowProfileRaw(v);
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      if (v) window.sessionStorage.setItem('the_pages_show_profile', 'true');
+      else window.sessionStorage.removeItem('the_pages_show_profile');
+    }
+  }, []);
   const [showReport, setShowReport] = useState(false);
   const [showCommunity, setShowCommunity] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
@@ -263,6 +277,33 @@ function ConnectedSearchOverlay() {
   return <SearchOverlay onApplyFilters={(filters) => setSearchFilters(filters)} />;
 }
 
+/* ─── Inner Layout (needs auth context for FlyersProvider) ─── */
+
+function InnerLayout() {
+  const { session } = useAuthContext();
+  const userId = session?.user?.id;
+
+  return (
+    <FlyersProvider userId={userId}>
+      <Tabs
+        tabBar={(props) => <CustomTabBar {...props} />}
+        screenOptions={{ headerShown: false }}
+      >
+        <Tabs.Screen name="index" />
+      </Tabs>
+
+      {/* Overlay stack — render order matters (later = higher z-index) */}
+      <ConnectedSearchOverlay />
+      <AddEventSheet />
+      <ReportSheet />
+      <ProfilePanel />
+      <CommunitySheet />
+      <AuthPrompt />
+      <AuthFlow />
+    </FlyersProvider>
+  );
+}
+
 /* ─── Tab Layout ─── */
 
 export default function TabLayout() {
@@ -291,21 +332,7 @@ export default function TabLayout() {
 
   return (
     <OverlayProvider>
-      <Tabs
-        tabBar={(props) => <CustomTabBar {...props} />}
-        screenOptions={{ headerShown: false }}
-      >
-        <Tabs.Screen name="index" />
-      </Tabs>
-
-      {/* Overlay stack — render order matters (later = higher z-index) */}
-      <ConnectedSearchOverlay />
-      <AddEventSheet />
-      <ReportSheet />
-      <ProfilePanel />
-      <CommunitySheet />
-      <AuthPrompt />
-      <AuthFlow />
+      <InnerLayout />
 
       {/* Welcome screen — shows on first launch */}
       {showWelcome && <WelcomeScreen onDismiss={handleDismissWelcome} />}

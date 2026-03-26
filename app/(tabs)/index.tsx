@@ -18,7 +18,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
 import { FlyerCard } from '../../components/FlyerCard';
-import { useFlyers, parseEventDate } from '../../hooks/useFlyers';
+import { useSharedFlyers, parseEventDate } from '../../hooks/useFlyers';
 import { useOverlay } from './_layout';
 import { useAuth } from '../../hooks/useAuth';
 import { FONTS } from '../../constants/fonts';
@@ -47,7 +47,7 @@ function SearchIcon() {
 
 export default function FeedScreen() {
   const { user } = useAuth();
-  const { flyers, loading, error, toggleSave, refetch } = useFlyers(user?.id);
+  const { flyers, loading, error, toggleSave, refetch } = useSharedFlyers();
   const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt, setEditingPost, setShowAddEvent, scrollToTopRef } = useOverlay();
   const flatListRef = useRef<FlatList>(null);
   const prevShowAddEvent = useRef(false);

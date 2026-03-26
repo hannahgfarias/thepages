@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
 import { useOverlay } from '../app/(tabs)/_layout';
-import { useFlyers, parseEventDate } from '../hooks/useFlyers';
+import { useSharedFlyers, parseEventDate } from '../hooks/useFlyers';
 import { useAuth } from '../hooks/useAuth';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
@@ -174,7 +174,7 @@ export function ProfilePanel() {
   ).current;
 
   const userId = session?.user?.id;
-  const { flyers: allFlyers, refetch, toggleSave } = useFlyers(userId);
+  const { flyers: allFlyers, refetch, toggleSave } = useSharedFlyers();
 
   // Your posts — filter all flyers by current user
   const yourPosts = useMemo(() =>
