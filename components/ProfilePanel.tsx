@@ -117,6 +117,7 @@ export function ProfilePanel() {
 
   useEffect(() => {
     if (showProfile) {
+      refetch(); // Refresh posts/saves when profile opens
       translateX.setValue(width);
       Animated.timing(translateX, {
         toValue: 0,
