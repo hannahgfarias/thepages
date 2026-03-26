@@ -78,7 +78,7 @@ function PinIcon() {
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
-export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSave, onActiveChange, onTagPress, onEdit, onDelete }: FlyerCardProps) {
+export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSave, onShare, onActiveChange, onTagPress, onEdit, onDelete }: FlyerCardProps) {
   const { width } = useWindowDimensions();
   const [active, setActive] = useState(false);
   const [saved, setSaved] = useState(flyer.is_saved ?? false);

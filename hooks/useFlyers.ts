@@ -250,7 +250,7 @@ const FlyersContext = createContext<FlyersContextValue | null>(null);
 
 export function FlyersProvider({ userId, children }: { userId?: string; children: React.ReactNode }) {
   const hookResult = useFlyers(userId);
-  const value = React.useMemo(() => hookResult, [hookResult.flyers, hookResult.loading, hookResult.error, hookResult.refetch, hookResult.toggleSave]);
+  const value = React.useMemo(() => hookResult, [hookResult.flyers, hookResult.loading, hookResult.error, hookResult.refetch, hookResult.toggleSave, hookResult.recordShare]);
   return React.createElement(FlyersContext.Provider, { value }, children);
 }
 

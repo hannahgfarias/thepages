@@ -17,25 +17,40 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
+import { useLocalSearchParams } from 'expo-router';
 import { FlyerCard } from '../../components/FlyerCard';
 import { useSharedFlyers, parseEventDate } from '../../hooks/useFlyers';
 import { useOverlay } from './_layout';
 import { useAuth } from '../../hooks/useAuth';
+import { supabase } from '../../lib/supabase';
 import { FONTS } from '../../constants/fonts';
 import { COLORS } from '../../constants/colors';
 import type { Post } from '../../types';
+
+type FeedTab = 'following' | 'community' | 'all';
+
+/** Returns true if a hex color is light (needs dark text on top) */
+function isLightColor(hex: string): boolean {
+  const c = hex.replace('#', '');
+  if (c.length < 6) return true;
+  const r = parseInt(c.substring(0, 2), 16);
+  const g = parseInt(c.substring(2, 4), 16);
+  const b = parseInt(c.substring(4, 6), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.55;
+}
 
 const NAV_HEIGHT = 64;
 
 /* ─── Magnifying Glass Icon ─── */
 
-function SearchIcon() {
+function SearchIcon({ color = '#02040F' }: { color?: string }) {
   return (
     <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Circle cx={11} cy={11} r={7} stroke="#02040F" strokeWidth={2} />
+      <Circle cx={11} cy={11} r={7} stroke={color} strokeWidth={2} />
       <Path
         d="M20 20l-4-4"
-        stroke="#02040F"
+        stroke={color}
         strokeWidth={2}
         strokeLinecap="round"
       />
@@ -47,9 +62,11 @@ function SearchIcon() {
 
 export default function FeedScreen() {
   const { user } = useAuth();
-  const { flyers, loading, error, toggleSave, refetch } = useSharedFlyers();
-  const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt, setEditingPost, setShowAddEvent, scrollToTopRef } = useOverlay();
+  const { flyers, loading, error, toggleSave, recordShare, refetch } = useSharedFlyers();
+  const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt, setEditingPost, setShowAddEvent, scrollToTopRef, focusPostId, setFocusPostId } = useOverlay();
+  const { focus } = useLocalSearchParams<{ focus?: string }>();
   const flatListRef = useRef<FlatList>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const prevShowAddEvent = useRef(false);
   const [activeTopTab, setActiveTopTab] = useState<'community' | 'following' | 'all'>('all');
 
@@ -60,6 +77,19 @@ export default function FeedScreen() {
     };
     return () => { scrollToTopRef.current = null; };
   }, [scrollToTopRef]);
+
+  // Handle deep link: ?focus={postId} from /event/[id] redirect
+  useEffect(() => {
+    if (focus) {
+      setFocusPostId(focus);
+    }
+  }, [focus, setFocusPostId]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
   // Refetch feed when AddEventSheet closes (post was potentially added) and scroll to top
   useEffect(() => {
@@ -73,16 +103,70 @@ export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const cardHeight = height - NAV_HEIGHT - insets.bottom;
 
+  // Scroll to a specific post when focusPostId is set (e.g. tapping a saved post)
+  useEffect(() => {
+    if (focusPostId && filteredFlyersRef.current.length > 0) {
+      const index = filteredFlyersRef.current.findIndex((f) => f.id === focusPostId);
+      if (index >= 0) {
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({ index, animated: true });
+        }, 450); // wait for profile panel close animation
+      }
+      setFocusPostId(null);
+    }
+  }, [focusPostId, setFocusPostId]);
+
+  // Feed tabs: Following / Community / All
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [communityIds, setCommunityIds] = useState<Set<string>>(new Set());
+
+  // Fetch follow graph for the current user
+  useEffect(() => {
+    if (!user?.id) {
+      setFollowingIds(new Set());
+      setCommunityIds(new Set());
+      return;
+    }
+
+    const fetchFollows = async () => {
+      // People I follow
+      const { data: myFollows } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', user.id);
+
+      const iFollow = new Set<string>((myFollows || []).map((f: any) => f.following_id));
+      setFollowingIds(iFollow);
+
+      // People who follow me
+      const { data: theirFollows } = await supabase
+        .from('follows')
+        .select('follower_id')
+        .eq('following_id', user.id);
+
+      const followMe = new Set<string>((theirFollows || []).map((f: any) => f.follower_id));
+
+      // Community = mutual follows
+      const mutual = new Set<string>();
+      iFollow.forEach((id) => {
+        if (followMe.has(id)) mutual.add(id);
+      });
+      setCommunityIds(mutual);
+    };
+
+    fetchFollows();
+  }, [user?.id]);
+
   // Tag filtering
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
   const filteredFlyers = flyers.filter((f) => {
-    // Top tab filter
-    if (activeTopTab === 'following') {
-      // Show only posts from users you follow (is_mine as placeholder until follows are wired)
-      if (!f.is_mine) return false;
+    // Feed tab filter (using follow graph)
+    if (activeTopTab === 'following' && user?.id) {
+      if (!followingIds.has(f.user_id) && f.user_id !== user.id) return false;
+    } else if (activeTopTab === 'community' && user?.id) {
+      if (!communityIds.has(f.user_id) && f.user_id !== user.id) return false;
     }
-    // 'community' and 'all' show everything for now
 
     // Tag filter
     if (activeTag && !f.tags?.some((t) => t.toLowerCase() === activeTag.toLowerCase())) {
@@ -94,7 +178,7 @@ export default function FeedScreen() {
       // Text query
       if (searchFilters.query) {
         const q = searchFilters.query.toLowerCase();
-        const match = [f.title, f.subtitle, f.location, f.date_text, f.category, ...(f.tags || []),
+        const match = [f.title, f.subtitle, f.description, f.location, f.date_text, f.category, ...(f.tags || []),
           f.profile?.handle, f.profile?.display_name]
           .filter(Boolean)
           .some((s) => s!.toLowerCase().includes(q));
@@ -177,6 +261,9 @@ export default function FeedScreen() {
     return true;
   });
 
+  const filteredFlyersRef = useRef(filteredFlyers);
+  filteredFlyersRef.current = filteredFlyers;
+
   const handleTagPress = useCallback((tag: string) => {
     setActiveTag(tag);
   }, []);
@@ -195,6 +282,8 @@ export default function FeedScreen() {
     })
   ).current;
 
+  // Track current visible flyer for adaptive header colors
+  const [currentFlyerIndex, setCurrentFlyerIndex] = useState(0);
   // Directional haptics tracking
   const previousIndex = useRef(0);
   // Swipe hint animation
@@ -284,6 +373,10 @@ export default function FeedScreen() {
     toggleSave(id);
   }, [toggleSave, isAuthenticated, setShowAuthPrompt]);
 
+  const handleShare = useCallback((id: string) => {
+    recordShare(id);
+  }, [recordShare]);
+
   const handleEdit = useCallback((post: Post) => {
     setEditingPost(post);
     setShowAddEvent(true);
@@ -339,6 +432,7 @@ export default function FeedScreen() {
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (viewableItems.length > 0 && viewableItems[0].index != null) {
         const newIndex = viewableItems[0].index;
+        setCurrentFlyerIndex(newIndex);
         if (newIndex !== previousIndex.current) {
           const direction = newIndex > previousIndex.current ? 'down' : 'up';
           fireDirectionalHaptic(direction);
@@ -354,9 +448,9 @@ export default function FeedScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: Post }) => (
-      <FlyerCard flyer={item} cardHeight={cardHeight} onSave={handleSave} onActiveChange={handleCardActiveChange} onTagPress={handleTagPress} onEdit={handleEdit} onDelete={handleDelete} />
+      <FlyerCard flyer={item} cardHeight={cardHeight} onSave={handleSave} onShare={handleShare} onActiveChange={handleCardActiveChange} onTagPress={handleTagPress} onEdit={handleEdit} onDelete={handleDelete} />
     ),
-    [cardHeight, handleSave, handleCardActiveChange, handleTagPress, handleEdit, handleDelete]
+    [cardHeight, handleSave, handleShare, handleCardActiveChange, handleTagPress, handleEdit, handleDelete]
   );
 
   const getItemLayout = useCallback(
@@ -367,6 +461,13 @@ export default function FeedScreen() {
     }),
     [cardHeight]
   );
+
+  // Determine header text color based on current flyer's background
+  const currentFlyer = filteredFlyers[currentFlyerIndex];
+  const flyerBg = currentFlyer?.bgColor || currentFlyer?.image_url ? '#1a1a2e' : '#F0ECEC';
+  const headerUseDark = currentFlyer?.image_url ? false : isLightColor(currentFlyer?.bgColor || '#F0ECEC');
+  const headerColor = headerUseDark ? '#02040F' : '#ffffff';
+  const headerInactiveColor = headerUseDark ? 'rgba(2,4,15,0.35)' : 'rgba(255,255,255,0.5)';
 
   return (
     <View style={styles.container} {...swipePanResponder.panHandlers}>
@@ -510,6 +611,8 @@ export default function FeedScreen() {
           initialNumToRender={2}
           maxToRenderPerBatch={2}
           windowSize={3}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
           ListFooterComponent={
             <View style={[styles.endOfFeed, { height: cardHeight }]}>
               <Text style={styles.endOfFeedEmoji}>✨</Text>

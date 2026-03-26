@@ -175,6 +175,8 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   const [customLocation, setCustomLocation] = useState('');
   const [customDate, setCustomDate] = useState('');
   const [showDateInput, setShowDateInput] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [hasSearched, setHasSearched] = useState(false);
 
   // People search state
@@ -321,6 +323,8 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
       setHasSearched(false);
       setShowDateInput(false);
       setCustomDate('');
+      setSelectedDate(null);
+      setCalendarMonth(new Date());
       setCustomLocation('');
       setViewingUser(null);
       setViewingUserPosts([]);
@@ -367,6 +371,29 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
     );
   };
 
+  const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1).getDay();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const days: (number | null)[] = [];
+    for (let i = 0; i < firstDay; i++) days.push(null);
+    for (let i = 1; i <= daysInMonth; i++) days.push(i);
+    return days;
+  };
+
+  const selectCalendarDate = (day: number) => {
+    const date = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day);
+    setSelectedDate(date);
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    setCustomDate(`${y}-${m}-${d}`);
+  };
+
   const toggleWhen = (when: string) => {
     if (when === 'Pick a Date') {
       setSelectedWhen(when);
@@ -374,6 +401,8 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
     } else {
       setSelectedWhen((prev) => (prev === when ? null : when));
       setShowDateInput(false);
+      setSelectedDate(null);
+      setCustomDate('');
     }
   };
 
@@ -558,18 +587,65 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
                       ))}
                     </View>
                     {showDateInput && selectedWhen === 'Pick a Date' && (
-                      <View style={styles.dateInputContainer}>
-                        <TextInput
-                          style={styles.dateInput}
-                          value={customDate}
-                          onChangeText={setCustomDate}
-                          placeholder="YYYY-MM-DD"
-                          placeholderTextColor="rgba(2,4,15,0.4)"
-                          autoCorrect={false}
-                          autoCapitalize="none"
-                          keyboardType="numbers-and-punctuation"
-                          maxLength={10}
-                        />
+                      <View style={styles.calendarContainer}>
+                        {/* Month navigation */}
+                        <View style={styles.calendarHeader}>
+                          <TouchableOpacity onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1))}>
+                            <Text style={styles.calendarNav}>{'\u2039'}</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.calendarMonthLabel}>
+                            {MONTHS[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
+                          </Text>
+                          <TouchableOpacity onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1))}>
+                            <Text style={styles.calendarNav}>{'\u203A'}</Text>
+                          </TouchableOpacity>
+                        </View>
+
+                        {/* Weekday headers */}
+                        <View style={styles.calendarWeekdays}>
+                          {WEEKDAYS.map((d) => (
+                            <Text key={d} style={styles.calendarWeekday}>{d}</Text>
+                          ))}
+                        </View>
+
+                        {/* Days grid */}
+                        <View style={styles.calendarGrid}>
+                          {getDaysInMonth(calendarMonth).map((day, i) => {
+                            const isSelected = selectedDate &&
+                              day === selectedDate.getDate() &&
+                              calendarMonth.getMonth() === selectedDate.getMonth() &&
+                              calendarMonth.getFullYear() === selectedDate.getFullYear();
+                            const isToday = day === new Date().getDate() &&
+                              calendarMonth.getMonth() === new Date().getMonth() &&
+                              calendarMonth.getFullYear() === new Date().getFullYear();
+
+                            return (
+                              <TouchableOpacity
+                                key={i}
+                                style={[
+                                  styles.calendarDay,
+                                  isSelected && styles.calendarDaySelected,
+                                  isToday && !isSelected && styles.calendarDayToday,
+                                ]}
+                                activeOpacity={day ? 0.7 : 1}
+                                onPress={() => day && selectCalendarDate(day)}
+                              >
+                                <Text style={[
+                                  styles.calendarDayText,
+                                  isSelected && styles.calendarDayTextSelected,
+                                ]}>
+                                  {day || ''}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+
+                        {selectedDate && (
+                          <Text style={styles.selectedDateLabel}>
+                            {MONTHS[selectedDate.getMonth()]} {selectedDate.getDate()}, {selectedDate.getFullYear()}
+                          </Text>
+                        )}
                       </View>
                     )}
                   </View>
@@ -892,6 +968,75 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
+    marginTop: 12,
+  },
+  calendarContainer: {
+    marginTop: 12,
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 0,
+    padding: 16,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  calendarNav: {
+    fontFamily: FONTS.display,
+    fontSize: 24,
+    color: '#02040F',
+    paddingHorizontal: 12,
+  },
+  calendarMonthLabel: {
+    fontFamily: FONTS.display,
+    fontSize: 15,
+    letterSpacing: 1,
+    color: '#02040F',
+  },
+  calendarWeekdays: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  calendarWeekday: {
+    flex: 1,
+    textAlign: 'center',
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: 'rgba(2,4,15,0.4)',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarDay: {
+    width: '14.28%',
+    aspectRatio: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarDaySelected: {
+    backgroundColor: '#EB736C',
+  },
+  calendarDayToday: {
+    borderWidth: 1,
+    borderColor: '#02040F',
+  },
+  calendarDayText: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: '#02040F',
+  },
+  calendarDayTextSelected: {
+    color: '#ffffff',
+  },
+  selectedDateLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    color: '#EB736C',
+    textAlign: 'center',
     marginTop: 12,
   },
   stickyButtonContainer: {
