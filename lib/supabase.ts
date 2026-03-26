@@ -65,7 +65,7 @@ class WebStorage {
 }
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://taygiieowkyuhvxmlyeg.supabase.co';
-const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_06MYb5KGpy5eIIV4tkQqgQ_jdgatC7R';
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRheWdpaWVvd2t5dWh2eG1seWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0NDMwNjQsImV4cCI6MjA4OTAxOTA2NH0.UOYz-kMqGOpYVEuSIqlKmMr2mtIwIeeN_j7Cqwc1-Sc';
 
 // Use localStorage on web, encrypted SecureStore on native
 const storage = Platform.OS === 'web' ? new WebStorage() : new LargeSecureStore();
