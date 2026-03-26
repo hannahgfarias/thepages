@@ -193,9 +193,6 @@ export function ProfilePanel() {
 
   const sectionOrder: DateSection[] = ['HAPPENING TODAY', 'THIS WEEK', 'UPCOMING', 'PAST'];
 
-  // Never show profile panel if not authenticated
-  if (!showProfile || !isAuthenticated) return null;
-
   const handleEditPost = useCallback((post: Post) => {
     setEditingPost(post);
     setShowAddEvent(true);
@@ -242,6 +239,9 @@ export function ProfilePanel() {
   }, [handleEditPost, handleDeletePost]);
 
   const [webMenuPostId, setWebMenuPostId] = useState<string | null>(null);
+
+  // Never show profile panel if not authenticated
+  if (!showProfile || !isAuthenticated) return null;
 
   const renderPostGrid = (posts: Post[], isOwnPosts: boolean = false) => (
     <View style={styles.grid}>
