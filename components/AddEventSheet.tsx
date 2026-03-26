@@ -69,7 +69,7 @@ export function AddEventSheet() {
   const [showLinkField, setShowLinkField] = useState(false);
   const [fetchingOG, setFetchingOG] = useState(false);
   const ogDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [occurrences, setOccurrences] = useState<Array<{ date: string; location: string }>>([]);
+  const [occurrences, setOccurrences] = useState<Array<{ title: string; subtitle: string; date: string; location: string }>>([]);
   const [locationResults, setLocationResults] = useState<Array<{ display_name: string; name: string; address: any }>>([]);
   const [showLocationResults, setShowLocationResults] = useState(false);
   const locationDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -259,7 +259,12 @@ export function AddEventSheet() {
         }
         // If multiple dates/locations detected, store them for multi-post creation
         if (data.occurrences && data.occurrences.length > 1) {
-          setOccurrences(data.occurrences);
+          setOccurrences(data.occurrences.map((occ: any) => ({
+            title: occ.title || data.title || '',
+            subtitle: occ.subtitle || '',
+            date: occ.date || '',
+            location: occ.location || '',
+          })));
         } else {
           setOccurrences([]);
         }
@@ -594,10 +599,12 @@ export function AddEventSheet() {
         handleClose();
       } else {
         // INSERT new post(s)
-        // If multiple occurrences detected, create one post per date/location
+        // If multiple occurrences detected, create one post per occurrence with its own title/subtitle/date/location
         const postsToInsert = occurrences.length > 1
           ? occurrences.map((occ) => ({
               ...postBase,
+              title: (occ.title || '').trim() || postBase.title,
+              subtitle: (occ.subtitle || '').trim() || postBase.subtitle,
               date_text: (occ.date != null && occ.date !== '') ? occ.date : dateTime || null,
               location: (occ.location != null && occ.location !== '') ? occ.location : location || null,
             }))
@@ -1040,25 +1047,71 @@ export function AddEventSheet() {
               )}
             </View>
 
-            {/* Multiple dates/locations detected */}
+            {/* Multiple dates/locations detected — editable sections */}
             {occurrences.length > 1 && (
-              <View style={{ backgroundColor: 'rgba(120,184,150,0.12)', borderRadius: 8, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(120,184,150,0.25)' }}>
-                <Text style={{ fontFamily: FONTS.display, fontSize: 12, letterSpacing: 1.5, color: '#78B896', marginBottom: 8 }}>
-                  {occurrences.length} DATES/LOCATIONS DETECTED — ONE POST EACH
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontFamily: FONTS.display, fontSize: 12, letterSpacing: 1.5, color: '#78B896', marginBottom: 12 }}>
+                  {occurrences.length} EVENTS DETECTED — EDIT EACH BELOW
                 </Text>
                 {occurrences.map((occ, i) => (
-                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: 'rgba(120,184,150,0.15)' }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: '#02040F' }}>
-                        {occ.date}{occ.date && occ.location ? '  ·  ' : ''}{occ.location}
+                  <View key={i} style={{ backgroundColor: 'rgba(120,184,150,0.08)', borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(120,184,150,0.2)' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                      <Text style={{ fontFamily: FONTS.display, fontSize: 11, letterSpacing: 1.5, color: '#78B896' }}>
+                        EVENT {i + 1} OF {occurrences.length}
                       </Text>
+                      <TouchableOpacity
+                        onPress={() => setOccurrences(occurrences.filter((_, idx) => idx !== i))}
+                        style={{ padding: 4 }}
+                      >
+                        <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: 'rgba(2,4,15,0.3)' }}>Remove</Text>
+                      </TouchableOpacity>
                     </View>
-                    <TouchableOpacity
-                      onPress={() => setOccurrences(occurrences.filter((_, idx) => idx !== i))}
-                      style={{ padding: 4, marginLeft: 8 }}
-                    >
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 14, color: 'rgba(2,4,15,0.3)' }}>✕</Text>
-                    </TouchableOpacity>
+                    <TextInput
+                      style={[styles.input, { marginBottom: 8 }]}
+                      value={occ.title}
+                      onChangeText={(text) => {
+                        const updated = [...occurrences];
+                        updated[i] = { ...updated[i], title: text };
+                        setOccurrences(updated);
+                      }}
+                      placeholder="Title"
+                      placeholderTextColor="#999"
+                    />
+                    <TextInput
+                      style={[styles.input, { marginBottom: 8 }]}
+                      value={occ.subtitle}
+                      onChangeText={(text) => {
+                        const updated = [...occurrences];
+                        updated[i] = { ...updated[i], subtitle: text };
+                        setOccurrences(updated);
+                      }}
+                      placeholder="Subtitle / performer"
+                      placeholderTextColor="#999"
+                    />
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <TextInput
+                        style={[styles.input, { flex: 1 }]}
+                        value={occ.date}
+                        onChangeText={(text) => {
+                          const updated = [...occurrences];
+                          updated[i] = { ...updated[i], date: text };
+                          setOccurrences(updated);
+                        }}
+                        placeholder="Date & time"
+                        placeholderTextColor="#999"
+                      />
+                      <TextInput
+                        style={[styles.input, { flex: 1 }]}
+                        value={occ.location}
+                        onChangeText={(text) => {
+                          const updated = [...occurrences];
+                          updated[i] = { ...updated[i], location: text };
+                          setOccurrences(updated);
+                        }}
+                        placeholder="Location"
+                        placeholderTextColor="#999"
+                      />
+                    </View>
                   </View>
                 ))}
               </View>
