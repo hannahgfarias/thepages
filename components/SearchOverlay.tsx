@@ -170,6 +170,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedWhen, setSelectedWhen] = useState<string | null>('Happening Now');
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
+  const [customLocation, setCustomLocation] = useState('');
   const [customDate, setCustomDate] = useState('');
   const [showDateInput, setShowDateInput] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -185,6 +186,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
       setHasSearched(false);
       setShowDateInput(false);
       setCustomDate('');
+      setCustomLocation('');
 
       Animated.parallel([
         Animated.timing(bgOpacity, {
@@ -256,14 +258,16 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
 
   const toggleLocation = (loc: string) => {
     setSelectedLocation((prev) => (prev === loc ? null : loc));
+    setCustomLocation('');
   };
 
   const handleApply = () => {
+    const locationValue = selectedLocation || (customLocation.trim() || null);
     const filters: SearchFilters = {
       query,
       types: selectedTypes,
       when: selectedWhen,
-      locations: selectedLocation,
+      locations: locationValue,
       customDate: showDateInput ? customDate : undefined,
     };
 
@@ -279,7 +283,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
     query,
     types: selectedTypes,
     when: selectedWhen,
-    locations: selectedLocation,
+    locations: selectedLocation || (customLocation.trim() || null),
     customDate: showDateInput ? customDate : undefined,
   };
 
@@ -389,6 +393,19 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
                 />
               ))}
             </View>
+            <TextInput
+              style={styles.locationInput}
+              value={customLocation}
+              onChangeText={(text) => {
+                setCustomLocation(text);
+                if (text.trim()) setSelectedLocation(null);
+              }}
+              placeholder="Or type any location..."
+              placeholderTextColor="rgba(2,4,15,0.35)"
+              autoCorrect={false}
+              autoCapitalize="none"
+              returnKeyType="done"
+            />
           </View>
 
           {/* Search / Apply button */}
@@ -557,6 +574,18 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     paddingHorizontal: 16,
     paddingVertical: 12,
+  },
+  locationInput: {
+    fontFamily: FONTS.mono,
+    fontSize: 14,
+    color: '#02040F',
+    backgroundColor: 'rgba(255,255,255,0.6)',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginTop: 12,
   },
   applyButton: {
     width: '100%',

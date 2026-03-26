@@ -220,7 +220,8 @@ interface FlyersContextValue {
 const FlyersContext = createContext<FlyersContextValue | null>(null);
 
 export function FlyersProvider({ userId, children }: { userId?: string; children: React.ReactNode }) {
-  const value = useFlyers(userId);
+  const hookResult = useFlyers(userId);
+  const value = React.useMemo(() => hookResult, [hookResult.flyers, hookResult.loading, hookResult.error, hookResult.refetch, hookResult.toggleSave]);
   return React.createElement(FlyersContext.Provider, { value }, children);
 }
 

@@ -444,9 +444,9 @@ export default function FeedScreen() {
           </Svg>
           <Text style={styles.stateTitle}>Something went wrong</Text>
           <Text style={styles.stateSubtitle}>{error}</Text>
-          <TouchableOpacity style={styles.stateButton} activeOpacity={0.7} onPress={() => {
-            refetch();
+          <TouchableOpacity style={styles.stateButton} activeOpacity={0.7} onPress={async () => {
             flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+            await refetch();
           }}>
             <Text style={styles.stateButtonText}>TRY AGAIN</Text>
           </TouchableOpacity>
@@ -516,9 +516,9 @@ export default function FeedScreen() {
               <Text style={styles.endOfFeedSubtitle}>
                 {filteredFlyers.length} event{filteredFlyers.length !== 1 ? 's' : ''} in your feed
               </Text>
-              <TouchableOpacity style={styles.stateButton} activeOpacity={0.7} onPress={() => {
-                refetch();
+              <TouchableOpacity style={styles.stateButton} activeOpacity={0.7} onPress={async () => {
                 flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+                await refetch();
               }}>
                 <Text style={styles.stateButtonText}>REFRESH</Text>
               </TouchableOpacity>
