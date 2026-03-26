@@ -8,16 +8,15 @@ import {
   Animated,
   Easing,
   ScrollView,
-  FlatList,
   Image,
   useWindowDimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
 import { useOverlay } from '../app/(tabs)/_layout';
 import { useSharedFlyers, parseEventDate } from '../hooks/useFlyers';
-import { FlyerCard } from './FlyerCard';
 import type { Post, Profile } from '../types';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
@@ -40,6 +39,8 @@ export interface SearchFilters {
   customDate?: string;
 }
 
+type SearchMode = 'events' | 'people';
+
 interface ChipProps {
   label: string;
   selected: boolean;
@@ -51,10 +52,7 @@ function Chip({ label, selected, onPress }: ChipProps) {
     <TouchableOpacity
       activeOpacity={0.7}
       onPress={onPress}
-      style={[
-        styles.chip,
-        selected && styles.chipSelected,
-      ]}
+      style={[styles.chip, selected && styles.chipSelected]}
     >
       <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
         {label}
@@ -74,7 +72,6 @@ function SearchIcon({ size = 40, color = 'rgba(2,4,15,0.25)' }: { size?: number;
 
 function filterFlyers(filters: SearchFilters, allFlyers: Post[]) {
   return allFlyers.filter((flyer) => {
-    // Query filter — also matches poster handle/display_name
     if (filters.query) {
       const q = filters.query.toLowerCase();
       const matchesQuery =
@@ -89,7 +86,6 @@ function filterFlyers(filters: SearchFilters, allFlyers: Post[]) {
       if (!matchesQuery) return false;
     }
 
-    // Type filter
     if (filters.types.length > 0) {
       const categoryUpper = flyer.category.toUpperCase();
       const matchesType = filters.types.some((type) =>
@@ -98,7 +94,6 @@ function filterFlyers(filters: SearchFilters, allFlyers: Post[]) {
       if (!matchesType) return false;
     }
 
-    // Location filter
     if (filters.locations) {
       const loc = (Array.isArray(filters.locations) ? filters.locations[0] : filters.locations)?.toLowerCase() || '';
       if (loc && loc !== 'near me') {
@@ -114,7 +109,6 @@ function filterFlyers(filters: SearchFilters, allFlyers: Post[]) {
       }
     }
 
-    // When filter
     if (filters.when) {
       const eventDate = parseEventDate(flyer.date_text || '');
       if (eventDate) {
@@ -171,7 +165,10 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
 
+  const [searchMode, setSearchMode] = useState<SearchMode>('events');
   const [query, setQuery] = useState('');
+
+  // Event search state
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
   const [selectedWhen, setSelectedWhen] = useState<string | null>('Happening Now');
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
@@ -180,7 +177,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   const [showDateInput, setShowDateInput] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
-  // User search
+  // People search state
   const [userResults, setUserResults] = useState<Profile[]>([]);
   const [searchingUsers, setSearchingUsers] = useState(false);
   const userSearchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -190,8 +187,9 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   const [viewingUserPosts, setViewingUserPosts] = useState<Post[]>([]);
   const [loadingUserPosts, setLoadingUserPosts] = useState(false);
 
-  // Live user search — local first, then Supabase
+  // People search — runs when in people mode and query changes
   useEffect(() => {
+    if (searchMode !== 'people') return;
     if (userSearchDebounce.current) clearTimeout(userSearchDebounce.current);
 
     const raw = query.trim();
@@ -200,11 +198,10 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
       return;
     }
 
-    // Strip leading @ for matching
     const q = raw.startsWith('@') ? raw.slice(1) : raw;
     const qLower = q.toLowerCase();
 
-    // Immediate: search profiles we already have from loaded flyers
+    // Immediate: search profiles from loaded flyers
     const seen = new Set<string>();
     const localMatches: Profile[] = [];
     for (const f of allFlyers) {
@@ -230,7 +227,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
     }
     if (localMatches.length > 0) setUserResults(localMatches);
 
-    // Also search Supabase for users we don't have locally
+    // Async: search Supabase
     userSearchDebounce.current = setTimeout(async () => {
       setSearchingUsers(true);
       try {
@@ -238,17 +235,17 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
           .from('profiles')
           .select('id, handle, display_name, bio, location, avatar_url, avatar_color, avatar_initials, is_public, created_at')
           .or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`)
-          .limit(10);
+          .limit(20);
         if (error) {
-          console.warn('[UserSearch] Supabase error:', error.message);
+          console.warn('[UserSearch] error:', error.message);
         } else if (data && data.length > 0) {
-          // Merge: Supabase results take priority, dedupe by id
           const merged = new Map<string, Profile>();
           for (const p of localMatches) merged.set(p.id, p);
           for (const p of data as Profile[]) merged.set(p.id, p);
           setUserResults(Array.from(merged.values()));
+        } else if (localMatches.length === 0) {
+          setUserResults([]);
         }
-        // If Supabase returned nothing but we have local matches, keep them
       } catch (e) {
         console.warn('[UserSearch] exception:', e);
       }
@@ -258,7 +255,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
     return () => {
       if (userSearchDebounce.current) clearTimeout(userSearchDebounce.current);
     };
-  }, [query, allFlyers]);
+  }, [query, searchMode, allFlyers]);
 
   const openUserProfile = useCallback(async (profile: Profile) => {
     setViewingUser(profile);
@@ -327,25 +324,18 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
       setCustomLocation('');
       setViewingUser(null);
       setViewingUserPosts([]);
+      setUserResults([]);
+      setSearchMode('events');
 
       Animated.parallel([
         Animated.timing(bgOpacity, {
-          toValue: 1,
-          duration: 200,
-          easing: EASING,
-          useNativeDriver: true,
+          toValue: 1, duration: 200, easing: EASING, useNativeDriver: true,
         }),
         Animated.timing(panelTranslateY, {
-          toValue: 0,
-          duration: 250,
-          easing: EASING,
-          useNativeDriver: true,
+          toValue: 0, duration: 250, easing: EASING, useNativeDriver: true,
         }),
         Animated.timing(panelOpacity, {
-          toValue: 1,
-          duration: 250,
-          easing: EASING,
-          useNativeDriver: true,
+          toValue: 1, duration: 250, easing: EASING, useNativeDriver: true,
         }),
       ]).start();
     } else {
@@ -358,22 +348,13 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   const handleClose = () => {
     Animated.parallel([
       Animated.timing(bgOpacity, {
-        toValue: 0,
-        duration: 250,
-        easing: EASING,
-        useNativeDriver: true,
+        toValue: 0, duration: 250, easing: EASING, useNativeDriver: true,
       }),
       Animated.timing(panelOpacity, {
-        toValue: 0,
-        duration: 250,
-        easing: EASING,
-        useNativeDriver: true,
+        toValue: 0, duration: 250, easing: EASING, useNativeDriver: true,
       }),
       Animated.timing(panelTranslateY, {
-        toValue: -30,
-        duration: 250,
-        easing: EASING,
-        useNativeDriver: true,
+        toValue: -30, duration: 250, easing: EASING, useNativeDriver: true,
       }),
     ]).start(() => {
       setShowSearch(false);
@@ -401,7 +382,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
     setCustomLocation('');
   };
 
-  const handleApply = () => {
+  const handleEventSearch = () => {
     setHasSearched(true);
   };
 
@@ -413,7 +394,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
     customDate: showDateInput ? customDate : undefined,
   };
 
-  const results = hasSearched ? filterFlyers(currentFilters, allFlyers) : [];
+  const eventResults = hasSearched ? filterFlyers(currentFilters, allFlyers) : [];
 
   const thumbWidth = (width - 24 * 2 - 12) / 2;
   const thumbHeight = (thumbWidth * 4) / 3;
@@ -441,12 +422,34 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
           <Text style={styles.closeText}>X</Text>
         </TouchableOpacity>
 
+        {/* Mode toggle */}
+        <View style={styles.modeToggle}>
+          <TouchableOpacity
+            style={[styles.modeTab, searchMode === 'events' && styles.modeTabActive]}
+            activeOpacity={0.7}
+            onPress={() => setSearchMode('events')}
+          >
+            <Text style={[styles.modeTabText, searchMode === 'events' && styles.modeTabTextActive]}>
+              Events
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.modeTab, searchMode === 'people' && styles.modeTabActive]}
+            activeOpacity={0.7}
+            onPress={() => setSearchMode('people')}
+          >
+            <Text style={[styles.modeTabText, searchMode === 'people' && styles.modeTabTextActive]}>
+              People
+            </Text>
+          </TouchableOpacity>
+        </View>
+
         <ScrollView
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Search bar — always visible */}
+          {/* Search bar */}
           <View style={styles.searchBar}>
             <TextInput
               style={styles.searchInput}
@@ -455,241 +458,218 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
                 setQuery(text);
                 if (hasSearched) setHasSearched(false);
               }}
-              placeholder="Search events, people..."
+              placeholder={searchMode === 'events' ? 'Search events...' : 'Search by name or @handle...'}
               placeholderTextColor="rgba(2,4,15,0.4)"
               autoCorrect={false}
               autoCapitalize="none"
               returnKeyType="search"
-              onSubmitEditing={handleApply}
+              onSubmitEditing={searchMode === 'events' ? handleEventSearch : undefined}
             />
           </View>
 
-          {/* ─── RESULTS VIEW ─── */}
-          {hasSearched ? (
-            <View>
-              {/* Back to filters */}
-              <TouchableOpacity
-                style={styles.backToFilters}
-                activeOpacity={0.7}
-                onPress={() => setHasSearched(false)}
-              >
-                <Text style={styles.backToFiltersText}>{'\u2039'} Filters</Text>
-              </TouchableOpacity>
+          {/* ═══ EVENTS MODE ═══ */}
+          {searchMode === 'events' && (
+            <>
+              {hasSearched ? (
+                /* Event results view */
+                <View>
+                  <TouchableOpacity
+                    style={styles.backToFilters}
+                    activeOpacity={0.7}
+                    onPress={() => setHasSearched(false)}
+                  >
+                    <Text style={styles.backToFiltersText}>{'\u2039'} Filters</Text>
+                  </TouchableOpacity>
 
-              {/* People results */}
-              {userResults.length > 0 && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>PEOPLE</Text>
-                  {userResults.map((user) => (
-                    <TouchableOpacity
-                      key={user.id}
-                      style={styles.userRow}
-                      activeOpacity={0.7}
-                      onPress={() => openUserProfile(user)}
-                    >
-                      {user.avatar_url ? (
-                        <Image source={{ uri: user.avatar_url }} style={styles.userAvatar} />
-                      ) : (
-                        <View style={[styles.userAvatarFallback, { backgroundColor: user.avatar_color || '#EB736C' }]}>
-                          <Text style={styles.userAvatarInitials}>{user.avatar_initials || '?'}</Text>
-                        </View>
-                      )}
-                      <View style={styles.userInfo}>
-                        <Text style={styles.userName} numberOfLines={1}>
-                          {user.display_name || user.handle}
+                  <View style={styles.resultsSection}>
+                    {eventResults.length > 0 ? (
+                      <>
+                        <Text style={[styles.sectionLabel, { marginBottom: 12 }]}>
+                          {eventResults.length} EVENT{eventResults.length !== 1 ? 'S' : ''} FOUND
                         </Text>
-                        <Text style={styles.userHandle} numberOfLines={1}>{user.handle}</Text>
-                      </View>
-                      <Text style={styles.userArrow}>{'\u203A'}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              )}
+                        <View style={styles.resultsGrid}>
+                          {eventResults.map((post) => {
+                            const imageSource = post.image
+                              ? post.image
+                              : post.image_url
+                              ? { uri: post.image_url }
+                              : null;
 
-              {/* Event results */}
-              <View style={styles.resultsSection}>
-                {results.length > 0 ? (
-                  <>
-                    <Text style={[styles.sectionLabel, { marginBottom: 12 }]}>EVENTS</Text>
-                    <View style={styles.resultsGrid}>
-                      {results.map((post) => {
-                        const imageSource = post.image
-                          ? post.image
-                          : post.image_url
-                          ? { uri: post.image_url }
-                          : null;
-
-                        return (
-                          <View
-                            key={post.id}
-                            style={[
-                              styles.resultCard,
-                              { width: thumbWidth, height: thumbHeight },
-                            ]}
-                          >
-                            {imageSource ? (
-                              <Image
-                                source={imageSource}
-                                style={styles.resultImage}
-                                resizeMode="cover"
-                              />
-                            ) : (
+                            return (
                               <View
-                                style={[
-                                  styles.resultImage,
-                                  { backgroundColor: post.bgColor },
-                                ]}
-                              />
-                            )}
-                            <View style={styles.resultOverlay}>
-                              <Text style={styles.resultTitle} numberOfLines={2}>
-                                {post.title}
-                              </Text>
-                              <Text style={styles.resultDate} numberOfLines={1}>
-                                {post.date_text}
-                              </Text>
-                              {post.profile && !post.is_anonymous && (
-                                <Text style={styles.resultPoster} numberOfLines={1}>
-                                  {post.profile.display_name || post.profile.handle}
-                                </Text>
-                              )}
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </>
-                ) : userResults.length === 0 ? (
-                  <View style={styles.noResults}>
-                    <SearchIcon size={48} color="rgba(2,4,15,0.2)" />
-                    <Text style={styles.noResultsTitle}>No results found</Text>
-                    <Text style={styles.noResultsSubtitle}>Try a different search</Text>
-                  </View>
-                ) : null}
-              </View>
-            </View>
-          ) : (
-            /* ─── FILTERS VIEW ─── */
-            <View>
-              {/* People results — live as you type */}
-              {query.trim().length >= 2 && userResults.length > 0 && (
-                <View style={styles.section}>
-                  <Text style={styles.sectionLabel}>PEOPLE</Text>
-                  {userResults.map((user) => (
-                    <TouchableOpacity
-                      key={user.id}
-                      style={styles.userRow}
-                      activeOpacity={0.7}
-                      onPress={() => openUserProfile(user)}
-                    >
-                      {user.avatar_url ? (
-                        <Image source={{ uri: user.avatar_url }} style={styles.userAvatar} />
-                      ) : (
-                        <View style={[styles.userAvatarFallback, { backgroundColor: user.avatar_color || '#EB736C' }]}>
-                          <Text style={styles.userAvatarInitials}>{user.avatar_initials || '?'}</Text>
+                                key={post.id}
+                                style={[styles.resultCard, { width: thumbWidth, height: thumbHeight }]}
+                              >
+                                {imageSource ? (
+                                  <Image source={imageSource} style={styles.resultImage} resizeMode="cover" />
+                                ) : (
+                                  <View style={[styles.resultImage, { backgroundColor: post.bgColor }]} />
+                                )}
+                                <View style={styles.resultOverlay}>
+                                  <Text style={styles.resultTitle} numberOfLines={2}>{post.title}</Text>
+                                  <Text style={styles.resultDate} numberOfLines={1}>{post.date_text}</Text>
+                                  {post.profile && !post.is_anonymous && (
+                                    <Text style={styles.resultPoster} numberOfLines={1}>
+                                      {post.profile.display_name || post.profile.handle}
+                                    </Text>
+                                  )}
+                                </View>
+                              </View>
+                            );
+                          })}
                         </View>
-                      )}
-                      <View style={styles.userInfo}>
-                        <Text style={styles.userName} numberOfLines={1}>
-                          {user.display_name || user.handle}
-                        </Text>
-                        <Text style={styles.userHandle} numberOfLines={1}>{user.handle}</Text>
+                      </>
+                    ) : (
+                      <View style={styles.noResults}>
+                        <SearchIcon size={48} color="rgba(2,4,15,0.2)" />
+                        <Text style={styles.noResultsTitle}>No events found</Text>
+                        <Text style={styles.noResultsSubtitle}>Try adjusting your filters</Text>
                       </View>
-                      <Text style={styles.userArrow}>{'\u203A'}</Text>
-                    </TouchableOpacity>
-                  ))}
+                    )}
+                  </View>
                 </View>
-              )}
+              ) : (
+                /* Event filters view */
+                <View>
+                  <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>EVENT TYPE</Text>
+                    <View style={styles.chipsRow}>
+                      {EVENT_TYPES.map((type) => (
+                        <Chip
+                          key={type}
+                          label={type}
+                          selected={selectedTypes.includes(type)}
+                          onPress={() => toggleType(type)}
+                        />
+                      ))}
+                    </View>
+                  </View>
 
-              {/* Event Type */}
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>EVENT TYPE</Text>
-                <View style={styles.chipsRow}>
-                  {EVENT_TYPES.map((type) => (
-                    <Chip
-                      key={type}
-                      label={type}
-                      selected={selectedTypes.includes(type)}
-                      onPress={() => toggleType(type)}
-                    />
-                  ))}
-                </View>
-              </View>
+                  <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>WHEN</Text>
+                    <View style={styles.chipsRow}>
+                      {WHEN_OPTIONS.map((when) => (
+                        <Chip
+                          key={when}
+                          label={when}
+                          selected={selectedWhen === when}
+                          onPress={() => toggleWhen(when)}
+                        />
+                      ))}
+                    </View>
+                    {showDateInput && selectedWhen === 'Pick a Date' && (
+                      <View style={styles.dateInputContainer}>
+                        <TextInput
+                          style={styles.dateInput}
+                          value={customDate}
+                          onChangeText={setCustomDate}
+                          placeholder="YYYY-MM-DD"
+                          placeholderTextColor="rgba(2,4,15,0.4)"
+                          autoCorrect={false}
+                          autoCapitalize="none"
+                          keyboardType="numbers-and-punctuation"
+                          maxLength={10}
+                        />
+                      </View>
+                    )}
+                  </View>
 
-              {/* When */}
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>WHEN</Text>
-                <View style={styles.chipsRow}>
-                  {WHEN_OPTIONS.map((when) => (
-                    <Chip
-                      key={when}
-                      label={when}
-                      selected={selectedWhen === when}
-                      onPress={() => toggleWhen(when)}
-                    />
-                  ))}
-                </View>
-                {showDateInput && selectedWhen === 'Pick a Date' && (
-                  <View style={styles.dateInputContainer}>
+                  <View style={styles.section}>
+                    <Text style={styles.sectionLabel}>LOCATION</Text>
+                    <View style={styles.chipsRow}>
+                      {LOCATIONS.map((loc) => (
+                        <Chip
+                          key={loc}
+                          label={loc}
+                          selected={selectedLocation === loc}
+                          onPress={() => toggleLocation(loc)}
+                        />
+                      ))}
+                    </View>
                     <TextInput
-                      style={styles.dateInput}
-                      value={customDate}
-                      onChangeText={setCustomDate}
-                      placeholder="YYYY-MM-DD"
-                      placeholderTextColor="rgba(2,4,15,0.4)"
+                      style={styles.locationInput}
+                      value={customLocation}
+                      onChangeText={(text) => {
+                        setCustomLocation(text);
+                        if (text.trim()) setSelectedLocation(null);
+                      }}
+                      placeholder="Or type any location..."
+                      placeholderTextColor="rgba(2,4,15,0.35)"
                       autoCorrect={false}
                       autoCapitalize="none"
-                      keyboardType="numbers-and-punctuation"
-                      maxLength={10}
+                      returnKeyType="done"
                     />
                   </View>
-                )}
-              </View>
 
-              {/* Location */}
-              <View style={styles.section}>
-                <Text style={styles.sectionLabel}>LOCATION</Text>
-                <View style={styles.chipsRow}>
-                  {LOCATIONS.map((loc) => (
-                    <Chip
-                      key={loc}
-                      label={loc}
-                      selected={selectedLocation === loc}
-                      onPress={() => toggleLocation(loc)}
-                    />
+                  <TouchableOpacity
+                    style={styles.applyButton}
+                    activeOpacity={0.8}
+                    onPress={handleEventSearch}
+                  >
+                    <Text style={styles.applyButtonText}>SEARCH</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </>
+          )}
+
+          {/* ═══ PEOPLE MODE ═══ */}
+          {searchMode === 'people' && (
+            <View>
+              {query.trim().length < 2 ? (
+                <View style={styles.noResults}>
+                  <SearchIcon size={48} color="rgba(2,4,15,0.15)" />
+                  <Text style={styles.noResultsTitle}>Search for people</Text>
+                  <Text style={styles.noResultsSubtitle}>Type a name or @handle</Text>
+                </View>
+              ) : searchingUsers && userResults.length === 0 ? (
+                <View style={styles.noResults}>
+                  <ActivityIndicator size="small" color="rgba(2,4,15,0.3)" />
+                  <Text style={styles.noResultsSubtitle}>Searching...</Text>
+                </View>
+              ) : userResults.length > 0 ? (
+                <View>
+                  <Text style={styles.sectionLabel}>
+                    {userResults.length} RESULT{userResults.length !== 1 ? 'S' : ''}
+                  </Text>
+                  {userResults.map((user) => (
+                    <TouchableOpacity
+                      key={user.id}
+                      style={styles.userRow}
+                      activeOpacity={0.7}
+                      onPress={() => openUserProfile(user)}
+                    >
+                      {user.avatar_url ? (
+                        <Image source={{ uri: user.avatar_url }} style={styles.userAvatar} />
+                      ) : (
+                        <View style={[styles.userAvatarFallback, { backgroundColor: user.avatar_color || '#EB736C' }]}>
+                          <Text style={styles.userAvatarInitials}>{user.avatar_initials || '?'}</Text>
+                        </View>
+                      )}
+                      <View style={styles.userInfo}>
+                        <Text style={styles.userName} numberOfLines={1}>
+                          {user.display_name || user.handle}
+                        </Text>
+                        <Text style={styles.userHandle} numberOfLines={1}>{user.handle}</Text>
+                      </View>
+                      <Text style={styles.userArrow}>{'\u203A'}</Text>
+                    </TouchableOpacity>
                   ))}
                 </View>
-                <TextInput
-                  style={styles.locationInput}
-                  value={customLocation}
-                  onChangeText={(text) => {
-                    setCustomLocation(text);
-                    if (text.trim()) setSelectedLocation(null);
-                  }}
-                  placeholder="Or type any location..."
-                  placeholderTextColor="rgba(2,4,15,0.35)"
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                  returnKeyType="done"
-                />
-              </View>
-
-              {/* Search button */}
-              <TouchableOpacity
-                style={styles.applyButton}
-                activeOpacity={0.8}
-                onPress={handleApply}
-              >
-                <Text style={styles.applyButtonText}>SEARCH</Text>
-              </TouchableOpacity>
+              ) : (
+                <View style={styles.noResults}>
+                  <SearchIcon size={48} color="rgba(2,4,15,0.2)" />
+                  <Text style={styles.noResultsTitle}>No people found</Text>
+                  <Text style={styles.noResultsSubtitle}>Try a different name or handle</Text>
+                </View>
+              )}
             </View>
           )}
         </ScrollView>
 
-        {/* Public profile viewer */}
+        {/* Public profile viewer overlay */}
         {viewingUser && (
           <View style={styles.profileViewer}>
-            {/* Back button */}
             <TouchableOpacity
               style={[styles.profileBackButton, { top: insets.top + 12 }]}
               activeOpacity={0.7}
@@ -705,7 +685,6 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
               contentContainerStyle={[styles.profileScrollContent, { paddingTop: insets.top + 60 }]}
               showsVerticalScrollIndicator={false}
             >
-              {/* User info */}
               <View style={styles.profileHeader}>
                 {viewingUser.avatar_url ? (
                   <Image source={{ uri: viewingUser.avatar_url }} style={styles.profileAvatar} />
@@ -731,7 +710,6 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
                 </Text>
               </View>
 
-              {/* User's posts grid */}
               {loadingUserPosts ? (
                 <Text style={styles.profileLoading}>Loading posts...</Text>
               ) : viewingUserPosts.length > 0 ? (
@@ -805,9 +783,37 @@ const styles = StyleSheet.create({
     color: '#02040F',
     fontWeight: '600',
   },
-  searchBar: {
+  /* Mode toggle */
+  modeToggle: {
+    flexDirection: 'row',
     marginTop: 48,
-    marginBottom: 32,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(2,4,15,0.1)',
+  },
+  modeTab: {
+    flex: 1,
+    paddingVertical: 12,
+    alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+  },
+  modeTabActive: {
+    borderBottomColor: '#02040F',
+  },
+  modeTabText: {
+    fontFamily: FONTS.display,
+    fontSize: 14,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    color: 'rgba(2,4,15,0.35)',
+  },
+  modeTabTextActive: {
+    color: '#02040F',
+  },
+  /* Search bar */
+  searchBar: {
+    marginTop: 16,
+    marginBottom: 24,
   },
   searchInput: {
     fontFamily: FONTS.body,
@@ -897,9 +903,17 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     color: '#02040F',
   },
+  backToFilters: {
+    marginBottom: 16,
+  },
+  backToFiltersText: {
+    fontFamily: FONTS.mono,
+    fontSize: 13,
+    color: 'rgba(2,4,15,0.5)',
+  },
   /* Results */
   resultsSection: {
-    marginTop: 32,
+    marginTop: 8,
   },
   resultsGrid: {
     flexDirection: 'row',
@@ -971,37 +985,29 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(2,4,15,0.35)',
   },
-  backToFilters: {
-    marginBottom: 16,
-  },
-  backToFiltersText: {
-    fontFamily: FONTS.mono,
-    fontSize: 13,
-    color: 'rgba(2,4,15,0.5)',
-  },
-  /* User search rows */
+  /* User rows */
   userRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: 'rgba(2,4,15,0.08)',
   },
   userAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
   },
   userAvatarFallback: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
   },
   userAvatarInitials: {
     fontFamily: FONTS.display,
-    fontSize: 14,
+    fontSize: 15,
     color: '#ffffff',
     fontWeight: '700',
   },
