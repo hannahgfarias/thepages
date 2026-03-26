@@ -48,7 +48,8 @@ function SearchIcon() {
 export default function FeedScreen() {
   const { user } = useAuth();
   const { flyers, loading, error, toggleSave, recordShare, refetch } = useFlyers(user?.id);
-  const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt, setEditingPost, setShowAddEvent } = useOverlay();
+  const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt, setEditingPost, setShowAddEvent, focusPostId, setFocusPostId } = useOverlay();
+  const flatListRef = useRef<FlatList>(null);
   const prevShowAddEvent = useRef(false);
 
   // Refetch feed when AddEventSheet closes (post was potentially added)
@@ -61,6 +62,19 @@ export default function FeedScreen() {
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const cardHeight = height - NAV_HEIGHT - insets.bottom;
+
+  // Scroll to a specific post when focusPostId is set (e.g. tapping a saved post)
+  useEffect(() => {
+    if (focusPostId && filteredFlyersRef.current.length > 0) {
+      const index = filteredFlyersRef.current.findIndex((f) => f.id === focusPostId);
+      if (index >= 0) {
+        setTimeout(() => {
+          flatListRef.current?.scrollToIndex({ index, animated: true });
+        }, 450); // wait for profile panel close animation
+      }
+      setFocusPostId(null);
+    }
+  }, [focusPostId, setFocusPostId]);
 
   // Tag filtering
   const [activeTag, setActiveTag] = useState<string | null>(null);
@@ -157,6 +171,9 @@ export default function FeedScreen() {
 
     return true;
   });
+
+  const filteredFlyersRef = useRef(filteredFlyers);
+  filteredFlyersRef.current = filteredFlyers;
 
   const handleTagPress = useCallback((tag: string) => {
     setActiveTag(tag);
@@ -455,6 +472,7 @@ export default function FeedScreen() {
       {/* Feed */}
       {filteredFlyers.length > 0 && (
         <FlatList
+          ref={flatListRef}
           data={filteredFlyers}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
