@@ -325,6 +325,8 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
       setShowDateInput(false);
       setCustomDate('');
       setCustomLocation('');
+      setViewingUser(null);
+      setViewingUserPosts([]);
 
       Animated.parallel([
         Animated.timing(bgOpacity, {
@@ -400,21 +402,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   };
 
   const handleApply = () => {
-    const locationValue = selectedLocation || (customLocation.trim() || null);
-    const filters: SearchFilters = {
-      query,
-      types: selectedTypes,
-      when: selectedWhen,
-      locations: locationValue,
-      customDate: showDateInput ? customDate : undefined,
-    };
-
-    if (onApplyFilters) {
-      onApplyFilters(filters);
-    }
-
-    // Close the overlay after applying
-    handleClose();
+    setHasSearched(true);
   };
 
   const currentFilters: SearchFilters = {
@@ -458,199 +446,242 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
         >
-          {/* Search bar */}
+          {/* Search bar — always visible */}
           <View style={styles.searchBar}>
             <TextInput
               style={styles.searchInput}
               value={query}
-              onChangeText={setQuery}
+              onChangeText={(text) => {
+                setQuery(text);
+                if (hasSearched) setHasSearched(false);
+              }}
               placeholder="Search events, people..."
               placeholderTextColor="rgba(2,4,15,0.4)"
               autoCorrect={false}
               autoCapitalize="none"
               returnKeyType="search"
+              onSubmitEditing={handleApply}
             />
           </View>
 
-          {/* Debug banner — REMOVE AFTER TESTING */}
-          {query.trim().length >= 2 && (
-            <Text style={{ fontFamily: FONTS.mono, fontSize: 10, color: 'red', marginBottom: 8 }}>
-              DEBUG: flyers={allFlyers.length}, withProfile={allFlyers.filter(f => f.profile).length}, userResults={userResults.length}, searching={String(searchingUsers)}, q="{query}"
-            </Text>
-          )}
+          {/* ─── RESULTS VIEW ─── */}
+          {hasSearched ? (
+            <View>
+              {/* Back to filters */}
+              <TouchableOpacity
+                style={styles.backToFilters}
+                activeOpacity={0.7}
+                onPress={() => setHasSearched(false)}
+              >
+                <Text style={styles.backToFiltersText}>{'\u2039'} Filters</Text>
+              </TouchableOpacity>
 
-          {/* People results — live as you type */}
-          {query.trim().length >= 2 && userResults.length > 0 && (
-            <View style={styles.section}>
-              <Text style={styles.sectionLabel}>PEOPLE</Text>
-              {userResults.map((user) => (
-                <TouchableOpacity
-                  key={user.id}
-                  style={styles.userRow}
-                  activeOpacity={0.7}
-                  onPress={() => openUserProfile(user)}
-                >
-                  {user.avatar_url ? (
-                    <Image source={{ uri: user.avatar_url }} style={styles.userAvatar} />
-                  ) : (
-                    <View style={[styles.userAvatarFallback, { backgroundColor: user.avatar_color || '#EB736C' }]}>
-                      <Text style={styles.userAvatarInitials}>{user.avatar_initials || '?'}</Text>
-                    </View>
-                  )}
-                  <View style={styles.userInfo}>
-                    <Text style={styles.userName} numberOfLines={1}>
-                      {user.display_name || user.handle}
-                    </Text>
-                    <Text style={styles.userHandle} numberOfLines={1}>{user.handle}</Text>
-                  </View>
-                  <Text style={styles.userArrow}>{'\u203A'}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          )}
-
-          {/* Event Type */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>EVENT TYPE</Text>
-            <View style={styles.chipsRow}>
-              {EVENT_TYPES.map((type) => (
-                <Chip
-                  key={type}
-                  label={type}
-                  selected={selectedTypes.includes(type)}
-                  onPress={() => toggleType(type)}
-                />
-              ))}
-            </View>
-          </View>
-
-          {/* When */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>WHEN</Text>
-            <View style={styles.chipsRow}>
-              {WHEN_OPTIONS.map((when) => (
-                <Chip
-                  key={when}
-                  label={when}
-                  selected={selectedWhen === when}
-                  onPress={() => toggleWhen(when)}
-                />
-              ))}
-            </View>
-            {/* Date picker input */}
-            {showDateInput && selectedWhen === 'Pick a Date' && (
-              <View style={styles.dateInputContainer}>
-                <TextInput
-                  style={styles.dateInput}
-                  value={customDate}
-                  onChangeText={setCustomDate}
-                  placeholder="YYYY-MM-DD"
-                  placeholderTextColor="rgba(2,4,15,0.4)"
-                  autoCorrect={false}
-                  autoCapitalize="none"
-                  keyboardType="numbers-and-punctuation"
-                  maxLength={10}
-                />
-              </View>
-            )}
-          </View>
-
-          {/* Location */}
-          <View style={styles.section}>
-            <Text style={styles.sectionLabel}>LOCATION</Text>
-            <View style={styles.chipsRow}>
-              {LOCATIONS.map((loc) => (
-                <Chip
-                  key={loc}
-                  label={loc}
-                  selected={selectedLocation === loc}
-                  onPress={() => toggleLocation(loc)}
-                />
-              ))}
-            </View>
-            <TextInput
-              style={styles.locationInput}
-              value={customLocation}
-              onChangeText={(text) => {
-                setCustomLocation(text);
-                if (text.trim()) setSelectedLocation(null);
-              }}
-              placeholder="Or type any location..."
-              placeholderTextColor="rgba(2,4,15,0.35)"
-              autoCorrect={false}
-              autoCapitalize="none"
-              returnKeyType="done"
-            />
-          </View>
-
-          {/* Search / Apply button */}
-          <TouchableOpacity
-            style={styles.applyButton}
-            activeOpacity={0.8}
-            onPress={handleApply}
-          >
-            <Text style={styles.applyButtonText}>SEARCH</Text>
-          </TouchableOpacity>
-
-          {/* Search Results */}
-          {hasSearched && (
-            <View style={styles.resultsSection}>
-              {results.length > 0 ? (
-                <View style={styles.resultsGrid}>
-                  {results.map((post) => {
-                    const imageSource = post.image
-                      ? post.image
-                      : post.image_url
-                      ? { uri: post.image_url }
-                      : null;
-
-                    return (
-                      <View
-                        key={post.id}
-                        style={[
-                          styles.resultCard,
-                          { width: thumbWidth, height: thumbHeight },
-                        ]}
-                      >
-                        {imageSource ? (
-                          <Image
-                            source={imageSource}
-                            style={styles.resultImage}
-                            resizeMode="cover"
-                          />
-                        ) : (
-                          <View
-                            style={[
-                              styles.resultImage,
-                              { backgroundColor: post.bgColor },
-                            ]}
-                          />
-                        )}
-                        <View style={styles.resultOverlay}>
-                          <Text style={styles.resultTitle} numberOfLines={2}>
-                            {post.title}
-                          </Text>
-                          <Text style={styles.resultDate} numberOfLines={1}>
-                            {post.date_text}
-                          </Text>
-                          {post.profile && !post.is_anonymous && (
-                            <Text style={styles.resultPoster} numberOfLines={1}>
-                              {post.profile.display_name || post.profile.handle}
-                            </Text>
-                          )}
+              {/* People results */}
+              {userResults.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionLabel}>PEOPLE</Text>
+                  {userResults.map((user) => (
+                    <TouchableOpacity
+                      key={user.id}
+                      style={styles.userRow}
+                      activeOpacity={0.7}
+                      onPress={() => openUserProfile(user)}
+                    >
+                      {user.avatar_url ? (
+                        <Image source={{ uri: user.avatar_url }} style={styles.userAvatar} />
+                      ) : (
+                        <View style={[styles.userAvatarFallback, { backgroundColor: user.avatar_color || '#EB736C' }]}>
+                          <Text style={styles.userAvatarInitials}>{user.avatar_initials || '?'}</Text>
                         </View>
+                      )}
+                      <View style={styles.userInfo}>
+                        <Text style={styles.userName} numberOfLines={1}>
+                          {user.display_name || user.handle}
+                        </Text>
+                        <Text style={styles.userHandle} numberOfLines={1}>{user.handle}</Text>
                       </View>
-                    );
-                  })}
-                </View>
-              ) : (
-                /* No results state */
-                <View style={styles.noResults}>
-                  <SearchIcon size={48} color="rgba(2,4,15,0.2)" />
-                  <Text style={styles.noResultsTitle}>No events found</Text>
-                  <Text style={styles.noResultsSubtitle}>Try adjusting your filters</Text>
+                      <Text style={styles.userArrow}>{'\u203A'}</Text>
+                    </TouchableOpacity>
+                  ))}
                 </View>
               )}
+
+              {/* Event results */}
+              <View style={styles.resultsSection}>
+                {results.length > 0 ? (
+                  <>
+                    <Text style={[styles.sectionLabel, { marginBottom: 12 }]}>EVENTS</Text>
+                    <View style={styles.resultsGrid}>
+                      {results.map((post) => {
+                        const imageSource = post.image
+                          ? post.image
+                          : post.image_url
+                          ? { uri: post.image_url }
+                          : null;
+
+                        return (
+                          <View
+                            key={post.id}
+                            style={[
+                              styles.resultCard,
+                              { width: thumbWidth, height: thumbHeight },
+                            ]}
+                          >
+                            {imageSource ? (
+                              <Image
+                                source={imageSource}
+                                style={styles.resultImage}
+                                resizeMode="cover"
+                              />
+                            ) : (
+                              <View
+                                style={[
+                                  styles.resultImage,
+                                  { backgroundColor: post.bgColor },
+                                ]}
+                              />
+                            )}
+                            <View style={styles.resultOverlay}>
+                              <Text style={styles.resultTitle} numberOfLines={2}>
+                                {post.title}
+                              </Text>
+                              <Text style={styles.resultDate} numberOfLines={1}>
+                                {post.date_text}
+                              </Text>
+                              {post.profile && !post.is_anonymous && (
+                                <Text style={styles.resultPoster} numberOfLines={1}>
+                                  {post.profile.display_name || post.profile.handle}
+                                </Text>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  </>
+                ) : userResults.length === 0 ? (
+                  <View style={styles.noResults}>
+                    <SearchIcon size={48} color="rgba(2,4,15,0.2)" />
+                    <Text style={styles.noResultsTitle}>No results found</Text>
+                    <Text style={styles.noResultsSubtitle}>Try a different search</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          ) : (
+            /* ─── FILTERS VIEW ─── */
+            <View>
+              {/* People results — live as you type */}
+              {query.trim().length >= 2 && userResults.length > 0 && (
+                <View style={styles.section}>
+                  <Text style={styles.sectionLabel}>PEOPLE</Text>
+                  {userResults.map((user) => (
+                    <TouchableOpacity
+                      key={user.id}
+                      style={styles.userRow}
+                      activeOpacity={0.7}
+                      onPress={() => openUserProfile(user)}
+                    >
+                      {user.avatar_url ? (
+                        <Image source={{ uri: user.avatar_url }} style={styles.userAvatar} />
+                      ) : (
+                        <View style={[styles.userAvatarFallback, { backgroundColor: user.avatar_color || '#EB736C' }]}>
+                          <Text style={styles.userAvatarInitials}>{user.avatar_initials || '?'}</Text>
+                        </View>
+                      )}
+                      <View style={styles.userInfo}>
+                        <Text style={styles.userName} numberOfLines={1}>
+                          {user.display_name || user.handle}
+                        </Text>
+                        <Text style={styles.userHandle} numberOfLines={1}>{user.handle}</Text>
+                      </View>
+                      <Text style={styles.userArrow}>{'\u203A'}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {/* Event Type */}
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>EVENT TYPE</Text>
+                <View style={styles.chipsRow}>
+                  {EVENT_TYPES.map((type) => (
+                    <Chip
+                      key={type}
+                      label={type}
+                      selected={selectedTypes.includes(type)}
+                      onPress={() => toggleType(type)}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              {/* When */}
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>WHEN</Text>
+                <View style={styles.chipsRow}>
+                  {WHEN_OPTIONS.map((when) => (
+                    <Chip
+                      key={when}
+                      label={when}
+                      selected={selectedWhen === when}
+                      onPress={() => toggleWhen(when)}
+                    />
+                  ))}
+                </View>
+                {showDateInput && selectedWhen === 'Pick a Date' && (
+                  <View style={styles.dateInputContainer}>
+                    <TextInput
+                      style={styles.dateInput}
+                      value={customDate}
+                      onChangeText={setCustomDate}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor="rgba(2,4,15,0.4)"
+                      autoCorrect={false}
+                      autoCapitalize="none"
+                      keyboardType="numbers-and-punctuation"
+                      maxLength={10}
+                    />
+                  </View>
+                )}
+              </View>
+
+              {/* Location */}
+              <View style={styles.section}>
+                <Text style={styles.sectionLabel}>LOCATION</Text>
+                <View style={styles.chipsRow}>
+                  {LOCATIONS.map((loc) => (
+                    <Chip
+                      key={loc}
+                      label={loc}
+                      selected={selectedLocation === loc}
+                      onPress={() => toggleLocation(loc)}
+                    />
+                  ))}
+                </View>
+                <TextInput
+                  style={styles.locationInput}
+                  value={customLocation}
+                  onChangeText={(text) => {
+                    setCustomLocation(text);
+                    if (text.trim()) setSelectedLocation(null);
+                  }}
+                  placeholder="Or type any location..."
+                  placeholderTextColor="rgba(2,4,15,0.35)"
+                  autoCorrect={false}
+                  autoCapitalize="none"
+                  returnKeyType="done"
+                />
+              </View>
+
+              {/* Search button */}
+              <TouchableOpacity
+                style={styles.applyButton}
+                activeOpacity={0.8}
+                onPress={handleApply}
+              >
+                <Text style={styles.applyButtonText}>SEARCH</Text>
+              </TouchableOpacity>
             </View>
           )}
         </ScrollView>
@@ -939,6 +970,14 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
     fontSize: 14,
     color: 'rgba(2,4,15,0.35)',
+  },
+  backToFilters: {
+    marginBottom: 16,
+  },
+  backToFiltersText: {
+    fontFamily: FONTS.mono,
+    fontSize: 13,
+    color: 'rgba(2,4,15,0.5)',
   },
   /* User search rows */
   userRow: {
