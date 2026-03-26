@@ -42,6 +42,8 @@ export interface Post {
   is_anonymous: boolean;
   moderation_status: ModerationStatus;
   report_count: number;
+  save_count: number;
+  share_count: number;
   created_at: string;
   // CTA button text
   link: string;
@@ -83,6 +85,8 @@ export interface OGMetadata {
 }
 
 export interface ScanOccurrence {
+  title: string;
+  subtitle: string;
   date: string;
   location: string;
 }

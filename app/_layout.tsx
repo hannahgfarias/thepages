@@ -43,6 +43,7 @@ export default function RootLayout() {
           <StatusBar style="light" />
           <Stack screenOptions={{ headerShown: false }}>
             <Stack.Screen name="(tabs)" />
+            <Stack.Screen name="event/[id]" />
           </Stack>
         </View>
       </ToastProvider>

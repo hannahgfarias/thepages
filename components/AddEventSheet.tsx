@@ -5,12 +5,10 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Animated,
-  Easing,
   ScrollView,
   KeyboardAvoidingView,
+  Modal,
   Platform,
-  useWindowDimensions,
   Image,
   Alert,
   ActionSheetIOS,
@@ -24,8 +22,6 @@ import Svg, { Path } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
-
-const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
 const CATEGORIES = [
   'Party', 'Music', 'Community', 'Arts', 'Wellness', 'Food', 'Free', 'Theatre',
@@ -46,7 +42,6 @@ function hasBasicPII(text: string): { found: boolean; type: string } {
 export function AddEventSheet() {
   const { showAddEvent, setShowAddEvent, editingPost, setEditingPost } = useOverlay();
   const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -74,10 +69,13 @@ export function AddEventSheet() {
   const [showLinkField, setShowLinkField] = useState(false);
   const [fetchingOG, setFetchingOG] = useState(false);
   const ogDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [occurrences, setOccurrences] = useState<Array<{ date: string; location: string }>>([]);
+  const [occurrences, setOccurrences] = useState<Array<{ title: string; subtitle: string; date: string; location: string }>>([]);
   const [locationResults, setLocationResults] = useState<Array<{ display_name: string; name: string; address: any }>>([]);
   const [showLocationResults, setShowLocationResults] = useState(false);
   const locationDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track which occurrence's date/location is being edited (-1 = none)
+  const [editingOccDate, setEditingOccDate] = useState(-1);
+  const [editingOccLocation, setEditingOccLocation] = useState(-1);
 
   const addTag = () => {
     const cleaned = tagInput.trim().replace(/^#/, '');
@@ -227,35 +225,96 @@ export function AddEventSheet() {
   };
 
   const selectLocation = (result: any) => {
-    setLocation(result.display);
+    if (editingOccLocation >= 0) {
+      // Selecting for an occurrence
+      const updated = [...occurrences];
+      updated[editingOccLocation] = { ...updated[editingOccLocation], location: result.display };
+      setOccurrences(updated);
+      setEditingOccLocation(-1);
+    } else {
+      setLocation(result.display);
+    }
     setShowLocationResults(false);
     setLocationResults([]);
   };
 
-  const slideY = useRef(new Animated.Value(height)).current;
-  const scrimOpacity = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (showAddEvent) {
-      Animated.parallel([
-        Animated.timing(slideY, {
-          toValue: 0,
-          duration: 250,
-          easing: EASING,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scrimOpacity, {
-          toValue: 1,
-          duration: 200,
-          easing: EASING,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      slideY.setValue(height);
-      scrimOpacity.setValue(0);
+  // Search location for an occurrence
+  const searchOccLocation = (query: string, index: number) => {
+    const updated = [...occurrences];
+    updated[index] = { ...updated[index], location: query };
+    setOccurrences(updated);
+    setEditingOccLocation(index);
+    // Reuse the same search logic
+    if (locationDebounce.current) clearTimeout(locationDebounce.current);
+    if (query.length < 2) {
+      setLocationResults([]);
+      setShowLocationResults(false);
+      return;
     }
-  }, [showAddEvent, slideY, scrimOpacity, height]);
+    locationDebounce.current = setTimeout(async () => {
+      try {
+        const [photonRes, nominatimRes] = await Promise.allSettled([
+          fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=4&lang=en&osm_tag=amenity&osm_tag=shop&osm_tag=tourism&osm_tag=leisure`),
+          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=4&addressdetails=1&countrycodes=us`, { headers: { 'User-Agent': 'ThePages/1.0' } }),
+        ]);
+        const combined: any[] = [];
+        const seen = new Set<string>();
+        if (photonRes.status === 'fulfilled') {
+          const photonData = await photonRes.value.json();
+          (photonData.features || []).forEach((f: any) => {
+            const p = f.properties;
+            const name = p.name || '';
+            const street = p.housenumber ? `${p.housenumber} ${p.street || ''}` : (p.street || '');
+            const city = p.city || p.town || p.village || '';
+            const state = p.state || '';
+            const addressParts = [street, city, state].filter(Boolean).join(', ');
+            const key = `${name}|${addressParts}`.toLowerCase();
+            if (!seen.has(key) && (name || street)) {
+              seen.add(key);
+              combined.push({ name, address: addressParts, display: name && addressParts ? `${name}, ${addressParts}` : (name || addressParts) });
+            }
+          });
+        }
+        if (nominatimRes.status === 'fulfilled') {
+          const nomData = await nominatimRes.value.json();
+          (nomData || []).forEach((r: any) => {
+            const a = r.address || {};
+            const name = r.name || a.amenity || a.shop || a.tourism || '';
+            const houseNum = a.house_number || '';
+            const road = a.road || '';
+            const street = houseNum ? `${houseNum} ${road}` : road;
+            const city = a.city || a.town || a.village || a.hamlet || '';
+            const state = a.state || '';
+            const addressParts = [street, city, state].filter(Boolean).join(', ');
+            const key = `${name}|${addressParts}`.toLowerCase();
+            if (!seen.has(key) && (name || street)) {
+              seen.add(key);
+              combined.push({ name: name && name !== road ? name : '', address: addressParts, display: name && name !== road && addressParts ? `${name}, ${addressParts}` : (addressParts || name) });
+            }
+          });
+        }
+        setLocationResults(combined.slice(0, 6));
+        setShowLocationResults(combined.length > 0);
+      } catch {
+        setLocationResults([]);
+        setShowLocationResults(false);
+      }
+    }, 350);
+  };
+
+  // Select a date for an occurrence from the calendar
+  const selectOccDate = (day: number, index: number) => {
+    const date = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day);
+    const MONTHS_SHORT = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    const dateStr = `${DAYS[date.getDay()]} ${MONTHS_SHORT[date.getMonth()]} ${date.getDate()}`;
+    const updated = [...occurrences];
+    updated[index] = { ...updated[index], date: dateStr };
+    setOccurrences(updated);
+    setEditingOccDate(-1);
+  };
+
+
 
   const [scanError, setScanError] = useState<string | null>(null);
 
@@ -287,7 +346,12 @@ export function AddEventSheet() {
         }
         // If multiple dates/locations detected, store them for multi-post creation
         if (data.occurrences && data.occurrences.length > 1) {
-          setOccurrences(data.occurrences);
+          setOccurrences(data.occurrences.map((occ: any) => ({
+            title: occ.title || data.title || '',
+            subtitle: occ.subtitle || '',
+            date: occ.date || '',
+            location: occ.location || '',
+          })));
         } else {
           setOccurrences([]);
         }
@@ -433,6 +497,7 @@ export function AddEventSheet() {
   const resetForm = () => {
     setImageUri(null);
     setScanning(false);
+    setScanError(null);
     setTitle('');
     setSubtitle('');
     setDescription('');
@@ -454,6 +519,11 @@ export function AddEventSheet() {
     setShowLinkField(false);
     setOccurrences([]);
     setIsPublic(true);
+    setLocationResults([]);
+    setShowLocationResults(false);
+    setShowLinkField(false);
+    setOccurrences([]);
+    setIsPublic(true);
     setIsAnonymous(false);
     setPublishing(false);
     setScanError(null);
@@ -462,24 +532,9 @@ export function AddEventSheet() {
   };
 
   const handleClose = () => {
-    Animated.parallel([
-      Animated.timing(slideY, {
-        toValue: height,
-        duration: 220,
-        easing: EASING,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scrimOpacity, {
-        toValue: 0,
-        duration: 180,
-        easing: EASING,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      resetForm();
-      setEditingPost(null);
-      setShowAddEvent(false);
-    });
+    resetForm();
+    setEditingPost(null);
+    setShowAddEvent(false);
   };
 
   const handleSubmit = async () => {
@@ -631,10 +686,12 @@ export function AddEventSheet() {
         handleClose();
       } else {
         // INSERT new post(s)
-        // If multiple occurrences detected, create one post per date/location
+        // If multiple occurrences detected, create one post per occurrence with its own title/subtitle/date/location
         const postsToInsert = occurrences.length > 1
           ? occurrences.map((occ) => ({
               ...postBase,
+              title: (occ.title || '').trim() || postBase.title,
+              subtitle: (occ.subtitle || '').trim() || postBase.subtitle,
               date_text: (occ.date != null && occ.date !== '') ? occ.date : dateTime || null,
               location: (occ.location != null && occ.location !== '') ? occ.location : location || null,
             }))
@@ -692,41 +749,38 @@ export function AddEventSheet() {
   if (!showAddEvent) return null;
 
   return (
-    <View style={[StyleSheet.absoluteFill, { zIndex: 90 }]} pointerEvents="box-none">
-      {/* Scrim */}
-      <Animated.View style={[styles.scrim, { opacity: scrimOpacity }]} pointerEvents="auto">
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={handleClose}
-        />
-      </Animated.View>
-
-      {/* Sheet */}
-      <Animated.View
-        style={[
-          styles.sheet,
-          {
-            maxHeight: '92%',
-            height: Platform.OS === 'web' ? '92vh' : height * 0.92,
-            transform: [{ translateY: slideY }],
-          } as any,
-        ]}
-      >
-        <ScrollView
+    <Modal
+      visible={showAddEvent}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={handleClose}
+    >
+      <View style={styles.modalContainer}>
+        <KeyboardAvoidingView
           style={{ flex: 1 }}
-          showsVerticalScrollIndicator
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.scrollContent}
-          bounces
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator
+              bounces
+            >
             {/* Handle bar */}
             <View style={styles.handleContainer}>
               <View style={styles.handle} />
+              <TouchableOpacity
+                style={styles.closeButton}
+                activeOpacity={0.7}
+                onPress={handleClose}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Title */}
-            <Text style={styles.sheetTitle}>{editingPost ? 'EDIT EVENT' : 'SHARE SOMETHING HAPPENING'}</Text>
+            <Text style={styles.sheetTitle}>{editingPost ? 'EDIT EVENT' : occurrences.length > 1 ? `${occurrences.length} EVENTS DETECTED` : 'SHARE SOMETHING HAPPENING'}</Text>
 
             {/* Upload zone */}
             <TouchableOpacity
@@ -781,26 +835,30 @@ export function AddEventSheet() {
               </TouchableOpacity>
             )}
 
-            {/* Form fields */}
-            <View style={styles.field}>
-              <TextInput
-                style={styles.input}
-                value={title}
-                onChangeText={setTitle}
-                placeholder="Event title"
-                placeholderTextColor="#999"
-              />
-            </View>
+            {/* Form fields — hidden when multi-event detected (each occurrence has its own) */}
+            {occurrences.length <= 1 && (
+              <>
+                <View style={styles.field}>
+                  <TextInput
+                    style={styles.input}
+                    value={title}
+                    onChangeText={setTitle}
+                    placeholder="Event title"
+                    placeholderTextColor="#999"
+                  />
+                </View>
 
-            <View style={styles.field}>
-              <TextInput
-                style={styles.input}
-                value={subtitle}
-                onChangeText={setSubtitle}
-                placeholder="Tagline or subtitle (optional)"
-                placeholderTextColor="#999"
-              />
-            </View>
+                <View style={styles.field}>
+                  <TextInput
+                    style={styles.input}
+                    value={subtitle}
+                    onChangeText={setSubtitle}
+                    placeholder="Tagline or subtitle (optional)"
+                    placeholderTextColor="#999"
+                  />
+                </View>
+              </>
+            )}
 
             <View style={styles.field}>
               <TextInput
@@ -814,6 +872,9 @@ export function AddEventSheet() {
               />
             </View>
 
+            {/* Date, location — hidden when multi-event (each occurrence has its own) */}
+            {occurrences.length <= 1 && (
+              <>
             {/* Date & time — tappable to open calendar */}
             <TouchableOpacity
               style={styles.field}
@@ -1079,26 +1140,164 @@ export function AddEventSheet() {
                 </View>
               )}
             </View>
+              </>
+            )}
 
-            {/* Multiple dates/locations detected */}
+            {/* Multiple dates/locations detected — editable sections */}
             {occurrences.length > 1 && (
-              <View style={{ backgroundColor: 'rgba(120,184,150,0.12)', borderRadius: 8, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(120,184,150,0.25)' }}>
-                <Text style={{ fontFamily: FONTS.display, fontSize: 12, letterSpacing: 1.5, color: '#78B896', marginBottom: 8 }}>
-                  {occurrences.length} DATES/LOCATIONS DETECTED — ONE POST EACH
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontFamily: FONTS.display, fontSize: 12, letterSpacing: 1.5, color: '#78B896', marginBottom: 12 }}>
+                  {occurrences.length} EVENTS DETECTED — EDIT EACH BELOW
                 </Text>
                 {occurrences.map((occ, i) => (
-                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 6, borderTopWidth: i > 0 ? 1 : 0, borderTopColor: 'rgba(120,184,150,0.15)' }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: '#02040F' }}>
-                        {occ.date}{occ.date && occ.location ? '  ·  ' : ''}{occ.location}
+                  <View key={i} style={styles.occurrenceCard}>
+                    <View style={styles.occurrenceHeader}>
+                      <Text style={styles.occurrenceLabel}>
+                        EVENT {i + 1} OF {occurrences.length}
                       </Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setOccurrences(occurrences.filter((_, idx) => idx !== i));
+                          if (editingOccDate === i) setEditingOccDate(-1);
+                          if (editingOccLocation === i) setEditingOccLocation(-1);
+                        }}
+                        style={{ padding: 4 }}
+                      >
+                        <Text style={styles.occurrenceRemove}>Remove</Text>
+                      </TouchableOpacity>
                     </View>
+                    <TextInput
+                      style={[styles.input, styles.occurrenceInput]}
+                      value={occ.title}
+                      onChangeText={(text) => {
+                        const updated = [...occurrences];
+                        updated[i] = { ...updated[i], title: text };
+                        setOccurrences(updated);
+                      }}
+                      placeholder="Title"
+                      placeholderTextColor="#999"
+                      multiline
+                    />
+                    <TextInput
+                      style={[styles.input, styles.occurrenceInput]}
+                      value={occ.subtitle}
+                      onChangeText={(text) => {
+                        const updated = [...occurrences];
+                        updated[i] = { ...updated[i], subtitle: text };
+                        setOccurrences(updated);
+                      }}
+                      placeholder="Subtitle / performer"
+                      placeholderTextColor="#999"
+                      multiline
+                    />
+
+                    {/* Date — tappable to open calendar */}
                     <TouchableOpacity
-                      onPress={() => setOccurrences(occurrences.filter((_, idx) => idx !== i))}
-                      style={{ padding: 4, marginLeft: 8 }}
+                      style={styles.occurrenceInput}
+                      activeOpacity={0.7}
+                      onPress={() => setEditingOccDate(editingOccDate === i ? -1 : i)}
                     >
-                      <Text style={{ fontFamily: FONTS.mono, fontSize: 14, color: 'rgba(2,4,15,0.3)' }}>✕</Text>
+                      <View style={styles.input}>
+                        <Text style={[styles.inputText, !occ.date && { color: '#999' }]}>
+                          {occ.date || 'Date & time'}
+                        </Text>
+                        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                          <Path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" stroke="#999" strokeWidth={1.5} strokeLinecap="round" />
+                        </Svg>
+                      </View>
                     </TouchableOpacity>
+
+                    {/* Inline calendar for this occurrence */}
+                    {editingOccDate === i && (
+                      <View style={[styles.calendarContainer, { marginBottom: 8 }]}>
+                        <View style={styles.calendarHeader}>
+                          <TouchableOpacity onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1))}>
+                            <Text style={styles.calendarNav}>‹</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.calendarMonthLabel}>
+                            {MONTHS[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
+                          </Text>
+                          <TouchableOpacity onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1))}>
+                            <Text style={styles.calendarNav}>›</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <View style={styles.calendarWeekdays}>
+                          {WEEKDAYS.map((d) => (
+                            <Text key={d} style={styles.calendarWeekday}>{d}</Text>
+                          ))}
+                        </View>
+                        <View style={styles.calendarGrid}>
+                          {getDaysInMonth(calendarMonth).map((day, di) => {
+                            const isToday = day === new Date().getDate() &&
+                              calendarMonth.getMonth() === new Date().getMonth() &&
+                              calendarMonth.getFullYear() === new Date().getFullYear();
+                            return (
+                              <TouchableOpacity
+                                key={di}
+                                style={[
+                                  styles.calendarDay,
+                                  isToday && styles.calendarDayToday,
+                                ]}
+                                activeOpacity={day ? 0.7 : 1}
+                                onPress={() => day && selectOccDate(day, i)}
+                              >
+                                <Text style={styles.calendarDayText}>
+                                  {day || ''}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                        <TouchableOpacity
+                          style={styles.pickerDoneButton}
+                          activeOpacity={0.8}
+                          onPress={() => setEditingOccDate(-1)}
+                        >
+                          <Text style={styles.pickerDoneText}>DONE</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {/* Location — searchable with dropdown */}
+                    <View style={styles.locationField}>
+                      <TextInput
+                        style={[styles.input, { marginBottom: 0 }]}
+                        value={occ.location}
+                        onChangeText={(text) => searchOccLocation(text, i)}
+                        placeholder="Search venue or address"
+                        placeholderTextColor="#999"
+                        onFocus={() => {
+                          setEditingOccLocation(i);
+                          if (locationResults.length > 0) setShowLocationResults(true);
+                        }}
+                        onBlur={() => {
+                          setTimeout(() => {
+                            if (editingOccLocation === i) setShowLocationResults(false);
+                          }, 200);
+                        }}
+                      />
+                      {showLocationResults && editingOccLocation === i && locationResults.length > 0 && (
+                        <View style={styles.locationDropdown}>
+                          {locationResults.map((result: any, ri: number) => (
+                            <TouchableOpacity
+                              key={ri}
+                              style={styles.locationResult}
+                              activeOpacity={0.7}
+                              onPress={() => selectLocation(result)}
+                            >
+                              {result.name ? (
+                                <>
+                                  <Text style={styles.locationResultName} numberOfLines={1}>{result.name}</Text>
+                                  <Text style={styles.locationResultSub} numberOfLines={2}>{result.address}</Text>
+                                </>
+                              ) : (
+                                <Text style={styles.locationResultName} numberOfLines={2}>{result.address}</Text>
+                              )}
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+                    </View>
                   </View>
                 ))}
               </View>
@@ -1220,57 +1419,30 @@ export function AddEventSheet() {
               />
             </View>
 
-            {/* Anonymous toggle */}
-            <View style={styles.visibilityRow}>
-              <View>
-                <Text style={styles.visibilityLabel}>
-                  {isAnonymous ? 'Posting Anonymously' : 'Posting as You'}
-                </Text>
-                <Text style={styles.visibilityHint}>
-                  {isAnonymous ? 'Your name won\'t appear on this post' : 'Your handle will be shown on this post'}
-                </Text>
-              </View>
-              <Switch
-                value={isAnonymous}
-                onValueChange={setIsAnonymous}
-                trackColor={{ true: '#EB736C', false: '#ddd' }}
-                thumbColor="#fff"
-              />
-            </View>
 
-        </ScrollView>
+          </ScrollView>
 
-        {/* Sticky submit button */}
-        <TouchableOpacity
-          style={[styles.submitButton, { paddingBottom: insets.bottom + 20 }, publishing && styles.submitButtonDisabled]}
-          activeOpacity={0.8}
-          onPress={handleSubmit}
-          disabled={publishing}
-        >
-          <Text style={styles.submitText}>
-            {publishing ? 'CHECKING CONTENT...' : editingPost ? 'UPDATE EVENT' : 'POST TO THE PAGES'}
-          </Text>
-        </TouchableOpacity>
-      </Animated.View>
-    </View>
+          {/* Sticky submit button */}
+          <TouchableOpacity
+            style={[styles.submitButton, { paddingBottom: insets.bottom + 20 }, publishing && styles.submitButtonDisabled]}
+            activeOpacity={0.8}
+            onPress={handleSubmit}
+            disabled={publishing}
+          >
+            <Text style={styles.submitText}>
+              {publishing ? 'CHECKING CONTENT...' : editingPost ? 'UPDATE EVENT' : 'POST TO THE PAGES'}
+            </Text>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  scrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.scrim,
-    zIndex: 90,
-  },
-  sheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  modalContainer: {
+    flex: 1,
     backgroundColor: COLORS.sheetBg,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    zIndex: 91,
   },
   scrollContent: {
     paddingHorizontal: 24,
@@ -1280,6 +1452,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 12,
     paddingBottom: 16,
+    position: 'relative',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 0,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeButtonText: {
+    fontFamily: FONTS.body,
+    fontSize: 18,
+    color: 'rgba(2,4,15,0.4)',
   },
   handle: {
     width: 36,
@@ -1706,6 +1893,34 @@ const styles = StyleSheet.create({
   },
   submitButtonDisabled: {
     opacity: 0.6,
+  },
+  occurrenceCard: {
+    backgroundColor: 'rgba(120,184,150,0.08)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(120,184,150,0.2)',
+  },
+  occurrenceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  occurrenceLabel: {
+    fontFamily: FONTS.display,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    color: '#78B896',
+  },
+  occurrenceRemove: {
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    color: 'rgba(2,4,15,0.3)',
+  },
+  occurrenceInput: {
+    marginBottom: 8,
   },
   submitText: {
     fontFamily: FONTS.display,

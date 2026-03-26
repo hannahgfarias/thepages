@@ -19,8 +19,12 @@ import { useOverlay } from '../app/(tabs)/_layout';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { detectCity, pickImageFromLibrary } from '../lib/platform';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { TermsAgeGate } from './TermsAgeGate';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
+
+const TERMS_ACCEPTED_KEY = 'the_pages_terms_accepted';
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
@@ -42,6 +46,7 @@ export function AuthFlow() {
   const [otpError, setOtpError] = useState<string | null>(null);
   const [sendingCode, setSendingCode] = useState(false);
   const [verifying, setVerifying] = useState(false);
+  const [showTerms, setShowTerms] = useState(false);
 
   // Profile step state
   const [displayName, setDisplayName] = useState('');
@@ -175,8 +180,18 @@ export function AuthFlow() {
             console.log('[AUTH] Returning user, closing auth flow');
             handleClose();
           } else {
-            // New user — go through profile setup
-            setStep('profile');
+            // New user — show terms if not yet accepted, then profile setup
+            let accepted: string | null = null;
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              accepted = window.localStorage.getItem(TERMS_ACCEPTED_KEY);
+            } else {
+              accepted = await AsyncStorage.getItem(TERMS_ACCEPTED_KEY);
+            }
+            if (accepted === 'true') {
+              setStep('profile');
+            } else {
+              setShowTerms(true);
+            }
           }
         } else {
           setOtpError('Invalid or expired code. Try again or resend.');
@@ -340,6 +355,16 @@ export function AuthFlow() {
     handleClose();
   };
 
+  const handleTermsAccepted = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.localStorage.setItem(TERMS_ACCEPTED_KEY, 'true');
+    } else {
+      AsyncStorage.setItem(TERMS_ACCEPTED_KEY, 'true');
+    }
+    setShowTerms(false);
+    setStep('profile');
+  };
+
   const togglePref = (pref: string) => {
     setSelectedPrefs((prev) =>
       prev.includes(pref) ? prev.filter((p) => p !== pref) : [...prev, pref]
@@ -352,6 +377,7 @@ export function AuthFlow() {
   const avatarInitial = displayName.trim() ? displayName.trim()[0].toUpperCase() : '?';
 
   return (
+    <>
     <Animated.View style={[styles.overlay, { opacity }]}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -697,6 +723,10 @@ export function AuthFlow() {
         </ScrollView>
       </KeyboardAvoidingView>
     </Animated.View>
+
+    {/* Terms & Age Gate — shown after OTP for new users */}
+    <TermsAgeGate visible={showTerms} onAccept={handleTermsAccepted} />
+    </>
   );
 }
 
