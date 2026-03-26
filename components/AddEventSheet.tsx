@@ -723,6 +723,14 @@ export function AddEventSheet() {
             {/* Handle bar */}
             <View style={styles.handleContainer}>
               <View style={styles.handle} />
+              <TouchableOpacity
+                style={styles.closeButton}
+                activeOpacity={0.7}
+                onPress={handleClose}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              >
+                <Text style={styles.closeButtonText}>✕</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Title */}
@@ -1280,6 +1288,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: 12,
     paddingBottom: 16,
+    position: 'relative',
+  },
+  closeButton: {
+    position: 'absolute',
+    top: 10,
+    right: 0,
+    width: 32,
+    height: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  closeButtonText: {
+    fontFamily: FONTS.body,
+    fontSize: 18,
+    color: 'rgba(2,4,15,0.4)',
   },
   handle: {
     width: 36,
