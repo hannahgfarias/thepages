@@ -90,9 +90,17 @@ function OverlayProvider({ children }: { children: React.ReactNode }) {
   const [showSearch, setShowSearch] = useState(false);
   const [showAddEvent, setShowAddEvent] = useState(false);
   const [showProfile, setShowProfileRaw] = useState(() => {
-    // Restore profile state on web page refresh
+    // Restore profile state on web page refresh — but only if there's a session
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      return window.sessionStorage.getItem('the_pages_show_profile') === 'true';
+      const wasShowingProfile = window.sessionStorage.getItem('the_pages_show_profile') === 'true';
+      if (wasShowingProfile) {
+        // Check if there's a valid Supabase session in localStorage
+        // If not, don't restore profile (user cleared auth)
+        const hasSession = Object.keys(window.localStorage).some(
+          (k) => k.startsWith('sb-') && k.endsWith('-auth-token')
+        );
+        return hasSession;
+      }
     }
     return false;
   });
@@ -280,19 +288,20 @@ function ConnectedSearchOverlay() {
 /* ─── Inner Layout (needs auth context for FlyersProvider) ─── */
 
 function InnerLayout() {
-  const { session } = useAuthContext();
+  const { session, loading: authLoading } = useAuthContext();
   const userId = session?.user?.id;
   const isAuthenticated = !!session;
   const { showProfile, setShowProfile, setShowAuthPrompt } = useOverlay();
 
   // Guard: if profile panel was restored from sessionStorage but user is not
-  // authenticated (e.g. cleared browser), reset it and show auth prompt
+  // authenticated (e.g. cleared browser), reset it and show auth prompt.
+  // Wait for auth to finish loading before deciding.
   useEffect(() => {
-    if (showProfile && !isAuthenticated) {
+    if (showProfile && !authLoading && !isAuthenticated) {
       setShowProfile(false);
       setShowAuthPrompt(true);
     }
-  }, [showProfile, isAuthenticated, setShowProfile, setShowAuthPrompt]);
+  }, [showProfile, isAuthenticated, authLoading, setShowProfile, setShowAuthPrompt]);
 
   return (
     <FlyersProvider userId={userId}>
