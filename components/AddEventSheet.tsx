@@ -73,6 +73,9 @@ export function AddEventSheet() {
   const [locationResults, setLocationResults] = useState<Array<{ display_name: string; name: string; address: any }>>([]);
   const [showLocationResults, setShowLocationResults] = useState(false);
   const locationDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Track which occurrence's date/location is being edited (-1 = none)
+  const [editingOccDate, setEditingOccDate] = useState(-1);
+  const [editingOccLocation, setEditingOccLocation] = useState(-1);
 
   const addTag = () => {
     const cleaned = tagInput.trim().replace(/^#/, '');
@@ -222,9 +225,93 @@ export function AddEventSheet() {
   };
 
   const selectLocation = (result: any) => {
-    setLocation(result.display);
+    if (editingOccLocation >= 0) {
+      // Selecting for an occurrence
+      const updated = [...occurrences];
+      updated[editingOccLocation] = { ...updated[editingOccLocation], location: result.display };
+      setOccurrences(updated);
+      setEditingOccLocation(-1);
+    } else {
+      setLocation(result.display);
+    }
     setShowLocationResults(false);
     setLocationResults([]);
+  };
+
+  // Search location for an occurrence
+  const searchOccLocation = (query: string, index: number) => {
+    const updated = [...occurrences];
+    updated[index] = { ...updated[index], location: query };
+    setOccurrences(updated);
+    setEditingOccLocation(index);
+    // Reuse the same search logic
+    if (locationDebounce.current) clearTimeout(locationDebounce.current);
+    if (query.length < 2) {
+      setLocationResults([]);
+      setShowLocationResults(false);
+      return;
+    }
+    locationDebounce.current = setTimeout(async () => {
+      try {
+        const [photonRes, nominatimRes] = await Promise.allSettled([
+          fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=4&lang=en&osm_tag=amenity&osm_tag=shop&osm_tag=tourism&osm_tag=leisure`),
+          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=4&addressdetails=1&countrycodes=us`, { headers: { 'User-Agent': 'ThePages/1.0' } }),
+        ]);
+        const combined: any[] = [];
+        const seen = new Set<string>();
+        if (photonRes.status === 'fulfilled') {
+          const photonData = await photonRes.value.json();
+          (photonData.features || []).forEach((f: any) => {
+            const p = f.properties;
+            const name = p.name || '';
+            const street = p.housenumber ? `${p.housenumber} ${p.street || ''}` : (p.street || '');
+            const city = p.city || p.town || p.village || '';
+            const state = p.state || '';
+            const addressParts = [street, city, state].filter(Boolean).join(', ');
+            const key = `${name}|${addressParts}`.toLowerCase();
+            if (!seen.has(key) && (name || street)) {
+              seen.add(key);
+              combined.push({ name, address: addressParts, display: name && addressParts ? `${name}, ${addressParts}` : (name || addressParts) });
+            }
+          });
+        }
+        if (nominatimRes.status === 'fulfilled') {
+          const nomData = await nominatimRes.value.json();
+          (nomData || []).forEach((r: any) => {
+            const a = r.address || {};
+            const name = r.name || a.amenity || a.shop || a.tourism || '';
+            const houseNum = a.house_number || '';
+            const road = a.road || '';
+            const street = houseNum ? `${houseNum} ${road}` : road;
+            const city = a.city || a.town || a.village || a.hamlet || '';
+            const state = a.state || '';
+            const addressParts = [street, city, state].filter(Boolean).join(', ');
+            const key = `${name}|${addressParts}`.toLowerCase();
+            if (!seen.has(key) && (name || street)) {
+              seen.add(key);
+              combined.push({ name: name && name !== road ? name : '', address: addressParts, display: name && name !== road && addressParts ? `${name}, ${addressParts}` : (addressParts || name) });
+            }
+          });
+        }
+        setLocationResults(combined.slice(0, 6));
+        setShowLocationResults(combined.length > 0);
+      } catch {
+        setLocationResults([]);
+        setShowLocationResults(false);
+      }
+    }, 350);
+  };
+
+  // Select a date for an occurrence from the calendar
+  const selectOccDate = (day: number, index: number) => {
+    const date = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth(), day);
+    const MONTHS_SHORT = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+    const DAYS = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+    const dateStr = `${DAYS[date.getDay()]} ${MONTHS_SHORT[date.getMonth()]} ${date.getDate()}`;
+    const updated = [...occurrences];
+    updated[index] = { ...updated[index], date: dateStr };
+    setOccurrences(updated);
+    setEditingOccDate(-1);
   };
 
 
@@ -1069,7 +1156,11 @@ export function AddEventSheet() {
                         EVENT {i + 1} OF {occurrences.length}
                       </Text>
                       <TouchableOpacity
-                        onPress={() => setOccurrences(occurrences.filter((_, idx) => idx !== i))}
+                        onPress={() => {
+                          setOccurrences(occurrences.filter((_, idx) => idx !== i));
+                          if (editingOccDate === i) setEditingOccDate(-1);
+                          if (editingOccLocation === i) setEditingOccLocation(-1);
+                        }}
                         style={{ padding: 4 }}
                       >
                         <Text style={styles.occurrenceRemove}>Remove</Text>
@@ -1099,29 +1190,114 @@ export function AddEventSheet() {
                       placeholderTextColor="#999"
                       multiline
                     />
-                    <TextInput
-                      style={[styles.input, styles.occurrenceInput]}
-                      value={occ.date}
-                      onChangeText={(text) => {
-                        const updated = [...occurrences];
-                        updated[i] = { ...updated[i], date: text };
-                        setOccurrences(updated);
-                      }}
-                      placeholder="Date & time"
-                      placeholderTextColor="#999"
-                    />
-                    <TextInput
-                      style={[styles.input, { marginBottom: 0 }]}
-                      value={occ.location}
-                      onChangeText={(text) => {
-                        const updated = [...occurrences];
-                        updated[i] = { ...updated[i], location: text };
-                        setOccurrences(updated);
-                      }}
-                      placeholder="Location"
-                      placeholderTextColor="#999"
-                      multiline
-                    />
+
+                    {/* Date — tappable to open calendar */}
+                    <TouchableOpacity
+                      style={styles.occurrenceInput}
+                      activeOpacity={0.7}
+                      onPress={() => setEditingOccDate(editingOccDate === i ? -1 : i)}
+                    >
+                      <View style={styles.input}>
+                        <Text style={[styles.inputText, !occ.date && { color: '#999' }]}>
+                          {occ.date || 'Date & time'}
+                        </Text>
+                        <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                          <Path d="M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V6a2 2 0 012-2z" stroke="#999" strokeWidth={1.5} strokeLinecap="round" />
+                        </Svg>
+                      </View>
+                    </TouchableOpacity>
+
+                    {/* Inline calendar for this occurrence */}
+                    {editingOccDate === i && (
+                      <View style={[styles.calendarContainer, { marginBottom: 8 }]}>
+                        <View style={styles.calendarHeader}>
+                          <TouchableOpacity onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1))}>
+                            <Text style={styles.calendarNav}>‹</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.calendarMonthLabel}>
+                            {MONTHS[calendarMonth.getMonth()]} {calendarMonth.getFullYear()}
+                          </Text>
+                          <TouchableOpacity onPress={() => setCalendarMonth(new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1))}>
+                            <Text style={styles.calendarNav}>›</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <View style={styles.calendarWeekdays}>
+                          {WEEKDAYS.map((d) => (
+                            <Text key={d} style={styles.calendarWeekday}>{d}</Text>
+                          ))}
+                        </View>
+                        <View style={styles.calendarGrid}>
+                          {getDaysInMonth(calendarMonth).map((day, di) => {
+                            const isToday = day === new Date().getDate() &&
+                              calendarMonth.getMonth() === new Date().getMonth() &&
+                              calendarMonth.getFullYear() === new Date().getFullYear();
+                            return (
+                              <TouchableOpacity
+                                key={di}
+                                style={[
+                                  styles.calendarDay,
+                                  isToday && styles.calendarDayToday,
+                                ]}
+                                activeOpacity={day ? 0.7 : 1}
+                                onPress={() => day && selectOccDate(day, i)}
+                              >
+                                <Text style={styles.calendarDayText}>
+                                  {day || ''}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                        <TouchableOpacity
+                          style={styles.pickerDoneButton}
+                          activeOpacity={0.8}
+                          onPress={() => setEditingOccDate(-1)}
+                        >
+                          <Text style={styles.pickerDoneText}>DONE</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )}
+
+                    {/* Location — searchable with dropdown */}
+                    <View style={styles.locationField}>
+                      <TextInput
+                        style={[styles.input, { marginBottom: 0 }]}
+                        value={occ.location}
+                        onChangeText={(text) => searchOccLocation(text, i)}
+                        placeholder="Search venue or address"
+                        placeholderTextColor="#999"
+                        onFocus={() => {
+                          setEditingOccLocation(i);
+                          if (locationResults.length > 0) setShowLocationResults(true);
+                        }}
+                        onBlur={() => {
+                          setTimeout(() => {
+                            if (editingOccLocation === i) setShowLocationResults(false);
+                          }, 200);
+                        }}
+                      />
+                      {showLocationResults && editingOccLocation === i && locationResults.length > 0 && (
+                        <View style={styles.locationDropdown}>
+                          {locationResults.map((result: any, ri: number) => (
+                            <TouchableOpacity
+                              key={ri}
+                              style={styles.locationResult}
+                              activeOpacity={0.7}
+                              onPress={() => selectLocation(result)}
+                            >
+                              {result.name ? (
+                                <>
+                                  <Text style={styles.locationResultName} numberOfLines={1}>{result.name}</Text>
+                                  <Text style={styles.locationResultSub} numberOfLines={2}>{result.address}</Text>
+                                </>
+                              ) : (
+                                <Text style={styles.locationResultName} numberOfLines={2}>{result.address}</Text>
+                              )}
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      )}
+                    </View>
                   </View>
                 ))}
               </View>
