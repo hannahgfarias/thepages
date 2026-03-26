@@ -691,6 +691,9 @@ export function AddEventSheet() {
 
   if (!showAddEvent) return null;
 
+  const sheetHeight = height * 0.92;
+  const scrollHeight = sheetHeight - 80; // subtract submit button area
+
   return (
     <View style={[StyleSheet.absoluteFill, { zIndex: 90 }]} pointerEvents="box-none">
       {/* Scrim */}
@@ -707,18 +710,18 @@ export function AddEventSheet() {
         style={[
           styles.sheet,
           {
-            height: height * 0.92,
+            height: sheetHeight,
             transform: [{ translateY: slideY }],
           },
         ]}
       >
-          <ScrollView
-            style={{ maxHeight: height * 0.92 - 80 }}
-            showsVerticalScrollIndicator
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.scrollContent}
-            bounces
-          >
+          <View style={{ height: scrollHeight }}>
+            <ScrollView
+              contentContainerStyle={styles.scrollContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator
+              bounces
+            >
             {/* Handle bar */}
             <View style={styles.handleContainer}>
               <View style={styles.handle} />
@@ -1220,7 +1223,8 @@ export function AddEventSheet() {
             </View>
 
 
-          </ScrollView>
+            </ScrollView>
+          </View>
 
         {/* Sticky submit button */}
         <TouchableOpacity
