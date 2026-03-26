@@ -601,13 +601,6 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
                     />
                   </View>
 
-                  <TouchableOpacity
-                    style={styles.applyButton}
-                    activeOpacity={0.8}
-                    onPress={handleEventSearch}
-                  >
-                    <Text style={styles.applyButtonText}>SEARCH</Text>
-                  </TouchableOpacity>
                 </View>
               )}
             </>
@@ -666,6 +659,19 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
             </View>
           )}
         </ScrollView>
+
+        {/* Sticky SEARCH button — events filter mode only */}
+        {searchMode === 'events' && !hasSearched && (
+          <View style={[styles.stickyButtonContainer, { paddingBottom: insets.bottom + 12 }]}>
+            <TouchableOpacity
+              style={styles.applyButton}
+              activeOpacity={0.8}
+              onPress={handleEventSearch}
+            >
+              <Text style={styles.applyButtonText}>SEARCH</Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Public profile viewer overlay */}
         {viewingUser && (
@@ -763,7 +769,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   scrollContent: {
-    paddingBottom: 40,
+    paddingBottom: 80,
   },
   closeButton: {
     position: 'absolute',
@@ -888,13 +894,19 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     marginTop: 12,
   },
+  stickyButtonContainer: {
+    paddingHorizontal: 24,
+    paddingTop: 12,
+    backgroundColor: 'rgba(229,218,218,0.95)',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(2,4,15,0.08)',
+  },
   applyButton: {
     width: '100%',
     backgroundColor: '#E9D25E',
     borderRadius: 0,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 8,
   },
   applyButtonText: {
     fontFamily: FONTS.display,
