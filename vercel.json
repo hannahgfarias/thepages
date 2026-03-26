@@ -1,11 +1,6 @@
 {
   "buildCommand": "npx expo export --platform web",
   "outputDirectory": "dist",
-  "functions": {
-    "api/event/[id].ts": {
-      "runtime": "@vercel/node@3"
-    }
-  },
   "rewrites": [
     { "source": "/event/:id", "destination": "/api/event/:id" },
     { "source": "/(.*)", "destination": "/index.html" }
