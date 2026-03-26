@@ -1219,23 +1219,6 @@ export function AddEventSheet() {
               />
             </View>
 
-            {/* Anonymous toggle */}
-            <View style={styles.visibilityRow}>
-              <View>
-                <Text style={styles.visibilityLabel}>
-                  {isAnonymous ? 'Posting Anonymously' : 'Posting as You'}
-                </Text>
-                <Text style={styles.visibilityHint}>
-                  {isAnonymous ? 'Your name won\'t appear on this post' : 'Your handle will be shown on this post'}
-                </Text>
-              </View>
-              <Switch
-                value={isAnonymous}
-                onValueChange={setIsAnonymous}
-                trackColor={{ true: '#EB736C', false: '#ddd' }}
-                thumbColor="#fff"
-              />
-            </View>
 
           </ScrollView>
 
