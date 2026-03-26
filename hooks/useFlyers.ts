@@ -54,18 +54,26 @@ function sortByEventDate(posts: Post[]): Post[] {
     const dateA = parseEventDate(a.date_text || '');
     const dateB = parseEventDate(b.date_text || '');
 
-    // Posts without parseable dates go to the end
-    if (!dateA && !dateB) return 0;
+    // Posts without parseable dates: sort by created_at (newest first)
+    if (!dateA && !dateB) {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
     if (!dateA) return 1;
     if (!dateB) return -1;
 
     const diffA = dateA.getTime() - todayStart.getTime();
     const diffB = dateB.getTime() - todayStart.getTime();
 
-    // Both upcoming (>= today): sooner first
-    if (diffA >= 0 && diffB >= 0) return diffA - diffB;
-    // Both past (< today): more recent past first
-    if (diffA < 0 && diffB < 0) return diffB - diffA;
+    // Both upcoming (>= today): sooner first, then newest upload first
+    if (diffA >= 0 && diffB >= 0) {
+      if (diffA !== diffB) return diffA - diffB;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
+    // Both past (< today): more recent past first, then newest upload first
+    if (diffA < 0 && diffB < 0) {
+      if (diffA !== diffB) return diffB - diffA;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    }
     // One upcoming, one past: upcoming wins
     if (diffA >= 0) return -1;
     return 1;

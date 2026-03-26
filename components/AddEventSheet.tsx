@@ -405,6 +405,7 @@ export function AddEventSheet() {
   const resetForm = () => {
     setImageUri(null);
     setScanning(false);
+    setScanError(null);
     setTitle('');
     setSubtitle('');
     setDescription('');
@@ -423,6 +424,11 @@ export function AddEventSheet() {
     setEndMinute(0);
     setEndPeriod('PM');
     setShowEndTime(false);
+    setShowLinkField(false);
+    setOccurrences([]);
+    setIsPublic(true);
+    setLocationResults([]);
+    setShowLocationResults(false);
     setShowLinkField(false);
     setOccurrences([]);
     setIsPublic(true);
