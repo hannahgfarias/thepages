@@ -95,18 +95,8 @@ export function AuthPrompt({ message }: AuthPromptProps) {
   };
 
   const handleSignUp = async () => {
-    // Check if terms already accepted
-    let accepted: string | null = null;
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      accepted = window.localStorage.getItem(TERMS_ACCEPTED_KEY);
-    } else {
-      accepted = await AsyncStorage.getItem(TERMS_ACCEPTED_KEY);
-    }
-    if (accepted === 'true') {
-      proceedToAuth();
-    } else {
-      setShowTerms(true);
-    }
+    // Go directly to phone entry — terms acceptance moved to after OTP for new users
+    proceedToAuth();
   };
 
   const handleTermsAccepted = () => {
