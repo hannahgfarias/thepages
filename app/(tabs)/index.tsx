@@ -30,15 +30,27 @@ type FeedTab = 'following' | 'community' | 'all';
 
 const NAV_HEIGHT = 64;
 
+/** Returns true if a hex color is light (needs dark text on top) */
+function isLightColor(hex: string): boolean {
+  const c = hex.replace('#', '');
+  if (c.length < 6) return true;
+  const r = parseInt(c.substring(0, 2), 16);
+  const g = parseInt(c.substring(2, 4), 16);
+  const b = parseInt(c.substring(4, 6), 16);
+  // Perceived luminance formula
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.55;
+}
+
 /* ─── Magnifying Glass Icon ─── */
 
-function SearchIcon() {
+function SearchIcon({ color = '#02040F' }: { color?: string }) {
   return (
     <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Circle cx={11} cy={11} r={7} stroke="#02040F" strokeWidth={2} />
+      <Circle cx={11} cy={11} r={7} stroke={color} strokeWidth={2} />
       <Path
         d="M20 20l-4-4"
-        stroke="#02040F"
+        stroke={color}
         strokeWidth={2}
         strokeLinecap="round"
       />
@@ -243,6 +255,8 @@ export default function FeedScreen() {
     })
   ).current;
 
+  // Track current visible flyer for adaptive header colors
+  const [currentFlyerIndex, setCurrentFlyerIndex] = useState(0);
   // Directional haptics tracking
   const previousIndex = useRef(0);
   // Swipe hint animation
@@ -391,6 +405,7 @@ export default function FeedScreen() {
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (viewableItems.length > 0 && viewableItems[0].index != null) {
         const newIndex = viewableItems[0].index;
+        setCurrentFlyerIndex(newIndex);
         if (newIndex !== previousIndex.current) {
           const direction = newIndex > previousIndex.current ? 'down' : 'up';
           fireDirectionalHaptic(direction);
@@ -420,6 +435,13 @@ export default function FeedScreen() {
     [cardHeight]
   );
 
+  // Determine header text color based on current flyer's background
+  const currentFlyer = filteredFlyers[currentFlyerIndex];
+  const flyerBg = currentFlyer?.bgColor || currentFlyer?.image_url ? '#1a1a2e' : '#F0ECEC';
+  const headerUseDark = currentFlyer?.image_url ? false : isLightColor(currentFlyer?.bgColor || '#F0ECEC');
+  const headerColor = headerUseDark ? '#02040F' : '#ffffff';
+  const headerInactiveColor = headerUseDark ? 'rgba(2,4,15,0.35)' : 'rgba(255,255,255,0.5)';
+
   return (
     <View style={styles.container} {...swipePanResponder.panHandlers}>
       {/* Top bar — hidden when card details are active */}
@@ -429,12 +451,10 @@ export default function FeedScreen() {
           pointerEvents="box-none"
         >
           <View style={styles.topBarGradient} />
-          {/* TikTok-style top bar: search icon | tabs | spacer */}
+          {/* TikTok-style top bar: spacer | tabs | search icon */}
           <View style={styles.topBarContent}>
-            {/* Search icon (left) */}
-            <TouchableOpacity style={styles.searchButton} activeOpacity={0.7} onPress={() => setShowSearch(true)}>
-              <SearchIcon />
-            </TouchableOpacity>
+            {/* Spacer to balance search icon */}
+            <View style={{ width: 36 }} />
 
             {/* Feed tabs (center) */}
             <View style={styles.feedTabs}>
@@ -449,16 +469,21 @@ export default function FeedScreen() {
                   activeOpacity={0.7}
                   onPress={() => setFeedTab(tab.key)}
                 >
-                  <Text style={[styles.feedTabText, feedTab === tab.key && styles.feedTabTextActive]}>
+                  <Text style={[
+                    styles.feedTabText,
+                    { color: feedTab === tab.key ? headerColor : headerInactiveColor },
+                  ]}>
                     {tab.label}
                   </Text>
-                  {feedTab === tab.key && <View style={styles.feedTabIndicator} />}
+                  {feedTab === tab.key && <View style={[styles.feedTabIndicator, { backgroundColor: headerColor }]} />}
                 </TouchableOpacity>
               ))}
             </View>
 
-            {/* Spacer to balance search icon */}
-            <View style={{ width: 36 }} />
+            {/* Search icon (right) */}
+            <TouchableOpacity style={styles.searchButton} activeOpacity={0.7} onPress={() => setShowSearch(true)}>
+              <SearchIcon color={headerColor} />
+            </TouchableOpacity>
           </View>
 
           {/* Tag filter bar */}
@@ -549,6 +574,7 @@ export default function FeedScreen() {
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
           pagingEnabled
+          disableIntervalMomentum
           showsVerticalScrollIndicator={false}
           snapToAlignment="start"
           decelerationRate="fast"
@@ -648,15 +674,10 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.display,
     fontSize: 15,
     letterSpacing: 0.5,
-    color: 'rgba(2,4,15,0.35)',
-  },
-  feedTabTextActive: {
-    color: '#02040F',
   },
   feedTabIndicator: {
     width: 20,
     height: 2,
-    backgroundColor: '#02040F',
     borderRadius: 1,
     marginTop: 4,
   },
