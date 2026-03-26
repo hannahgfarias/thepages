@@ -282,6 +282,17 @@ function ConnectedSearchOverlay() {
 function InnerLayout() {
   const { session } = useAuthContext();
   const userId = session?.user?.id;
+  const isAuthenticated = !!session;
+  const { showProfile, setShowProfile, setShowAuthPrompt } = useOverlay();
+
+  // Guard: if profile panel was restored from sessionStorage but user is not
+  // authenticated (e.g. cleared browser), reset it and show auth prompt
+  useEffect(() => {
+    if (showProfile && !isAuthenticated) {
+      setShowProfile(false);
+      setShowAuthPrompt(true);
+    }
+  }, [showProfile, isAuthenticated, setShowProfile, setShowAuthPrompt]);
 
   return (
     <FlyersProvider userId={userId}>
