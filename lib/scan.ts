@@ -29,7 +29,9 @@ export async function scanFlyer(
     try {
       if ((error as any).context) {
         const responseBody = await (error as any).context.json();
-        details = responseBody?.error || responseBody?.detail || responseBody?.message || JSON.stringify(responseBody);
+        // Show all fields — the detail field has the actual reason
+        const parts = [responseBody?.error, responseBody?.detail, responseBody?.message].filter(Boolean);
+        details = parts.length > 0 ? parts.join(' — ') : JSON.stringify(responseBody);
       }
     } catch {
       // couldn't parse response body
