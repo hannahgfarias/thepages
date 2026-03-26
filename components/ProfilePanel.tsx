@@ -24,6 +24,7 @@ import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
 import type { Post } from '../types';
 import { SettingsSheet } from './SettingsSheet';
+import { FlyerCard } from './FlyerCard';
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
@@ -172,7 +173,7 @@ export function ProfilePanel() {
   ).current;
 
   const userId = session?.user?.id;
-  const { flyers: allFlyers, refetch } = useFlyers(userId);
+  const { flyers: allFlyers, refetch, toggleSave } = useFlyers(userId);
 
   // Your posts — filter all flyers by current user
   const yourPosts = useMemo(() =>
@@ -239,6 +240,7 @@ export function ProfilePanel() {
   }, [handleEditPost, handleDeletePost]);
 
   const [webMenuPostId, setWebMenuPostId] = useState<string | null>(null);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   // Never show profile panel if not authenticated
   if (!showProfile || !isAuthenticated) return null;
@@ -261,7 +263,13 @@ export function ProfilePanel() {
             ]}
             activeOpacity={0.8}
             onLongPress={isOwnPosts ? () => handlePostLongPress(post) : undefined}
-            onPress={isOwnPosts && Platform.OS === 'web' ? () => setWebMenuPostId(webMenuPostId === post.id ? null : post.id) : undefined}
+            onPress={() => {
+              if (isOwnPosts && Platform.OS === 'web') {
+                setWebMenuPostId(webMenuPostId === post.id ? null : post.id);
+              } else {
+                setSelectedPost(post);
+              }
+            }}
           >
             {imageSource ? (
               <Image
@@ -454,6 +462,29 @@ export function ProfilePanel() {
         )}
       </ScrollView>
     </Animated.View>
+
+    {/* Detail view — full-screen FlyerCard within profile */}
+    {selectedPost && (
+      <View style={[styles.detailOverlay, { paddingTop: insets.top }]}>
+        <TouchableOpacity
+          style={styles.backButton}
+          activeOpacity={0.7}
+          onPress={() => setSelectedPost(null)}
+        >
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+            <Path d="M19 12H5M12 19l-7-7 7-7" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+          </Svg>
+          <Text style={styles.backButtonText}>Back</Text>
+        </TouchableOpacity>
+        <FlyerCard
+          flyer={selectedPost}
+          cardHeight={height - insets.top - insets.bottom - 64}
+          onSave={(id) => toggleSave(id)}
+          onEdit={selectedPost.is_mine ? handleEditPost : undefined}
+          onDelete={selectedPost.is_mine ? (id) => { handleDeletePost(selectedPost); setSelectedPost(null); } : undefined}
+        />
+      </View>
+    )}
 
     {/* Settings — rendered outside the profile panel so it gets full screen */}
     {showSettings && (
@@ -685,5 +716,28 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
     fontSize: 13,
     color: '#02040F',
+  },
+  detailOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 64,
+    backgroundColor: '#0a0a0a',
+    zIndex: 20,
+  },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    zIndex: 25,
+  },
+  backButtonText: {
+    fontFamily: FONTS.display,
+    fontSize: 14,
+    color: '#ffffff',
+    letterSpacing: 0.5,
   },
 });
