@@ -90,7 +90,7 @@ export default function FeedScreen() {
       // Text query
       if (searchFilters.query) {
         const q = searchFilters.query.toLowerCase();
-        const match = [f.title, f.subtitle, f.location, f.date_text, f.category, ...(f.tags || [])]
+        const match = [f.title, f.subtitle, f.description, f.location, f.date_text, f.category, ...(f.tags || [])]
           .filter(Boolean)
           .some((s) => s!.toLowerCase().includes(q));
         if (!match) return false;
@@ -162,10 +162,8 @@ export default function FeedScreen() {
               }
               break;
           }
-        } else {
-          // No parseable date — exclude from date-filtered results
-          return false;
         }
+        // If no parseable date, include it anyway — don't hide events just because the date can't be parsed
       }
     }
 
