@@ -1063,20 +1063,20 @@ export function AddEventSheet() {
                   {occurrences.length} EVENTS DETECTED — EDIT EACH BELOW
                 </Text>
                 {occurrences.map((occ, i) => (
-                  <View key={i} style={{ backgroundColor: 'rgba(120,184,150,0.08)', borderRadius: 8, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: 'rgba(120,184,150,0.2)' }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                      <Text style={{ fontFamily: FONTS.display, fontSize: 11, letterSpacing: 1.5, color: '#78B896' }}>
+                  <View key={i} style={styles.occurrenceCard}>
+                    <View style={styles.occurrenceHeader}>
+                      <Text style={styles.occurrenceLabel}>
                         EVENT {i + 1} OF {occurrences.length}
                       </Text>
                       <TouchableOpacity
                         onPress={() => setOccurrences(occurrences.filter((_, idx) => idx !== i))}
                         style={{ padding: 4 }}
                       >
-                        <Text style={{ fontFamily: FONTS.mono, fontSize: 12, color: 'rgba(2,4,15,0.3)' }}>Remove</Text>
+                        <Text style={styles.occurrenceRemove}>Remove</Text>
                       </TouchableOpacity>
                     </View>
                     <TextInput
-                      style={[styles.input, { marginBottom: 8 }]}
+                      style={[styles.input, styles.occurrenceInput]}
                       value={occ.title}
                       onChangeText={(text) => {
                         const updated = [...occurrences];
@@ -1085,9 +1085,10 @@ export function AddEventSheet() {
                       }}
                       placeholder="Title"
                       placeholderTextColor="#999"
+                      multiline
                     />
                     <TextInput
-                      style={[styles.input, { marginBottom: 8 }]}
+                      style={[styles.input, styles.occurrenceInput]}
                       value={occ.subtitle}
                       onChangeText={(text) => {
                         const updated = [...occurrences];
@@ -1096,31 +1097,31 @@ export function AddEventSheet() {
                       }}
                       placeholder="Subtitle / performer"
                       placeholderTextColor="#999"
+                      multiline
                     />
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <TextInput
-                        style={[styles.input, { flex: 1 }]}
-                        value={occ.date}
-                        onChangeText={(text) => {
-                          const updated = [...occurrences];
-                          updated[i] = { ...updated[i], date: text };
-                          setOccurrences(updated);
-                        }}
-                        placeholder="Date & time"
-                        placeholderTextColor="#999"
-                      />
-                      <TextInput
-                        style={[styles.input, { flex: 1 }]}
-                        value={occ.location}
-                        onChangeText={(text) => {
-                          const updated = [...occurrences];
-                          updated[i] = { ...updated[i], location: text };
-                          setOccurrences(updated);
-                        }}
-                        placeholder="Location"
-                        placeholderTextColor="#999"
-                      />
-                    </View>
+                    <TextInput
+                      style={[styles.input, styles.occurrenceInput]}
+                      value={occ.date}
+                      onChangeText={(text) => {
+                        const updated = [...occurrences];
+                        updated[i] = { ...updated[i], date: text };
+                        setOccurrences(updated);
+                      }}
+                      placeholder="Date & time"
+                      placeholderTextColor="#999"
+                    />
+                    <TextInput
+                      style={[styles.input, { marginBottom: 0 }]}
+                      value={occ.location}
+                      onChangeText={(text) => {
+                        const updated = [...occurrences];
+                        updated[i] = { ...updated[i], location: text };
+                        setOccurrences(updated);
+                      }}
+                      placeholder="Location"
+                      placeholderTextColor="#999"
+                      multiline
+                    />
                   </View>
                 ))}
               </View>
@@ -1716,6 +1717,34 @@ const styles = StyleSheet.create({
   },
   submitButtonDisabled: {
     opacity: 0.6,
+  },
+  occurrenceCard: {
+    backgroundColor: 'rgba(120,184,150,0.08)',
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(120,184,150,0.2)',
+  },
+  occurrenceHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  occurrenceLabel: {
+    fontFamily: FONTS.display,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    color: '#78B896',
+  },
+  occurrenceRemove: {
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    color: 'rgba(2,4,15,0.3)',
+  },
+  occurrenceInput: {
+    marginBottom: 8,
   },
   submitText: {
     fontFamily: FONTS.display,
