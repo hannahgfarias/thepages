@@ -50,7 +50,14 @@ export default function FeedScreen() {
   const { flyers, loading, error, toggleSave, recordShare, refetch } = useFlyers(user?.id);
   const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt, setEditingPost, setShowAddEvent, focusPostId, setFocusPostId } = useOverlay();
   const flatListRef = useRef<FlatList>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const prevShowAddEvent = useRef(false);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await refetch();
+    setRefreshing(false);
+  }, [refetch]);
 
   // Refetch feed when AddEventSheet closes (post was potentially added)
   useEffect(() => {
@@ -485,6 +492,8 @@ export default function FeedScreen() {
           viewabilityConfig={viewabilityConfig}
           onScroll={handleScroll}
           scrollEventThrottle={16}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
           ListFooterComponent={
             <View style={[styles.endOfFeed, { height: cardHeight }]}>
               <Text style={styles.endOfFeedEmoji}>✨</Text>
