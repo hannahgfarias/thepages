@@ -171,33 +171,31 @@ export function FlyerCard({ flyer, cardHeight, onSave, onShare, onActiveChange, 
 
   const handleShare = useCallback(async () => {
     try {
-      // Build share text with event details
+      // Always link to the flyer on The Pages
+      const flyerUrl = `https://thepages.app/event/${flyer.id}`;
+
       const details = [
         flyer.title,
         flyer.date_text,
         flyer.location,
       ].filter(Boolean).join('\n');
 
-      // Use the event's actual URL if available, otherwise link to the app
-      const shareUrl = flyer.event_url || 'https://thepages.app';
-
       let shared = false;
       if (Platform.OS === 'web' && navigator?.share) {
         await navigator.share({
           title: flyer.title,
           text: details,
-          url: shareUrl,
+          url: flyerUrl,
         });
         shared = true;
       } else if (Platform.OS === 'web') {
-        await navigator.clipboard.writeText(`${details}\n\n${shareUrl}`);
+        await navigator.clipboard.writeText(`${details}\n\n${flyerUrl}`);
         shared = true;
       } else {
-        // iOS: pass details as message, link as url — iOS renders them
-        // separately so only one link appears, and url gets a rich preview
+        // iOS: pass details as message, flyer link as url for rich preview
         const result = await Share.share({
           message: details,
-          url: shareUrl,
+          url: flyerUrl,
         });
         shared = result.action === Share.sharedAction;
       }
