@@ -71,12 +71,13 @@ function SearchIcon({ size = 40, color = 'rgba(2,4,15,0.25)' }: { size?: number;
 
 function filterFlyers(filters: SearchFilters, allFlyers: Post[]) {
   return allFlyers.filter((flyer) => {
-    // Query filter
+    // Query filter — search across all text fields
     if (filters.query) {
       const q = filters.query.toLowerCase();
       const matchesQuery =
         flyer.title.toLowerCase().includes(q) ||
         (flyer.subtitle && flyer.subtitle.toLowerCase().includes(q)) ||
+        (flyer.description && flyer.description.toLowerCase().includes(q)) ||
         (flyer.location && flyer.location.toLowerCase().includes(q)) ||
         (flyer.date_text && flyer.date_text.toLowerCase().includes(q)) ||
         flyer.category.toLowerCase().includes(q) ||
@@ -109,9 +110,10 @@ function filterFlyers(filters: SearchFilters, allFlyers: Post[]) {
       }
     }
 
-    // When filter
+    // When filter — only apply if user explicitly selected a date filter
     if (filters.when) {
       const eventDate = parseEventDate(flyer.date_text || '');
+      // If the event has no parseable date, include it anyway (don't hide it)
       if (eventDate) {
         const now = new Date();
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -147,8 +149,6 @@ function filterFlyers(filters: SearchFilters, allFlyers: Post[]) {
             }
             break;
         }
-      } else {
-        return false;
       }
     }
 
@@ -168,7 +168,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
 
   const [query, setQuery] = useState('');
   const [selectedTypes, setSelectedTypes] = useState<string[]>([]);
-  const [selectedWhen, setSelectedWhen] = useState<string | null>('Happening Now');
+  const [selectedWhen, setSelectedWhen] = useState<string | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
   const [customDate, setCustomDate] = useState('');
   const [showDateInput, setShowDateInput] = useState(false);
@@ -183,7 +183,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   // Reset state when overlay opens
   useEffect(() => {
     if (showSearch) {
-      setSelectedWhen('Happening Now');
+      setSelectedWhen(null);
       setHasSearched(false);
       setShowDateInput(false);
       setCustomDate('');
@@ -347,16 +347,27 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
         >
           {/* Search bar */}
           <View style={styles.searchBar}>
-            <TextInput
-              style={styles.searchInput}
-              value={query}
-              onChangeText={setQuery}
-              placeholder="Search events..."
-              placeholderTextColor="rgba(2,4,15,0.4)"
-              autoCorrect={false}
-              autoCapitalize="none"
-              returnKeyType="search"
-            />
+            <View style={styles.searchInputRow}>
+              <TextInput
+                style={styles.searchInput}
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Search events..."
+                placeholderTextColor="rgba(2,4,15,0.4)"
+                autoCorrect={false}
+                autoCapitalize="none"
+                returnKeyType="search"
+              />
+              {query.length > 0 && (
+                <TouchableOpacity
+                  style={styles.clearButton}
+                  activeOpacity={0.7}
+                  onPress={() => setQuery('')}
+                >
+                  <Text style={styles.clearButtonText}>✕</Text>
+                </TouchableOpacity>
+              )}
+            </View>
           </View>
 
           {/* Event Type */}
@@ -573,16 +584,33 @@ const styles = StyleSheet.create({
     marginTop: 48,
     marginBottom: 32,
   },
-  searchInput: {
-    fontFamily: FONTS.body,
-    fontSize: 16,
-    color: '#02040F',
+  searchInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     backgroundColor: 'rgba(255,255,255,0.6)',
     borderWidth: 1,
     borderColor: '#ddd',
     borderRadius: 0,
+  },
+  searchInput: {
+    flex: 1,
+    fontFamily: FONTS.body,
+    fontSize: 16,
+    color: '#02040F',
     paddingHorizontal: 18,
     paddingVertical: 14,
+  },
+  clearButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 8,
+  },
+  clearButtonText: {
+    fontFamily: FONTS.mono,
+    fontSize: 14,
+    color: 'rgba(2,4,15,0.4)',
   },
   section: {
     marginBottom: 28,

@@ -21,21 +21,36 @@ import { FlyerCard } from '../../components/FlyerCard';
 import { useFlyers, parseEventDate } from '../../hooks/useFlyers';
 import { useOverlay } from './_layout';
 import { useAuth } from '../../hooks/useAuth';
+import { supabase } from '../../lib/supabase';
 import { FONTS } from '../../constants/fonts';
 import { COLORS } from '../../constants/colors';
 import type { Post } from '../../types';
 
+type FeedTab = 'following' | 'community' | 'all';
+
 const NAV_HEIGHT = 64;
+
+/** Returns true if a hex color is light (needs dark text on top) */
+function isLightColor(hex: string): boolean {
+  const c = hex.replace('#', '');
+  if (c.length < 6) return true;
+  const r = parseInt(c.substring(0, 2), 16);
+  const g = parseInt(c.substring(2, 4), 16);
+  const b = parseInt(c.substring(4, 6), 16);
+  // Perceived luminance formula
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.55;
+}
 
 /* ─── Magnifying Glass Icon ─── */
 
-function SearchIcon() {
+function SearchIcon({ color = '#02040F' }: { color?: string }) {
   return (
     <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-      <Circle cx={11} cy={11} r={7} stroke="#02040F" strokeWidth={2} />
+      <Circle cx={11} cy={11} r={7} stroke={color} strokeWidth={2} />
       <Path
         d="M20 20l-4-4"
-        stroke="#02040F"
+        stroke={color}
         strokeWidth={2}
         strokeLinecap="round"
       />
@@ -83,10 +98,59 @@ export default function FeedScreen() {
     }
   }, [focusPostId, setFocusPostId]);
 
+  // Feed tabs: Following / Community / All
+  const [feedTab, setFeedTab] = useState<FeedTab>('all');
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [communityIds, setCommunityIds] = useState<Set<string>>(new Set());
+
+  // Fetch follow graph for the current user
+  useEffect(() => {
+    if (!user?.id) {
+      setFollowingIds(new Set());
+      setCommunityIds(new Set());
+      return;
+    }
+
+    const fetchFollows = async () => {
+      // People I follow
+      const { data: myFollows } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', user.id);
+
+      const iFollow = new Set<string>((myFollows || []).map((f: any) => f.following_id));
+      setFollowingIds(iFollow);
+
+      // People who follow me
+      const { data: theirFollows } = await supabase
+        .from('follows')
+        .select('follower_id')
+        .eq('following_id', user.id);
+
+      const followMe = new Set<string>((theirFollows || []).map((f: any) => f.follower_id));
+
+      // Community = mutual follows
+      const mutual = new Set<string>();
+      iFollow.forEach((id) => {
+        if (followMe.has(id)) mutual.add(id);
+      });
+      setCommunityIds(mutual);
+    };
+
+    fetchFollows();
+  }, [user?.id]);
+
   // Tag filtering
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
   const filteredFlyers = flyers.filter((f) => {
+    // Feed tab filter
+    if (feedTab === 'following' && user?.id) {
+      if (!followingIds.has(f.user_id) && f.user_id !== user.id) return false;
+    } else if (feedTab === 'community' && user?.id) {
+      if (!communityIds.has(f.user_id) && f.user_id !== user.id) return false;
+    }
+
     // Tag filter
     if (activeTag && !f.tags?.some((t) => t.toLowerCase() === activeTag.toLowerCase())) {
       return false;
@@ -97,7 +161,7 @@ export default function FeedScreen() {
       // Text query
       if (searchFilters.query) {
         const q = searchFilters.query.toLowerCase();
-        const match = [f.title, f.subtitle, f.location, f.date_text, f.category, ...(f.tags || [])]
+        const match = [f.title, f.subtitle, f.description, f.location, f.date_text, f.category, ...(f.tags || [])]
           .filter(Boolean)
           .some((s) => s!.toLowerCase().includes(q));
         if (!match) return false;
@@ -169,10 +233,8 @@ export default function FeedScreen() {
               }
               break;
           }
-        } else {
-          // No parseable date — exclude from date-filtered results
-          return false;
         }
+        // If no parseable date, include it anyway — don't hide events just because the date can't be parsed
       }
     }
 
@@ -200,6 +262,8 @@ export default function FeedScreen() {
     })
   ).current;
 
+  // Track current visible flyer for adaptive header colors
+  const [currentFlyerIndex, setCurrentFlyerIndex] = useState(0);
   // Directional haptics tracking
   const previousIndex = useRef(0);
   // Swipe hint animation
@@ -348,6 +412,7 @@ export default function FeedScreen() {
     ({ viewableItems }: { viewableItems: ViewToken[] }) => {
       if (viewableItems.length > 0 && viewableItems[0].index != null) {
         const newIndex = viewableItems[0].index;
+        setCurrentFlyerIndex(newIndex);
         if (newIndex !== previousIndex.current) {
           const direction = newIndex > previousIndex.current ? 'down' : 'up';
           fireDirectionalHaptic(direction);
@@ -377,6 +442,13 @@ export default function FeedScreen() {
     [cardHeight]
   );
 
+  // Determine header text color based on current flyer's background
+  const currentFlyer = filteredFlyers[currentFlyerIndex];
+  const flyerBg = currentFlyer?.bgColor || currentFlyer?.image_url ? '#1a1a2e' : '#F0ECEC';
+  const headerUseDark = currentFlyer?.image_url ? false : isLightColor(currentFlyer?.bgColor || '#F0ECEC');
+  const headerColor = headerUseDark ? '#02040F' : '#ffffff';
+  const headerInactiveColor = headerUseDark ? 'rgba(2,4,15,0.35)' : 'rgba(255,255,255,0.5)';
+
   return (
     <View style={styles.container} {...swipePanResponder.panHandlers}>
       {/* Top bar — hidden when card details are active */}
@@ -386,13 +458,38 @@ export default function FeedScreen() {
           pointerEvents="box-none"
         >
           <View style={styles.topBarGradient} />
+          {/* TikTok-style top bar: spacer | tabs | search icon */}
           <View style={styles.topBarContent}>
-            {/* Wordmark */}
-            <Text style={styles.wordmark}>THE PAGES</Text>
+            {/* Spacer to balance search icon */}
+            <View style={{ width: 36 }} />
 
-            {/* Search button */}
+            {/* Feed tabs (center) */}
+            <View style={styles.feedTabs}>
+              {([
+                { key: 'following' as FeedTab, label: 'Following' },
+                { key: 'community' as FeedTab, label: 'Community' },
+                { key: 'all' as FeedTab, label: 'Discover' },
+              ]).map((tab) => (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={styles.feedTab}
+                  activeOpacity={0.7}
+                  onPress={() => setFeedTab(tab.key)}
+                >
+                  <Text style={[
+                    styles.feedTabText,
+                    { color: feedTab === tab.key ? headerColor : headerInactiveColor },
+                  ]}>
+                    {tab.label}
+                  </Text>
+                  {feedTab === tab.key && <View style={[styles.feedTabIndicator, { backgroundColor: headerColor }]} />}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Search icon (right) */}
             <TouchableOpacity style={styles.searchButton} activeOpacity={0.7} onPress={() => setShowSearch(true)}>
-              <SearchIcon />
+              <SearchIcon color={headerColor} />
             </TouchableOpacity>
           </View>
 
@@ -455,7 +552,7 @@ export default function FeedScreen() {
           </Svg>
           <Text style={styles.stateTitle}>No events found</Text>
           <Text style={styles.stateSubtitle}>
-            {activeTag ? `No events with ${activeTag}` : searchFilters ? 'Try adjusting your filters' : 'Check back soon for new events'}
+            {activeTag ? `No events with ${activeTag}` : searchFilters ? 'Try adjusting your filters' : feedTab === 'following' ? 'Follow people to see their events here' : feedTab === 'community' ? 'Your community (mutual follows) events will appear here' : 'Check back soon for new events'}
           </Text>
           {(activeTag || searchFilters) && (
             <TouchableOpacity
@@ -484,6 +581,7 @@ export default function FeedScreen() {
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
           pagingEnabled
+          disableIntervalMomentum
           showsVerticalScrollIndicator={false}
           snapToAlignment="start"
           decelerationRate="fast"
@@ -562,22 +660,35 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  wordmark: {
-    fontFamily: FONTS.display,
-    fontSize: 18,
-    letterSpacing: 3,
-    textTransform: 'uppercase',
-    color: '#02040F',
-  },
   searchButton: {
     width: 36,
     height: 36,
-    borderRadius: 0,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(2,4,15,0.15)',
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    opacity: 0.5,
+  },
+
+  /* Feed tabs */
+  feedTabs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+  },
+  feedTab: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  feedTabText: {
+    fontFamily: FONTS.display,
+    fontSize: 15,
+    letterSpacing: 0.5,
+  },
+  feedTabIndicator: {
+    width: 20,
+    height: 2,
+    borderRadius: 1,
+    marginTop: 4,
   },
 
   /* Swipe hint */

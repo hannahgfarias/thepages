@@ -41,7 +41,7 @@ serve(async (req) => {
       },
       body: JSON.stringify({
         model: MODEL,
-        max_tokens: 1000,
+        max_tokens: 2000,
         messages: [{
           role: 'user',
           content: [
@@ -59,11 +59,11 @@ Return exactly this structure:
   "subtitle": "Short tagline, time, or secondary text",
   "description": "1-2 sentence description of the event",
   "location": "Venue name and/or address as shown",
-  "date": "Abbreviated format like SAT APR 5 • 7PM or just the date if no time",
+  "date": "Abbreviated format like SAT MAR 18 • 7PM or just the date if no time",
   "category": "Exactly one of: Party, Music, Community, Arts, Wellness, Food, Free, Theatre, Fitness, Nightlife, Volunteer, Sports, Tech, Film, Comedy, Markets, Workshop, Other",
   "tags": ["#relevant", "#hashtags", "#max5"],
   "occurrences": [
-    { "date": "SAT APR 5 • 7PM", "location": "Venue name" }
+    { "title": "EVENT NAME or performer for this date", "subtitle": "specific details for this date", "date": "SAT MAR 18 • 7PM", "location": "Venue name" }
   ]
 }
 
@@ -71,8 +71,14 @@ Rules:
 - Use empty string "" for any field not visible on the flyer
 - category must be exactly one of the options listed
 - tags should start with # and relate to the event type and location
-- The "date" and "location" top-level fields should contain the FIRST date/location shown
-- The "occurrences" array should list EVERY separate date/location combination on the flyer. Each entry is one event instance. If there is only one date and one location, return a single-element array. If there are 3 dates at the same venue, return 3 entries each with that venue. If there are 2 dates at 2 different venues, return one entry per date+venue pair.
+- The top-level "title", "date", "location" should contain the FIRST/main values
+- The "occurrences" array MUST list EVERY separate date/location/performer combination on the flyer
+- Each occurrence MUST have a specific full date (e.g. "SAT MAR 18 • 7PM"), NOT a vague month
+- If the flyer shows "March 18, 26, 28, 31" those are 4 separate occurrences with 4 specific dates
+- Each occurrence should have its own title — if different performers play different dates, each gets their performer name as the title. If it's the same event on different dates, use the same title for all.
+- Each occurrence gets its own subtitle with any details specific to that date (e.g. the performer, special theme, etc.)
+- If there is only one date and one location, return a single-element array
+- If there are 3 dates at the same venue, return 3 entries each with that venue
 - Return ONLY the JSON object, nothing else`,
             },
           ],

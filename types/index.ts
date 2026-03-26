@@ -85,6 +85,8 @@ export interface OGMetadata {
 }
 
 export interface ScanOccurrence {
+  title: string;
+  subtitle: string;
   date: string;
   location: string;
 }
