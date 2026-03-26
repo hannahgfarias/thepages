@@ -115,6 +115,9 @@ export function ProfilePanel() {
   // Track if we're currently dragging to skip animation
   const isDragging = useRef(false);
 
+  const userId = session?.user?.id;
+  const { flyers: allFlyers, refetch, toggleSave } = useFlyers(userId);
+
   useEffect(() => {
     if (showProfile) {
       refetch(); // Refresh posts/saves when profile opens
@@ -126,7 +129,7 @@ export function ProfilePanel() {
         useNativeDriver: true,
       }).start();
     }
-  }, [showProfile, translateX, width]);
+  }, [showProfile, translateX, width, refetch]);
 
   const close = () => {
     Animated.timing(translateX, {
@@ -172,9 +175,6 @@ export function ProfilePanel() {
       },
     })
   ).current;
-
-  const userId = session?.user?.id;
-  const { flyers: allFlyers, refetch, toggleSave } = useFlyers(userId);
 
   // Your posts — filter all flyers by current user
   const yourPosts = useMemo(() =>
