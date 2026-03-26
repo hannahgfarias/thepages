@@ -202,15 +202,17 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
     userSearchDebounce.current = setTimeout(async () => {
       setSearchingUsers(true);
       try {
-        const q = query.trim().toLowerCase();
-        const { data } = await supabase
+        const q = query.trim();
+        const pattern = `%${q}%`;
+        const { data, error } = await supabase
           .from('profiles')
-          .select('id, handle, display_name, bio, location, avatar_url, avatar_color, avatar_initials, is_public')
-          .eq('is_public', true)
-          .or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`)
+          .select('id, handle, display_name, bio, location, avatar_url, avatar_color, avatar_initials, is_public, created_at')
+          .or(`handle.ilike.${pattern},display_name.ilike.${pattern}`)
           .limit(10);
+        if (error) console.warn('[UserSearch] error:', error.message);
         setUserResults((data as Profile[]) || []);
-      } catch {
+      } catch (e) {
+        console.warn('[UserSearch] exception:', e);
         setUserResults([]);
       }
       setSearchingUsers(false);
