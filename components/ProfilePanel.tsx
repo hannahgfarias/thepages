@@ -522,6 +522,13 @@ export function ProfilePanel() {
             index,
           })}
           initialScrollIndex={viewerInitialIndex}
+          onScrollToIndexFailed={(info) => {
+            setTimeout(() => {
+              if (viewerPosts) {
+                // no-op — gracefully handle failed scroll
+              }
+            }, 100);
+          }}
         />
       </View>
     )}

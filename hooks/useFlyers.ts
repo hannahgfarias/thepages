@@ -173,23 +173,20 @@ export function useFlyers(userId?: string) {
   }, [fetchFlyers]);
 
   const toggleSave = useCallback(async (postId: string) => {
-    // Read current state before optimistic update
-    let wasSaved = false;
+    // Read current saved state before optimistic update
+    const currentFlyer = flyers.find((f) => f.id === postId);
+    const wasSaved = currentFlyer?.is_saved ?? false;
+
+    // Optimistic update
     setFlyers((prev) =>
-      prev.map((f) => {
-        if (f.id === postId) {
-          wasSaved = f.is_saved ?? false;
-          return { ...f, is_saved: !f.is_saved };
-        }
-        return f;
-      })
+      prev.map((f) => f.id === postId ? { ...f, is_saved: !f.is_saved } : f)
     );
 
     if (!userId) return; // Not logged in — just toggle locally
 
     try {
       if (wasSaved) {
-        const { error } = await supabase.from('saves').delete().match({ user_id: userId, post_id: postId });
+        const { error } = await supabase.from('saves').delete().eq('user_id', userId).eq('post_id', postId);
         if (error) throw error;
       } else {
         const { error } = await supabase.from('saves').insert({ user_id: userId, post_id: postId });
@@ -201,7 +198,7 @@ export function useFlyers(userId?: string) {
         prev.map((f) => (f.id === postId ? { ...f, is_saved: !f.is_saved } : f))
       );
     }
-  }, [userId]);
+  }, [userId, flyers]);
 
   return { flyers, loading, error, refetch: fetchFlyers, toggleSave };
 }

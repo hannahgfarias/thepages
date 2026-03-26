@@ -77,6 +77,13 @@ export default function FeedScreen() {
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
   const filteredFlyers = flyers.filter((f) => {
+    // Top tab filter
+    if (activeTopTab === 'following') {
+      // Show only posts from users you follow (is_mine as placeholder until follows are wired)
+      if (!f.is_mine) return false;
+    }
+    // 'community' and 'all' show everything for now
+
     // Tag filter
     if (activeTag && !f.tags?.some((t) => t.toLowerCase() === activeTag.toLowerCase())) {
       return false;
@@ -450,9 +457,15 @@ export default function FeedScreen() {
             <Circle cx={11} cy={11} r={7} stroke="rgba(2,4,15,0.15)" strokeWidth={1.5} />
             <Path d="M20 20l-4-4" stroke="rgba(2,4,15,0.15)" strokeWidth={1.5} strokeLinecap="round" />
           </Svg>
-          <Text style={styles.stateTitle}>No events found</Text>
+          <Text style={styles.stateTitle}>
+            {activeTopTab === 'following' ? 'No one followed yet' : 'No events found'}
+          </Text>
           <Text style={styles.stateSubtitle}>
-            {activeTag ? `No events with ${activeTag}` : searchFilters ? 'Try adjusting your filters' : 'Check back soon for new events'}
+            {activeTopTab === 'following'
+              ? 'Follow people to see their events here'
+              : activeTag ? `No events with ${activeTag}`
+              : searchFilters ? 'Try adjusting your filters'
+              : 'Check back soon for new events'}
           </Text>
           {(activeTag || searchFilters) && (
             <TouchableOpacity
