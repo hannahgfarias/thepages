@@ -21,9 +21,12 @@ import { FlyerCard } from '../../components/FlyerCard';
 import { useFlyers, parseEventDate } from '../../hooks/useFlyers';
 import { useOverlay } from './_layout';
 import { useAuth } from '../../hooks/useAuth';
+import { supabase } from '../../lib/supabase';
 import { FONTS } from '../../constants/fonts';
 import { COLORS } from '../../constants/colors';
 import type { Post } from '../../types';
+
+type FeedTab = 'following' | 'community' | 'all';
 
 const NAV_HEIGHT = 64;
 
@@ -76,10 +79,59 @@ export default function FeedScreen() {
     }
   }, [focusPostId, setFocusPostId]);
 
+  // Feed tabs: Following / Community / All
+  const [feedTab, setFeedTab] = useState<FeedTab>('all');
+  const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
+  const [communityIds, setCommunityIds] = useState<Set<string>>(new Set());
+
+  // Fetch follow graph for the current user
+  useEffect(() => {
+    if (!user?.id) {
+      setFollowingIds(new Set());
+      setCommunityIds(new Set());
+      return;
+    }
+
+    const fetchFollows = async () => {
+      // People I follow
+      const { data: myFollows } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', user.id);
+
+      const iFollow = new Set<string>((myFollows || []).map((f: any) => f.following_id));
+      setFollowingIds(iFollow);
+
+      // People who follow me
+      const { data: theirFollows } = await supabase
+        .from('follows')
+        .select('follower_id')
+        .eq('following_id', user.id);
+
+      const followMe = new Set<string>((theirFollows || []).map((f: any) => f.follower_id));
+
+      // Community = mutual follows
+      const mutual = new Set<string>();
+      iFollow.forEach((id) => {
+        if (followMe.has(id)) mutual.add(id);
+      });
+      setCommunityIds(mutual);
+    };
+
+    fetchFollows();
+  }, [user?.id]);
+
   // Tag filtering
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
   const filteredFlyers = flyers.filter((f) => {
+    // Feed tab filter
+    if (feedTab === 'following' && user?.id) {
+      if (!followingIds.has(f.user_id) && f.user_id !== user.id) return false;
+    } else if (feedTab === 'community' && user?.id) {
+      if (!communityIds.has(f.user_id) && f.user_id !== user.id) return false;
+    }
+
     // Tag filter
     if (activeTag && !f.tags?.some((t) => t.toLowerCase() === activeTag.toLowerCase())) {
       return false;
@@ -377,14 +429,36 @@ export default function FeedScreen() {
           pointerEvents="box-none"
         >
           <View style={styles.topBarGradient} />
+          {/* TikTok-style top bar: search icon | tabs | spacer */}
           <View style={styles.topBarContent}>
-            {/* Wordmark */}
-            <Text style={styles.wordmark}>THE PAGES</Text>
-
-            {/* Search button */}
+            {/* Search icon (left) */}
             <TouchableOpacity style={styles.searchButton} activeOpacity={0.7} onPress={() => setShowSearch(true)}>
               <SearchIcon />
             </TouchableOpacity>
+
+            {/* Feed tabs (center) */}
+            <View style={styles.feedTabs}>
+              {([
+                { key: 'following' as FeedTab, label: 'Following' },
+                { key: 'community' as FeedTab, label: 'Community' },
+                { key: 'all' as FeedTab, label: 'Discover' },
+              ]).map((tab) => (
+                <TouchableOpacity
+                  key={tab.key}
+                  style={styles.feedTab}
+                  activeOpacity={0.7}
+                  onPress={() => setFeedTab(tab.key)}
+                >
+                  <Text style={[styles.feedTabText, feedTab === tab.key && styles.feedTabTextActive]}>
+                    {tab.label}
+                  </Text>
+                  {feedTab === tab.key && <View style={styles.feedTabIndicator} />}
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            {/* Spacer to balance search icon */}
+            <View style={{ width: 36 }} />
           </View>
 
           {/* Tag filter bar */}
@@ -446,7 +520,7 @@ export default function FeedScreen() {
           </Svg>
           <Text style={styles.stateTitle}>No events found</Text>
           <Text style={styles.stateSubtitle}>
-            {activeTag ? `No events with ${activeTag}` : searchFilters ? 'Try adjusting your filters' : 'Check back soon for new events'}
+            {activeTag ? `No events with ${activeTag}` : searchFilters ? 'Try adjusting your filters' : feedTab === 'following' ? 'Follow people to see their events here' : feedTab === 'community' ? 'Your community (mutual follows) events will appear here' : 'Check back soon for new events'}
           </Text>
           {(activeTag || searchFilters) && (
             <TouchableOpacity
@@ -551,22 +625,40 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  wordmark: {
-    fontFamily: FONTS.display,
-    fontSize: 18,
-    letterSpacing: 3,
-    textTransform: 'uppercase',
-    color: '#02040F',
-  },
   searchButton: {
     width: 36,
     height: 36,
-    borderRadius: 0,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(2,4,15,0.15)',
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
+    opacity: 0.5,
+  },
+
+  /* Feed tabs */
+  feedTabs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 20,
+  },
+  feedTab: {
+    alignItems: 'center',
+    paddingVertical: 4,
+  },
+  feedTabText: {
+    fontFamily: FONTS.display,
+    fontSize: 15,
+    letterSpacing: 0.5,
+    color: 'rgba(2,4,15,0.35)',
+  },
+  feedTabTextActive: {
+    color: '#02040F',
+  },
+  feedTabIndicator: {
+    width: 20,
+    height: 2,
+    backgroundColor: '#02040F',
+    borderRadius: 1,
+    marginTop: 4,
   },
 
   /* Swipe hint */
