@@ -712,14 +712,12 @@ export function AddEventSheet() {
           },
         ]}
       >
-        <View style={{ flex: 1 }}>
           <ScrollView
-            style={{ flex: 1 }}
+            style={{ maxHeight: height * 0.92 - 80 }}
             showsVerticalScrollIndicator
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.scrollContent}
             bounces
-            nestedScrollEnabled
           >
             {/* Handle bar */}
             <View style={styles.handleContainer}>
@@ -1240,7 +1238,6 @@ export function AddEventSheet() {
             </View>
 
           </ScrollView>
-        </View>
 
         {/* Sticky submit button */}
         <TouchableOpacity
