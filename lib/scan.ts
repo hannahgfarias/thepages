@@ -1,41 +1,42 @@
 import { supabase } from './supabase';
 import type { ScanResult } from '../types';
 
-const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://taygiieowkyuhvxmlyeg.supabase.co';
-const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_06MYb5KGpy5eIIV4tkQqgQ_jdgatC7R';
+const SUPABASE_URL = 'https://taygiieowkyuhvxmlyeg.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRheWdpaWVvd2t5dWh2eG1seWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0NDMwNjQsImV4cCI6MjA4OTAxOTA2NH0.UOYz-kMqGOpYVEuSIqlKmMr2mtIwIeeN_j7Cqwc1-Sc';
 
 /**
- * Build headers for Supabase edge function calls.
- * Supabase requires both the `apikey` header and a valid `Authorization` bearer.
- * For anonymous users (no session), the anon key works as the bearer token.
- */
-async function edgeFunctionHeaders(): Promise<Record<string, string>> {
-  const { data: { session } } = await supabase.auth.getSession();
-  return {
-    'Content-Type': 'application/json',
-    'apikey': SUPABASE_ANON_KEY,
-    'Authorization': `Bearer ${session?.access_token || SUPABASE_ANON_KEY}`,
-  };
-}
-
-/**
- * Call the scan-flyer edge function to extract event details from an image.
+ * Call the scan-flyer edge function using raw fetch so we can see
+ * the exact response status and body on failure.
  */
 export async function scanFlyer(
   base64: string,
   mediaType: string
 ): Promise<ScanResult> {
-  const headers = await edgeFunctionHeaders();
+  const url = `${SUPABASE_URL}/functions/v1/scan-flyer`;
 
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/scan-flyer`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ imageBase64: base64, mediaType }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ imageBase64: base64, mediaType }),
+    });
+  } catch (networkError: any) {
+    throw new Error(`Network error: ${networkError.message}`);
+  }
 
   if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || `Scan failed (${response.status})`);
+    let body = '';
+    try {
+      body = await response.text();
+    } catch {
+      body = '(could not read body)';
+    }
+    throw new Error(`HTTP ${response.status}: ${body}`);
   }
 
   return response.json();
@@ -49,18 +50,23 @@ export async function moderateContent(
   mediaType: string | null,
   text: string
 ): Promise<{ status: string; confidence: number; reason_category?: string }> {
-  const headers = await edgeFunctionHeaders();
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/moderate-content`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ imageBase64, mediaType, text }),
+    });
 
-  const response = await fetch(`${SUPABASE_URL}/functions/v1/moderate-content`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ imageBase64, mediaType, text }),
-  });
+    if (!response.ok) {
+      return { status: 'held', confidence: 0.5 };
+    }
 
-  if (!response.ok) {
-    // Default to held if moderation fails
+    return response.json();
+  } catch {
     return { status: 'held', confidence: 0.5 };
   }
-
-  return response.json();
 }

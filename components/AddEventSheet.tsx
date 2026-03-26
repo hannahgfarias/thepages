@@ -5,12 +5,10 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Animated,
-  Easing,
   ScrollView,
   KeyboardAvoidingView,
+  Modal,
   Platform,
-  useWindowDimensions,
   Image,
   Alert,
   ActionSheetIOS,
@@ -24,8 +22,6 @@ import Svg, { Path } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
-
-const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
 const CATEGORIES = [
   'Party', 'Music', 'Community', 'Arts', 'Wellness', 'Food', 'Free', 'Theatre',
@@ -46,7 +42,6 @@ function hasBasicPII(text: string): { found: boolean; type: string } {
 export function AddEventSheet() {
   const { showAddEvent, setShowAddEvent, editingPost, setEditingPost } = useOverlay();
   const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
 
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
@@ -232,30 +227,7 @@ export function AddEventSheet() {
     setLocationResults([]);
   };
 
-  const slideY = useRef(new Animated.Value(height)).current;
-  const scrimOpacity = useRef(new Animated.Value(0)).current;
 
-  useEffect(() => {
-    if (showAddEvent) {
-      Animated.parallel([
-        Animated.timing(slideY, {
-          toValue: 0,
-          duration: 250,
-          easing: EASING,
-          useNativeDriver: true,
-        }),
-        Animated.timing(scrimOpacity, {
-          toValue: 1,
-          duration: 200,
-          easing: EASING,
-          useNativeDriver: true,
-        }),
-      ]).start();
-    } else {
-      slideY.setValue(height);
-      scrimOpacity.setValue(0);
-    }
-  }, [showAddEvent, slideY, scrimOpacity, height]);
 
   const [scanError, setScanError] = useState<string | null>(null);
 
@@ -462,24 +434,9 @@ export function AddEventSheet() {
   };
 
   const handleClose = () => {
-    Animated.parallel([
-      Animated.timing(slideY, {
-        toValue: height,
-        duration: 220,
-        easing: EASING,
-        useNativeDriver: true,
-      }),
-      Animated.timing(scrimOpacity, {
-        toValue: 0,
-        duration: 180,
-        easing: EASING,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      resetForm();
-      setEditingPost(null);
-      setShowAddEvent(false);
-    });
+    resetForm();
+    setEditingPost(null);
+    setShowAddEvent(false);
   };
 
   const handleSubmit = async () => {
@@ -692,34 +649,23 @@ export function AddEventSheet() {
   if (!showAddEvent) return null;
 
   return (
-    <View style={[StyleSheet.absoluteFill, { zIndex: 90 }]} pointerEvents="box-none">
-      {/* Scrim */}
-      <Animated.View style={[styles.scrim, { opacity: scrimOpacity }]} pointerEvents="auto">
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={handleClose}
-        />
-      </Animated.View>
-
-      {/* Sheet */}
-      <Animated.View
-        style={[
-          styles.sheet,
-          {
-            maxHeight: '92%',
-            height: Platform.OS === 'web' ? '92vh' : height * 0.92,
-            transform: [{ translateY: slideY }],
-          } as any,
-        ]}
-      >
-        <ScrollView
+    <Modal
+      visible={showAddEvent}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={handleClose}
+    >
+      <View style={styles.modalContainer}>
+        <KeyboardAvoidingView
           style={{ flex: 1 }}
-          showsVerticalScrollIndicator
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.scrollContent}
-          bounces
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
+          <ScrollView
+            contentContainerStyle={styles.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator
+              bounces
+            >
             {/* Handle bar */}
             <View style={styles.handleContainer}>
               <View style={styles.handle} />
@@ -1228,57 +1174,30 @@ export function AddEventSheet() {
               />
             </View>
 
-            {/* Anonymous toggle */}
-            <View style={styles.visibilityRow}>
-              <View>
-                <Text style={styles.visibilityLabel}>
-                  {isAnonymous ? 'Posting Anonymously' : 'Posting as You'}
-                </Text>
-                <Text style={styles.visibilityHint}>
-                  {isAnonymous ? 'Your name won\'t appear on this post' : 'Your handle will be shown on this post'}
-                </Text>
-              </View>
-              <Switch
-                value={isAnonymous}
-                onValueChange={setIsAnonymous}
-                trackColor={{ true: '#EB736C', false: '#ddd' }}
-                thumbColor="#fff"
-              />
-            </View>
 
-        </ScrollView>
+          </ScrollView>
 
-        {/* Sticky submit button */}
-        <TouchableOpacity
-          style={[styles.submitButton, { paddingBottom: insets.bottom + 20 }, publishing && styles.submitButtonDisabled]}
-          activeOpacity={0.8}
-          onPress={handleSubmit}
-          disabled={publishing}
-        >
-          <Text style={styles.submitText}>
-            {publishing ? 'CHECKING CONTENT...' : editingPost ? 'UPDATE EVENT' : 'POST TO THE PAGES'}
-          </Text>
-        </TouchableOpacity>
-      </Animated.View>
-    </View>
+          {/* Sticky submit button */}
+          <TouchableOpacity
+            style={[styles.submitButton, { paddingBottom: insets.bottom + 20 }, publishing && styles.submitButtonDisabled]}
+            activeOpacity={0.8}
+            onPress={handleSubmit}
+            disabled={publishing}
+          >
+            <Text style={styles.submitText}>
+              {publishing ? 'CHECKING CONTENT...' : editingPost ? 'UPDATE EVENT' : 'POST TO THE PAGES'}
+            </Text>
+          </TouchableOpacity>
+        </KeyboardAvoidingView>
+      </View>
+    </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  scrim: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.scrim,
-    zIndex: 90,
-  },
-  sheet: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+  modalContainer: {
+    flex: 1,
     backgroundColor: COLORS.sheetBg,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    zIndex: 91,
   },
   scrollContent: {
     paddingHorizontal: 24,
