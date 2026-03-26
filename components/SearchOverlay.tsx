@@ -71,7 +71,7 @@ function SearchIcon({ size = 40, color = 'rgba(2,4,15,0.25)' }: { size?: number;
 
 function filterFlyers(filters: SearchFilters, allFlyers: Post[]) {
   return allFlyers.filter((flyer) => {
-    // Query filter
+    // Query filter — also matches poster handle/display_name
     if (filters.query) {
       const q = filters.query.toLowerCase();
       const matchesQuery =
@@ -80,7 +80,9 @@ function filterFlyers(filters: SearchFilters, allFlyers: Post[]) {
         (flyer.location && flyer.location.toLowerCase().includes(q)) ||
         (flyer.date_text && flyer.date_text.toLowerCase().includes(q)) ||
         flyer.category.toLowerCase().includes(q) ||
-        flyer.tags.some((t) => t.toLowerCase().includes(q));
+        flyer.tags.some((t) => t.toLowerCase().includes(q)) ||
+        (flyer.profile?.handle && flyer.profile.handle.toLowerCase().includes(q)) ||
+        (flyer.profile?.display_name && flyer.profile.display_name.toLowerCase().includes(q));
       if (!matchesQuery) return false;
     }
 
@@ -326,7 +328,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
               style={styles.searchInput}
               value={query}
               onChangeText={setQuery}
-              placeholder="Search events..."
+              placeholder="Search events, people..."
               placeholderTextColor="rgba(2,4,15,0.4)"
               autoCorrect={false}
               autoCapitalize="none"
@@ -458,6 +460,11 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
                           <Text style={styles.resultDate} numberOfLines={1}>
                             {post.date_text}
                           </Text>
+                          {post.profile && !post.is_anonymous && (
+                            <Text style={styles.resultPoster} numberOfLines={1}>
+                              {post.profile.display_name || post.profile.handle}
+                            </Text>
+                          )}
                         </View>
                       </View>
                     );
@@ -644,6 +651,15 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.mono,
     fontSize: 10,
     color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  resultPoster: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.5)',
     marginTop: 2,
     textShadowColor: 'rgba(0,0,0,0.8)',
     textShadowOffset: { width: 0, height: 1 },

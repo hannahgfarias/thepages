@@ -94,7 +94,8 @@ export default function FeedScreen() {
       // Text query
       if (searchFilters.query) {
         const q = searchFilters.query.toLowerCase();
-        const match = [f.title, f.subtitle, f.location, f.date_text, f.category, ...(f.tags || [])]
+        const match = [f.title, f.subtitle, f.location, f.date_text, f.category, ...(f.tags || []),
+          f.profile?.handle, f.profile?.display_name]
           .filter(Boolean)
           .some((s) => s!.toLowerCase().includes(q));
         if (!match) return false;
