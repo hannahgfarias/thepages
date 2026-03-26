@@ -180,7 +180,11 @@ export function useFlyers(userId?: string) {
     setFlyers((prev) => {
       const target = prev.find((f) => f.id === postId);
       wasSaved = target?.is_saved ?? false;
-      return prev.map((f) => f.id === postId ? { ...f, is_saved: !f.is_saved } : f);
+      return prev.map((f) => f.id === postId ? {
+        ...f,
+        is_saved: !f.is_saved,
+        save_count: f.is_saved ? Math.max(f.save_count - 1, 0) : f.save_count + 1,
+      } : f);
     });
 
     if (!userId) return; // Not logged in — just toggle locally
@@ -199,12 +203,36 @@ export function useFlyers(userId?: string) {
     } catch {
       // Rollback optimistic update on failure
       setFlyers((prev) =>
-        prev.map((f) => (f.id === postId ? { ...f, is_saved: !f.is_saved } : f))
+        prev.map((f) => (f.id === postId ? {
+          ...f,
+          is_saved: !f.is_saved,
+          save_count: f.is_saved ? Math.max(f.save_count - 1, 0) : f.save_count + 1,
+        } : f))
       );
     }
   }, [userId]);
 
-  return { flyers, loading, error, refetch: fetchFlyers, toggleSave };
+  const recordShare = useCallback(async (postId: string) => {
+    // Optimistic UI update
+    setFlyers((prev) =>
+      prev.map((f) => (f.id === postId ? { ...f, share_count: f.share_count + 1 } : f))
+    );
+
+    try {
+      const { error } = await supabase.from('shares').insert({
+        user_id: userId || null,
+        post_id: postId,
+      });
+      if (error) throw error;
+    } catch {
+      // Rollback on failure
+      setFlyers((prev) =>
+        prev.map((f) => (f.id === postId ? { ...f, share_count: Math.max(f.share_count - 1, 0) } : f))
+      );
+    }
+  }, [userId]);
+
+  return { flyers, loading, error, refetch: fetchFlyers, toggleSave, recordShare };
 }
 
 /* ─── Shared Flyers Context ─── */
@@ -215,6 +243,7 @@ interface FlyersContextValue {
   error: string | null;
   refetch: () => Promise<void>;
   toggleSave: (postId: string) => Promise<void>;
+  recordShare: (postId: string) => Promise<void>;
 }
 
 const FlyersContext = createContext<FlyersContextValue | null>(null);
