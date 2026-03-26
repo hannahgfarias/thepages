@@ -9,6 +9,7 @@ import {
   Easing,
   PanResponder,
   ScrollView,
+  FlatList,
   useWindowDimensions,
   Alert,
   ActionSheetIOS,
@@ -23,6 +24,7 @@ import { useAuth } from '../hooks/useAuth';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
 import type { Post } from '../types';
+import { FlyerCard } from './FlyerCard';
 import { SettingsSheet } from './SettingsSheet';
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
@@ -172,7 +174,7 @@ export function ProfilePanel() {
   ).current;
 
   const userId = session?.user?.id;
-  const { flyers: allFlyers, refetch } = useFlyers(userId);
+  const { flyers: allFlyers, refetch, toggleSave } = useFlyers(userId);
 
   // Your posts — filter all flyers by current user
   const yourPosts = useMemo(() =>
@@ -243,6 +245,28 @@ export function ProfilePanel() {
 
   const [webMenuPostId, setWebMenuPostId] = useState<string | null>(null);
 
+  // Fullscreen post viewer
+  const [viewerPosts, setViewerPosts] = useState<Post[] | null>(null);
+  const [viewerInitialIndex, setViewerInitialIndex] = useState(0);
+  const [viewerIsOwn, setViewerIsOwn] = useState(false);
+
+  const NAV_HEIGHT = 64;
+  const viewerCardHeight = height - NAV_HEIGHT - insets.bottom;
+
+  const openPostViewer = useCallback((posts: Post[], index: number, isOwn: boolean) => {
+    setViewerPosts(posts);
+    setViewerInitialIndex(index);
+    setViewerIsOwn(isOwn);
+  }, []);
+
+  const closePostViewer = useCallback(() => {
+    setViewerPosts(null);
+  }, []);
+
+  const handleViewerSave = useCallback((id: string) => {
+    toggleSave(id);
+  }, [toggleSave]);
+
   const renderPostGrid = (posts: Post[], isOwnPosts: boolean = false) => (
     <View style={styles.grid}>
       {posts.map((post) => {
@@ -261,7 +285,10 @@ export function ProfilePanel() {
             ]}
             activeOpacity={0.8}
             onLongPress={isOwnPosts ? () => handlePostLongPress(post) : undefined}
-            onPress={isOwnPosts && Platform.OS === 'web' ? () => setWebMenuPostId(webMenuPostId === post.id ? null : post.id) : undefined}
+            onPress={() => {
+              const idx = posts.findIndex((p) => p.id === post.id);
+              openPostViewer(posts, idx >= 0 ? idx : 0, isOwnPosts);
+            }}
           >
             {imageSource ? (
               <Image
@@ -455,6 +482,49 @@ export function ProfilePanel() {
         )}
       </ScrollView>
     </Animated.View>
+
+    {/* Fullscreen post viewer */}
+    {viewerPosts && (
+      <View style={styles.viewerOverlay}>
+        {/* Close button */}
+        <TouchableOpacity
+          style={[styles.viewerClose, { top: insets.top + 12 }]}
+          activeOpacity={0.7}
+          onPress={closePostViewer}
+        >
+          <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+            <Path d="M18 6L6 18M6 6l12 12" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" />
+          </Svg>
+        </TouchableOpacity>
+
+        <FlatList
+          data={viewerPosts}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <FlyerCard
+              flyer={item}
+              cardHeight={viewerCardHeight}
+              onSave={handleViewerSave}
+              onEdit={viewerIsOwn ? handleEditPost : undefined}
+              onDelete={viewerIsOwn ? (id) => {
+                handleDeletePost(item);
+                closePostViewer();
+              } : undefined}
+            />
+          )}
+          pagingEnabled
+          showsVerticalScrollIndicator={false}
+          snapToAlignment="start"
+          decelerationRate="fast"
+          getItemLayout={(_, index) => ({
+            length: viewerCardHeight,
+            offset: viewerCardHeight * index,
+            index,
+          })}
+          initialScrollIndex={viewerInitialIndex}
+        />
+      </View>
+    )}
 
     {/* Settings — rendered outside the profile panel so it gets full screen */}
     {showSettings && (
@@ -693,5 +763,27 @@ const styles = StyleSheet.create({
     fontFamily: FONTS.body,
     fontSize: 13,
     color: '#02040F',
+  },
+
+  /* Fullscreen post viewer */
+  viewerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#000',
+    zIndex: 50,
+  },
+  viewerClose: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 60,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
