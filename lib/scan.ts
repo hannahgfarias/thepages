@@ -1,45 +1,45 @@
 import { supabase } from './supabase';
 import type { ScanResult } from '../types';
 
+const SUPABASE_URL = 'https://taygiieowkyuhvxmlyeg.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRheWdpaWVvd2t5dWh2eG1seWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM0NDMwNjQsImV4cCI6MjA4OTAxOTA2NH0.UOYz-kMqGOpYVEuSIqlKmMr2mtIwIeeN_j7Cqwc1-Sc';
+
 /**
- * Call the scan-flyer edge function to extract event details from an image.
- * Refreshes the session first to ensure a valid JWT.
+ * Call the scan-flyer edge function using raw fetch so we can see
+ * the exact response status and body on failure.
  */
 export async function scanFlyer(
   base64: string,
   mediaType: string
 ): Promise<ScanResult> {
-  // Force a session refresh to ensure the access token is valid
-  const { data: { session }, error: authError } = await supabase.auth.refreshSession();
+  const url = `${SUPABASE_URL}/functions/v1/scan-flyer`;
 
-  if (authError || !session) {
-    // If refresh fails, try getting the current session anyway
-    const { data: { session: currentSession } } = await supabase.auth.getSession();
-    if (!currentSession) {
-      throw new Error('Not signed in — please sign in and try again');
-    }
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ imageBase64: base64, mediaType }),
+    });
+  } catch (networkError: any) {
+    throw new Error(`Network error: ${networkError.message}`);
   }
 
-  const { data, error } = await supabase.functions.invoke('scan-flyer', {
-    body: { imageBase64: base64, mediaType },
-  });
-
-  if (error) {
-    let details = error.message;
+  if (!response.ok) {
+    let body = '';
     try {
-      if ((error as any).context) {
-        const responseBody = await (error as any).context.json();
-        // Show all fields — the detail field has the actual reason
-        const parts = [responseBody?.error, responseBody?.detail, responseBody?.message].filter(Boolean);
-        details = parts.length > 0 ? parts.join(' — ') : JSON.stringify(responseBody);
-      }
+      body = await response.text();
     } catch {
-      // couldn't parse response body
+      body = '(could not read body)';
     }
-    throw new Error(details);
+    throw new Error(`HTTP ${response.status}: ${body}`);
   }
 
-  return data;
+  return response.json();
 }
 
 /**
@@ -50,16 +50,23 @@ export async function moderateContent(
   mediaType: string | null,
   text: string
 ): Promise<{ status: string; confidence: number; reason_category?: string }> {
-  // Force session refresh
-  await supabase.auth.refreshSession();
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/moderate-content`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ imageBase64, mediaType, text }),
+    });
 
-  const { data, error } = await supabase.functions.invoke('moderate-content', {
-    body: { imageBase64, mediaType, text },
-  });
+    if (!response.ok) {
+      return { status: 'held', confidence: 0.5 };
+    }
 
-  if (error) {
+    return response.json();
+  } catch {
     return { status: 'held', confidence: 0.5 };
   }
-
-  return data;
 }
