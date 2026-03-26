@@ -1271,6 +1271,7 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     zIndex: 91,
+    overflow: 'hidden',
   },
   scrollContent: {
     paddingHorizontal: 24,
