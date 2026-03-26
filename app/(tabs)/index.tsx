@@ -48,13 +48,24 @@ function SearchIcon() {
 export default function FeedScreen() {
   const { user } = useAuth();
   const { flyers, loading, error, toggleSave, refetch } = useFlyers(user?.id);
-  const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt, setEditingPost, setShowAddEvent } = useOverlay();
+  const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt, setEditingPost, setShowAddEvent, scrollToTopRef } = useOverlay();
+  const flatListRef = useRef<FlatList>(null);
   const prevShowAddEvent = useRef(false);
+  const [activeTopTab, setActiveTopTab] = useState<'community' | 'following' | 'all'>('all');
 
-  // Refetch feed when AddEventSheet closes (post was potentially added)
+  // Register scroll-to-top
+  useEffect(() => {
+    scrollToTopRef.current = () => {
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    };
+    return () => { scrollToTopRef.current = null; };
+  }, [scrollToTopRef]);
+
+  // Refetch feed when AddEventSheet closes (post was potentially added) and scroll to top
   useEffect(() => {
     if (prevShowAddEvent.current && !showAddEvent) {
       refetch();
+      flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
     }
     prevShowAddEvent.current = showAddEvent;
   }, [showAddEvent, refetch]);
@@ -359,10 +370,24 @@ export default function FeedScreen() {
         >
           <View style={styles.topBarGradient} />
           <View style={styles.topBarContent}>
-            {/* Wordmark */}
-            <Text style={styles.wordmark}>THE PAGES</Text>
+            {/* TikTok-style centered tabs */}
+            <View style={styles.topTabs}>
+              {(['community', 'following', 'all'] as const).map((tab) => (
+                <TouchableOpacity
+                  key={tab}
+                  style={styles.topTab}
+                  activeOpacity={0.7}
+                  onPress={() => setActiveTopTab(tab)}
+                >
+                  <Text style={[styles.topTabText, activeTopTab === tab && styles.topTabTextActive]}>
+                    {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                  </Text>
+                  {activeTopTab === tab && <View style={styles.topTabIndicator} />}
+                </TouchableOpacity>
+              ))}
+            </View>
 
-            {/* Search button */}
+            {/* Search icon — no background */}
             <TouchableOpacity style={styles.searchButton} activeOpacity={0.7} onPress={() => setShowSearch(true)}>
               <SearchIcon />
             </TouchableOpacity>
@@ -451,6 +476,7 @@ export default function FeedScreen() {
       {/* Feed */}
       {filteredFlyers.length > 0 && (
         <FlatList
+          ref={flatListRef}
           data={filteredFlyers}
           renderItem={renderItem}
           keyExtractor={(item) => item.id}
@@ -463,6 +489,10 @@ export default function FeedScreen() {
           viewabilityConfig={viewabilityConfig}
           onScroll={handleScroll}
           scrollEventThrottle={16}
+          removeClippedSubviews={Platform.OS !== 'web'}
+          initialNumToRender={2}
+          maxToRenderPerBatch={2}
+          windowSize={3}
           ListFooterComponent={
             <View style={[styles.endOfFeed, { height: cardHeight }]}>
               <Text style={styles.endOfFeedEmoji}>✨</Text>
@@ -528,23 +558,37 @@ const styles = StyleSheet.create({
   },
   topBarContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
   },
-  wordmark: {
+  topTabs: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+  },
+  topTab: {
+    alignItems: 'center',
+    paddingBottom: 4,
+  },
+  topTabText: {
     fontFamily: FONTS.display,
-    fontSize: 18,
-    letterSpacing: 3,
-    textTransform: 'uppercase',
+    fontSize: 15,
+    letterSpacing: 1,
+    color: 'rgba(2,4,15,0.35)',
+  },
+  topTabTextActive: {
     color: '#02040F',
+  },
+  topTabIndicator: {
+    width: 20,
+    height: 2,
+    backgroundColor: '#02040F',
+    borderRadius: 1,
+    marginTop: 4,
   },
   searchButton: {
     width: 36,
     height: 36,
-    borderRadius: 0,
-    backgroundColor: 'rgba(255,255,255,0.85)',
-    borderWidth: 1,
-    borderColor: 'rgba(2,4,15,0.15)',
     alignItems: 'center',
     justifyContent: 'center',
   },

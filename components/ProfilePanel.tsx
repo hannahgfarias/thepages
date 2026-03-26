@@ -119,7 +119,7 @@ export function ProfilePanel() {
       translateX.setValue(width);
       Animated.timing(translateX, {
         toValue: 0,
-        duration: 400,
+        duration: 250,
         easing: EASING,
         useNativeDriver: true,
       }).start();
@@ -129,7 +129,7 @@ export function ProfilePanel() {
   const close = () => {
     Animated.timing(translateX, {
       toValue: width,
-      duration: 350,
+      duration: 220,
       easing: EASING,
       useNativeDriver: true,
     }).start(() => {
@@ -326,8 +326,9 @@ export function ProfilePanel() {
         ]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Settings gear — top right */}
+        {/* Top row — wordmark + gear */}
         <View style={styles.topRow}>
+          <Text style={styles.wordmark}>THE PAGES</Text>
           <View style={{ flex: 1 }} />
           <TouchableOpacity style={styles.gearButton} activeOpacity={0.7} onPress={() => setShowSettings(true)}>
             <GearIcon />
@@ -483,6 +484,13 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 20,
+  },
+  wordmark: {
+    fontFamily: FONTS.display,
+    fontSize: 18,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    color: '#02040F',
   },
   gearButton: {
     width: 36,

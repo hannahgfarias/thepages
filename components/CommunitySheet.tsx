@@ -107,13 +107,13 @@ export function CommunitySheet() {
       Animated.parallel([
         Animated.timing(slideY, {
           toValue: 0,
-          duration: 400,
+          duration: 250,
           easing: EASING,
           useNativeDriver: true,
         }),
         Animated.timing(scrimOpacity, {
           toValue: 1,
-          duration: 300,
+          duration: 200,
           easing: EASING,
           useNativeDriver: true,
         }),
@@ -128,13 +128,13 @@ export function CommunitySheet() {
     Animated.parallel([
       Animated.timing(slideY, {
         toValue: height,
-        duration: 350,
+        duration: 220,
         easing: EASING,
         useNativeDriver: true,
       }),
       Animated.timing(scrimOpacity, {
         toValue: 0,
-        duration: 250,
+        duration: 180,
         easing: EASING,
         useNativeDriver: true,
       }),
