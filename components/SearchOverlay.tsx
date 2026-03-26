@@ -190,30 +190,67 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   const [viewingUserPosts, setViewingUserPosts] = useState<Post[]>([]);
   const [loadingUserPosts, setLoadingUserPosts] = useState(false);
 
-  // Live user search as user types
+  // Live user search — local first, then Supabase
   useEffect(() => {
     if (userSearchDebounce.current) clearTimeout(userSearchDebounce.current);
 
-    if (!query.trim() || query.trim().length < 2) {
+    const raw = query.trim();
+    if (!raw || raw.length < 2) {
       setUserResults([]);
       return;
     }
 
+    // Strip leading @ for matching
+    const q = raw.startsWith('@') ? raw.slice(1) : raw;
+    const qLower = q.toLowerCase();
+
+    // Immediate: search profiles we already have from loaded flyers
+    const seen = new Set<string>();
+    const localMatches: Profile[] = [];
+    for (const f of allFlyers) {
+      if (!f.profile || seen.has(f.profile.id)) continue;
+      seen.add(f.profile.id);
+      const p = f.profile;
+      const handleMatch = p.handle?.toLowerCase().includes(qLower);
+      const nameMatch = p.display_name?.toLowerCase().includes(qLower);
+      if (handleMatch || nameMatch) {
+        localMatches.push({
+          id: p.id,
+          handle: p.handle,
+          display_name: p.display_name ?? null,
+          bio: null,
+          location: null,
+          avatar_url: p.avatar_url ?? null,
+          avatar_color: (p as any).avatar_color ?? '#EB736C',
+          avatar_initials: (p as any).avatar_initials ?? '?',
+          is_public: true,
+          created_at: '',
+        });
+      }
+    }
+    if (localMatches.length > 0) setUserResults(localMatches);
+
+    // Also search Supabase for users we don't have locally
     userSearchDebounce.current = setTimeout(async () => {
       setSearchingUsers(true);
       try {
-        const q = query.trim();
-        const pattern = `%${q}%`;
         const { data, error } = await supabase
           .from('profiles')
           .select('id, handle, display_name, bio, location, avatar_url, avatar_color, avatar_initials, is_public, created_at')
-          .or(`handle.ilike.${pattern},display_name.ilike.${pattern}`)
+          .or(`handle.ilike.%${q}%,display_name.ilike.%${q}%`)
           .limit(10);
-        if (error) console.warn('[UserSearch] error:', error.message);
-        setUserResults((data as Profile[]) || []);
+        if (error) {
+          console.warn('[UserSearch] Supabase error:', error.message);
+        } else if (data && data.length > 0) {
+          // Merge: Supabase results take priority, dedupe by id
+          const merged = new Map<string, Profile>();
+          for (const p of localMatches) merged.set(p.id, p);
+          for (const p of data as Profile[]) merged.set(p.id, p);
+          setUserResults(Array.from(merged.values()));
+        }
+        // If Supabase returned nothing but we have local matches, keep them
       } catch (e) {
         console.warn('[UserSearch] exception:', e);
-        setUserResults([]);
       }
       setSearchingUsers(false);
     }, 300);
@@ -221,7 +258,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
     return () => {
       if (userSearchDebounce.current) clearTimeout(userSearchDebounce.current);
     };
-  }, [query]);
+  }, [query, allFlyers]);
 
   const openUserProfile = useCallback(async (profile: Profile) => {
     setViewingUser(profile);
