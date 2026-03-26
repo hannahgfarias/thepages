@@ -693,7 +693,7 @@ export function AddEventSheet() {
             </View>
 
             {/* Title */}
-            <Text style={styles.sheetTitle}>{editingPost ? 'EDIT EVENT' : 'SHARE SOMETHING HAPPENING'}</Text>
+            <Text style={styles.sheetTitle}>{editingPost ? 'EDIT EVENT' : occurrences.length > 1 ? `${occurrences.length} EVENTS DETECTED` : 'SHARE SOMETHING HAPPENING'}</Text>
 
             {/* Upload zone */}
             <TouchableOpacity
@@ -748,26 +748,30 @@ export function AddEventSheet() {
               </TouchableOpacity>
             )}
 
-            {/* Form fields */}
-            <View style={styles.field}>
-              <TextInput
-                style={styles.input}
-                value={title}
-                onChangeText={setTitle}
-                placeholder="Event title"
-                placeholderTextColor="#999"
-              />
-            </View>
+            {/* Form fields — hidden when multi-event detected (each occurrence has its own) */}
+            {occurrences.length <= 1 && (
+              <>
+                <View style={styles.field}>
+                  <TextInput
+                    style={styles.input}
+                    value={title}
+                    onChangeText={setTitle}
+                    placeholder="Event title"
+                    placeholderTextColor="#999"
+                  />
+                </View>
 
-            <View style={styles.field}>
-              <TextInput
-                style={styles.input}
-                value={subtitle}
-                onChangeText={setSubtitle}
-                placeholder="Tagline or subtitle (optional)"
-                placeholderTextColor="#999"
-              />
-            </View>
+                <View style={styles.field}>
+                  <TextInput
+                    style={styles.input}
+                    value={subtitle}
+                    onChangeText={setSubtitle}
+                    placeholder="Tagline or subtitle (optional)"
+                    placeholderTextColor="#999"
+                  />
+                </View>
+              </>
+            )}
 
             <View style={styles.field}>
               <TextInput
@@ -781,6 +785,9 @@ export function AddEventSheet() {
               />
             </View>
 
+            {/* Date, location — hidden when multi-event (each occurrence has its own) */}
+            {occurrences.length <= 1 && (
+              <>
             {/* Date & time — tappable to open calendar */}
             <TouchableOpacity
               style={styles.field}
@@ -1046,6 +1053,8 @@ export function AddEventSheet() {
                 </View>
               )}
             </View>
+              </>
+            )}
 
             {/* Multiple dates/locations detected — editable sections */}
             {occurrences.length > 1 && (
