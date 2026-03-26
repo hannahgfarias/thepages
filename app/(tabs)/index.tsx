@@ -17,6 +17,7 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import * as Haptics from 'expo-haptics';
+import { useLocalSearchParams } from 'expo-router';
 import { FlyerCard } from '../../components/FlyerCard';
 import { useFlyers, parseEventDate } from '../../hooks/useFlyers';
 import { useOverlay } from './_layout';
@@ -64,9 +65,17 @@ export default function FeedScreen() {
   const { user } = useAuth();
   const { flyers, loading, error, toggleSave, recordShare, refetch } = useFlyers(user?.id);
   const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt, setEditingPost, setShowAddEvent, focusPostId, setFocusPostId } = useOverlay();
+  const { focus } = useLocalSearchParams<{ focus?: string }>();
   const flatListRef = useRef<FlatList>(null);
   const [refreshing, setRefreshing] = useState(false);
   const prevShowAddEvent = useRef(false);
+
+  // Handle deep link: ?focus={postId} from /event/[id] redirect
+  useEffect(() => {
+    if (focus) {
+      setFocusPostId(focus);
+    }
+  }, [focus, setFocusPostId]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
