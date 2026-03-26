@@ -173,16 +173,20 @@ export function useFlyers(userId?: string) {
   }, [fetchFlyers]);
 
   const toggleSave = useCallback(async (postId: string) => {
-    // Read current saved state before optimistic update
-    const currentFlyer = flyers.find((f) => f.id === postId);
-    const wasSaved = currentFlyer?.is_saved ?? false;
+    // Read current saved state synchronously from latest flyers
+    let wasSaved = false;
 
-    // Optimistic update
-    setFlyers((prev) =>
-      prev.map((f) => f.id === postId ? { ...f, is_saved: !f.is_saved } : f)
-    );
+    // Optimistic update + capture previous state
+    setFlyers((prev) => {
+      const target = prev.find((f) => f.id === postId);
+      wasSaved = target?.is_saved ?? false;
+      return prev.map((f) => f.id === postId ? { ...f, is_saved: !f.is_saved } : f);
+    });
 
     if (!userId) return; // Not logged in — just toggle locally
+
+    // Allow the state update to flush before reading wasSaved
+    await new Promise((r) => setTimeout(r, 0));
 
     try {
       if (wasSaved) {
@@ -198,7 +202,7 @@ export function useFlyers(userId?: string) {
         prev.map((f) => (f.id === postId ? { ...f, is_saved: !f.is_saved } : f))
       );
     }
-  }, [userId, flyers]);
+  }, [userId]);
 
   return { flyers, loading, error, refetch: fetchFlyers, toggleSave };
 }
