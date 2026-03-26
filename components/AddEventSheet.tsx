@@ -707,19 +707,20 @@ export function AddEventSheet() {
         style={[
           styles.sheet,
           {
-            maxHeight: '92%',
-            height: Platform.OS === 'web' ? '92vh' : height * 0.92,
+            height: height * 0.92,
             transform: [{ translateY: slideY }],
-          } as any,
+          },
         ]}
       >
-        <ScrollView
-          style={{ flex: 1 }}
-          showsVerticalScrollIndicator
-          keyboardShouldPersistTaps="handled"
-          contentContainerStyle={styles.scrollContent}
-          bounces
-        >
+        <View style={{ flex: 1 }}>
+          <ScrollView
+            style={{ flex: 1 }}
+            showsVerticalScrollIndicator
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.scrollContent}
+            bounces
+            nestedScrollEnabled
+          >
             {/* Handle bar */}
             <View style={styles.handleContainer}>
               <View style={styles.handle} />
@@ -1238,7 +1239,8 @@ export function AddEventSheet() {
               />
             </View>
 
-        </ScrollView>
+          </ScrollView>
+        </View>
 
         {/* Sticky submit button */}
         <TouchableOpacity
