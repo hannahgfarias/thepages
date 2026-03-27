@@ -275,7 +275,7 @@ export default function FeedScreen() {
         Math.abs(gs.dx) > 30 && Math.abs(gs.dx) > Math.abs(gs.dy) * 1.5,
       onPanResponderRelease: (_, gs) => {
         if (gs.dx < -80) {
-          // Swipe left → open profile
+          // Swipe left → open profile (or auth prompt if not logged in)
           setShowProfile(true);
         }
       },
