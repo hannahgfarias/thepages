@@ -1,6 +1,11 @@
 {
   "buildCommand": "npx expo export --platform web",
   "outputDirectory": "dist",
+  "git": {
+    "deploymentEnabled": {
+      "main": true
+    }
+  },
   "rewrites": [
     { "source": "/event/:id", "destination": "/api/event/:id" },
     { "source": "/(.*)", "destination": "/index.html" }
