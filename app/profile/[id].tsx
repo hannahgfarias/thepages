@@ -51,6 +51,7 @@ export default function PublicProfilePage() {
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [posts, setPosts] = useState<any[]>([]);
+  const [communityCount, setCommunityCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,6 +87,16 @@ export default function PublicProfilePage() {
           .limit(30);
 
         setPosts(postsData || []);
+
+        // Fetch community count (unique followers + following)
+        const [{ data: followers }, { data: following }] = await Promise.all([
+          supabase.from('follows').select('follower_id').eq('following_id', id),
+          supabase.from('follows').select('following_id').eq('follower_id', id),
+        ]);
+        const ids = new Set<string>();
+        (followers || []).forEach((f: any) => ids.add(f.follower_id));
+        (following || []).forEach((f: any) => ids.add(f.following_id));
+        setCommunityCount(ids.size);
       } catch {
         setError('Failed to load profile');
       } finally {
@@ -159,10 +170,17 @@ export default function PublicProfilePage() {
               </View>
             ) : null}
 
-            {/* Post count */}
-            <Text style={styles.postCount}>
-              {posts.length} post{posts.length !== 1 ? 's' : ''}
-            </Text>
+            {/* Stats row */}
+            <View style={styles.statsRow}>
+              <View style={styles.stat}>
+                <Text style={styles.statNumber}>{posts.length}</Text>
+                <Text style={styles.statLabel}>POSTS</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statNumber}>{communityCount}</Text>
+                <Text style={styles.statLabel}>COMMUNITY</Text>
+              </View>
+            </View>
           </View>
         }
         ListEmptyComponent={
@@ -273,12 +291,32 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255,255,255,0.5)',
   },
-  postCount: {
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 32,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+    width: '100%',
+    marginTop: 8,
+  },
+  stat: {
+    alignItems: 'center',
+  },
+  statNumber: {
     fontFamily: FONTS.display,
-    fontSize: 12,
+    fontSize: 20,
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  statLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 10,
     color: 'rgba(255,255,255,0.4)',
     letterSpacing: 2,
-    textTransform: 'uppercase',
+    marginTop: 2,
   },
   emptyText: {
     fontFamily: FONTS.body,

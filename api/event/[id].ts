@@ -11,14 +11,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.redirect(302, '/');
   }
 
-  // Check if this is a bot/crawler (iMessage, Twitter, Slack, etc.)
-  const ua = (req.headers['user-agent'] || '').toLowerCase();
-  const isCrawler = /facebookexternalhit|twitterbot|slackbot|linkedinbot|whatsapp|telegrambot|discordbot|applebot|bot|crawler|spider|preview/i.test(ua);
-
-  if (!isCrawler) {
-    // Regular user — redirect to the SPA which will scroll to the flyer
-    return res.redirect(302, `/?focus=${id}`);
-  }
+  // All requests get OG meta tags in the HTML.
+  // Regular browsers follow the <meta http-equiv="refresh"> redirect to the SPA.
+  // Crawlers (iMessage, Twitter, Slack, etc.) read the OG tags for rich previews.
 
   // Fetch event data from Supabase for OG tags
   const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://taygiieowkyuhvxmlyeg.supabase.co';
