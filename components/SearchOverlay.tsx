@@ -190,6 +190,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   // Public profile viewer
   const [viewingUser, setViewingUser] = useState<Profile | null>(null);
   const [viewingUserPosts, setViewingUserPosts] = useState<Post[]>([]);
+  const [viewingUserCommunityCount, setViewingUserCommunityCount] = useState(0);
   const [loadingUserPosts, setLoadingUserPosts] = useState(false);
 
   // Follow state
@@ -272,6 +273,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
     setViewingUser(profile);
     setLoadingUserPosts(true);
     setFollowStatus('none');
+    setViewingUserCommunityCount(0);
 
     try {
       // Fetch posts and follow status in parallel
@@ -307,9 +309,19 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
           .limit(1);
       }
 
-      const [postsResult, followResult, followBackResult] = await Promise.all([
-        postsPromise, followPromise, followBackPromise,
+      // Also fetch community count for this user
+      const communityFollowersPromise = supabase.from('follows').select('follower_id').eq('following_id', profile.id);
+      const communityFollowingPromise = supabase.from('follows').select('following_id').eq('follower_id', profile.id);
+
+      const [postsResult, followResult, followBackResult, commFollowers, commFollowing] = await Promise.all([
+        postsPromise, followPromise, followBackPromise, communityFollowersPromise, communityFollowingPromise,
       ]);
+
+      // Community count = unique people connected
+      const communityIds = new Set<string>();
+      (commFollowers.data || []).forEach((f: any) => communityIds.add(f.follower_id));
+      (commFollowing.data || []).forEach((f: any) => communityIds.add(f.following_id));
+      setViewingUserCommunityCount(communityIds.size);
 
       // Set follow status
       if (currentUserId && currentUserId !== profile.id) {
@@ -871,9 +883,17 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
                     <Text style={styles.profileLocation}>{viewingUser.location}</Text>
                   </View>
                 ) : null}
-                <Text style={styles.profilePostCount}>
-                  {viewingUserPosts.length} post{viewingUserPosts.length !== 1 ? 's' : ''}
-                </Text>
+                {/* Stats row */}
+                <View style={styles.profileStatsRow}>
+                  <View style={styles.profileStat}>
+                    <Text style={styles.profileStatNumber}>{viewingUserPosts.length}</Text>
+                    <Text style={styles.profileStatLabel}>POSTS</Text>
+                  </View>
+                  <View style={styles.profileStat}>
+                    <Text style={styles.profileStatNumber}>{viewingUserCommunityCount}</Text>
+                    <Text style={styles.profileStatLabel}>COMMUNITY</Text>
+                  </View>
+                </View>
 
                 {/* Follow / Unfollow button */}
                 {currentUserId && viewingUser.id !== currentUserId && (
@@ -889,21 +909,14 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
                       </Text>
                     </TouchableOpacity>
                   ) : (
-                    <View style={styles.followStatusRow}>
-                      <View style={styles.followBadge}>
-                        <Text style={styles.followBadgeText}>
-                          {followStatus === 'mutual' ? 'Mutuals' : 'Following'}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={styles.unfollowButton}
-                        activeOpacity={0.7}
-                        onPress={handleUnfollow}
-                        disabled={followLoading}
-                      >
-                        <Text style={styles.unfollowButtonText}>Unfollow</Text>
-                      </TouchableOpacity>
-                    </View>
+                    <TouchableOpacity
+                      style={styles.unfollowButton}
+                      activeOpacity={0.7}
+                      onPress={handleUnfollow}
+                      disabled={followLoading}
+                    >
+                      <Text style={styles.unfollowButtonText}>UNFOLLOW</Text>
+                    </TouchableOpacity>
                   )
                 )}
               </View>
@@ -1386,11 +1399,32 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: 'rgba(2,4,15,0.5)',
   },
-  profilePostCount: {
+  profileStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 32,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(2,4,15,0.08)',
+    width: '100%',
+    marginTop: 12,
+  },
+  profileStat: {
+    alignItems: 'center',
+  },
+  profileStatNumber: {
+    fontFamily: FONTS.display,
+    fontSize: 20,
+    color: '#02040F',
+    letterSpacing: 0.5,
+  },
+  profileStatLabel: {
     fontFamily: FONTS.mono,
-    fontSize: 12,
+    fontSize: 10,
     color: 'rgba(2,4,15,0.4)',
-    marginTop: 8,
+    letterSpacing: 2,
+    marginTop: 2,
   },
   profileLoading: {
     fontFamily: FONTS.mono,
@@ -1415,33 +1449,19 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
-  followStatusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+  unfollowButton: {
+    borderWidth: 1,
+    borderColor: 'rgba(2,4,15,0.2)',
+    borderRadius: 0,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
     marginTop: 14,
   },
-  followBadge: {
-    borderWidth: 1,
-    borderColor: 'rgba(2,4,15,0.12)',
-    borderRadius: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  followBadgeText: {
-    fontFamily: FONTS.mono,
-    fontSize: 10,
-    color: 'rgba(2,4,15,0.35)',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  unfollowButton: {
-    paddingHorizontal: 8,
-    paddingVertical: 6,
-  },
   unfollowButtonText: {
-    fontFamily: FONTS.mono,
-    fontSize: 11,
-    color: 'rgba(2,4,15,0.35)',
+    fontFamily: FONTS.display,
+    fontSize: 12,
+    color: 'rgba(2,4,15,0.4)',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
   },
 });

@@ -289,13 +289,11 @@ export function CommunitySheet() {
   };
 
   const requests = members.filter((m) => m.status === 'follows_you');
-  const mutuals = members.filter((m) => m.status === 'mutual');
-  const following = members.filter((m) => m.status === 'following');
+  const connected = members.filter((m) => m.status === 'mutual' || m.status === 'following');
 
   const sections = [
     ...(requests.length > 0 ? [{ title: `REQUESTS (${requests.length})`, data: requests }] : []),
-    ...(mutuals.length > 0 ? [{ title: 'YOUR MUTUALS', data: mutuals }] : []),
-    ...(following.length > 0 ? [{ title: 'FOLLOWING', data: following }] : []),
+    ...(connected.length > 0 ? [{ title: 'YOUR COMMUNITY', data: connected }] : []),
   ];
 
   const renderMember = (item: CommunityMember) => (
@@ -402,9 +400,13 @@ export function CommunitySheet() {
                     <Text style={styles.profileLocationText}>{viewingUser.location}</Text>
                   </View>
                 ) : null}
-                <Text style={styles.profilePostCount}>
-                  {viewingUserPosts.length} post{viewingUserPosts.length !== 1 ? 's' : ''}
-                </Text>
+                {/* Stats row */}
+                <View style={styles.profileStatsRow}>
+                  <View style={styles.profileStat}>
+                    <Text style={styles.profileStatNumber}>{viewingUserPosts.length}</Text>
+                    <Text style={styles.profileStatLabel}>POSTS</Text>
+                  </View>
+                </View>
               </View>
 
               {loadingUserPosts ? (
@@ -688,11 +690,32 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: 'rgba(2,4,15,0.4)',
   },
-  profilePostCount: {
+  profileStatsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 32,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(2,4,15,0.08)',
+    width: '100%',
+    marginTop: 12,
+  },
+  profileStat: {
+    alignItems: 'center',
+  },
+  profileStatNumber: {
+    fontFamily: FONTS.display,
+    fontSize: 20,
+    color: '#02040F',
+    letterSpacing: 0.5,
+  },
+  profileStatLabel: {
     fontFamily: FONTS.mono,
-    fontSize: 11,
-    color: 'rgba(2,4,15,0.35)',
-    marginTop: 8,
+    fontSize: 10,
+    color: 'rgba(2,4,15,0.4)',
+    letterSpacing: 2,
+    marginTop: 2,
   },
   postsGrid: {
     flexDirection: 'row',

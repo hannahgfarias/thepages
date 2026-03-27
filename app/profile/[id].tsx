@@ -23,10 +23,10 @@ function PinIcon() {
     <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
       <Path
         d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"
-        stroke="rgba(255,255,255,0.5)"
+        stroke="rgba(2,4,15,0.5)"
         strokeWidth={2}
       />
-      <Circle cx={12} cy={9} r={2.5} stroke="rgba(255,255,255,0.5)" strokeWidth={2} />
+      <Circle cx={12} cy={9} r={2.5} stroke="rgba(2,4,15,0.5)" strokeWidth={2} />
     </Svg>
   );
 }
@@ -34,7 +34,7 @@ function PinIcon() {
 function BackIcon() {
   return (
     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-      <Path d="M19 12H5M12 19l-7-7 7-7" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M19 12H5M12 19l-7-7 7-7" stroke="#02040F" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }
@@ -217,7 +217,7 @@ export default function PublicProfilePage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#F0ECEC',
   },
   backButton: {
     position: 'absolute',
@@ -226,7 +226,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(2,4,15,0.08)',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -261,20 +261,20 @@ const styles = StyleSheet.create({
   displayName: {
     fontFamily: FONTS.display,
     fontSize: 24,
-    color: '#fff',
+    color: '#02040F',
     letterSpacing: 0.5,
     marginBottom: 2,
   },
   handle: {
     fontFamily: FONTS.mono,
     fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(2,4,15,0.5)',
     marginBottom: 12,
   },
   bio: {
     fontFamily: FONTS.body,
     fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
+    color: 'rgba(2,4,15,0.7)',
     textAlign: 'center',
     paddingHorizontal: 24,
     marginBottom: 10,
@@ -289,7 +289,7 @@ const styles = StyleSheet.create({
   locationText: {
     fontFamily: FONTS.body,
     fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(2,4,15,0.5)',
   },
   statsRow: {
     flexDirection: 'row',
@@ -298,7 +298,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     borderTopWidth: 1,
     borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.1)',
+    borderColor: 'rgba(2,4,15,0.08)',
     width: '100%',
     marginTop: 8,
   },
@@ -308,27 +308,27 @@ const styles = StyleSheet.create({
   statNumber: {
     fontFamily: FONTS.display,
     fontSize: 20,
-    color: '#fff',
+    color: '#02040F',
     letterSpacing: 0.5,
   },
   statLabel: {
     fontFamily: FONTS.mono,
     fontSize: 10,
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(2,4,15,0.4)',
     letterSpacing: 2,
     marginTop: 2,
   },
   emptyText: {
     fontFamily: FONTS.body,
     fontSize: 14,
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(2,4,15,0.4)',
     textAlign: 'center',
     marginTop: 40,
   },
   errorText: {
     fontFamily: FONTS.display,
     fontSize: 20,
-    color: '#fff',
+    color: '#02040F',
     textAlign: 'center',
     marginTop: 80,
     letterSpacing: 1,
