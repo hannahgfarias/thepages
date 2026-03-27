@@ -830,11 +830,13 @@ export function AddEventSheet() {
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
           <ScrollView
+            style={{ flex: 1 }}
             contentContainerStyle={styles.scrollContent}
             keyboardShouldPersistTaps="handled"
-            showsVerticalScrollIndicator
-              bounces
-            >
+            showsVerticalScrollIndicator={true}
+            bounces={true}
+            nestedScrollEnabled={true}
+          >
             {/* Handle bar */}
             <View style={styles.handleContainer}>
               <View style={styles.handle} />
@@ -1514,10 +1516,18 @@ const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
     backgroundColor: COLORS.sheetBg,
+    ...Platform.select({
+      web: {
+        height: '100vh',
+        maxHeight: '100vh',
+        overflow: 'hidden',
+      } as any,
+      default: {},
+    }),
   },
   scrollContent: {
     paddingHorizontal: 24,
-    paddingBottom: 20,
+    paddingBottom: 40,
   },
   handleContainer: {
     alignItems: 'center',
