@@ -104,7 +104,7 @@ function PinIcon() {
 /* ─── ProfilePanel Component ─── */
 
 export function ProfilePanel() {
-  const { showProfile, setShowProfile, setShowCommunity, setEditingPost, setShowAddEvent } = useOverlay();
+  const { showProfile, setShowProfile, setShowCommunity, setEditingPost, setShowAddEvent, setShowAuthPrompt } = useOverlay();
   const { profile, isAuthenticated, session } = useAuth();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -116,8 +116,16 @@ export function ProfilePanel() {
   // Track if we're currently dragging to skip animation
   const isDragging = useRef(false);
 
+  // If profile panel is shown but user is not authenticated, redirect to auth
   useEffect(() => {
-    if (showProfile) {
+    if (showProfile && !isAuthenticated) {
+      setShowProfile(false);
+      setShowAuthPrompt(true);
+    }
+  }, [showProfile, isAuthenticated, setShowProfile, setShowAuthPrompt]);
+
+  useEffect(() => {
+    if (showProfile && isAuthenticated) {
       translateX.setValue(width);
       Animated.timing(translateX, {
         toValue: 0,
@@ -126,7 +134,7 @@ export function ProfilePanel() {
         useNativeDriver: true,
       }).start();
     }
-  }, [showProfile, translateX, width]);
+  }, [showProfile, isAuthenticated, translateX, width]);
 
   const close = () => {
     Animated.timing(translateX, {
