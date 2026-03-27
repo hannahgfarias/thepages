@@ -53,6 +53,9 @@ export default function PublicProfilePage() {
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -60,6 +63,10 @@ export default function PublicProfilePage() {
     const fetchProfile = async () => {
       try {
         setLoading(true);
+
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) setCurrentUserId(user.id);
 
         // Fetch profile
         const { data: profileData, error: profileErr } = await supabase
@@ -74,6 +81,17 @@ export default function PublicProfilePage() {
           return;
         }
         setProfile(profileData);
+
+        // Check follow status
+        if (user && user.id !== id) {
+          const { data: followData } = await supabase
+            .from('follows')
+            .select('id')
+            .eq('follower_id', user.id)
+            .eq('following_id', id)
+            .maybeSingle();
+          setIsFollowing(!!followData);
+        }
 
         // Fetch their public posts
         const { data: postsData } = await supabase
@@ -95,6 +113,29 @@ export default function PublicProfilePage() {
 
     fetchProfile();
   }, [id]);
+
+  const handleFollowToggle = async () => {
+    if (!currentUserId || !id || currentUserId === id) return;
+    setFollowLoading(true);
+    try {
+      if (isFollowing) {
+        await supabase
+          .from('follows')
+          .delete()
+          .match({ follower_id: currentUserId, following_id: id });
+        setIsFollowing(false);
+      } else {
+        await supabase
+          .from('follows')
+          .insert({ follower_id: currentUserId, following_id: id });
+        setIsFollowing(true);
+      }
+    } finally {
+      setFollowLoading(false);
+    }
+  };
+
+  const isOwnProfile = currentUserId === id;
 
   if (loading) {
     return (
@@ -163,6 +204,32 @@ export default function PublicProfilePage() {
             <Text style={styles.postCount}>
               {posts.length} post{posts.length !== 1 ? 's' : ''}
             </Text>
+
+            {/* Follow button — only show on other users' profiles */}
+            {!isOwnProfile && currentUserId ? (
+              <TouchableOpacity
+                style={[
+                  styles.followButton,
+                  isFollowing && styles.followButtonFollowing,
+                ]}
+                onPress={handleFollowToggle}
+                disabled={followLoading}
+                activeOpacity={0.7}
+              >
+                {followLoading ? (
+                  <ActivityIndicator size="small" color={isFollowing ? COLORS.red : '#fff'} />
+                ) : (
+                  <Text
+                    style={[
+                      styles.followButtonText,
+                      isFollowing && styles.followButtonTextFollowing,
+                    ]}
+                  >
+                    {isFollowing ? 'FOLLOWING' : 'FOLLOW'}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            ) : null}
           </View>
         }
         ListEmptyComponent={
@@ -279,6 +346,30 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.4)',
     letterSpacing: 2,
     textTransform: 'uppercase',
+  },
+  followButton: {
+    marginTop: 16,
+    backgroundColor: COLORS.red,
+    paddingVertical: 10,
+    paddingHorizontal: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 140,
+    minHeight: 40,
+  },
+  followButtonFollowing: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: COLORS.red,
+  },
+  followButtonText: {
+    fontFamily: FONTS.display,
+    fontSize: 14,
+    color: '#fff',
+    letterSpacing: 2,
+  },
+  followButtonTextFollowing: {
+    color: COLORS.red,
   },
   emptyText: {
     fontFamily: FONTS.body,
