@@ -161,11 +161,11 @@ export default function FeedScreen() {
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
   const filteredFlyers = flyers.filter((f) => {
-    // Feed tab filter (using follow graph)
+    // Feed tab filter (using follow graph) — only show posts from people in that group
     if (activeTopTab === 'following' && user?.id) {
-      if (!followingIds.has(f.user_id) && f.user_id !== user.id) return false;
+      if (!followingIds.has(f.user_id)) return false;
     } else if (activeTopTab === 'mutuals' && user?.id) {
-      if (!mutualIds.has(f.user_id) && f.user_id !== user.id) return false;
+      if (!mutualIds.has(f.user_id)) return false;
     }
 
     // Tag filter
