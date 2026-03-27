@@ -1497,13 +1497,13 @@ export function AddEventSheet() {
 
           {/* Sticky submit button */}
           <TouchableOpacity
-            style={[styles.submitButton, { paddingBottom: insets.bottom + 20 }, publishing && styles.submitButtonDisabled]}
+            style={[styles.submitButton, { paddingBottom: insets.bottom + 20 }, (publishing || scanning) && styles.submitButtonDisabled]}
             activeOpacity={0.8}
             onPress={handleSubmit}
-            disabled={publishing}
+            disabled={publishing || scanning}
           >
             <Text style={styles.submitText}>
-              {publishing ? 'CHECKING CONTENT...' : editingPost ? 'UPDATE EVENT' : 'POST TO THE PAGES'}
+              {scanning ? 'SCANNING FLYER...' : publishing ? 'CHECKING CONTENT...' : editingPost ? 'UPDATE EVENT' : 'POST TO THE PAGES'}
             </Text>
           </TouchableOpacity>
         </KeyboardAvoidingView>
