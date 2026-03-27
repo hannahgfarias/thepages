@@ -112,7 +112,7 @@ export function AuthPrompt({ message }: AuthPromptProps) {
   if (!showAuthPrompt) return null;
 
   return (
-    <View style={StyleSheet.absoluteFill}>
+    <View style={[StyleSheet.absoluteFill, { zIndex: 300 }]}>
       {/* Scrim */}
       <Animated.View style={[styles.scrim, { opacity: scrimOpacity }]}>
         <TouchableOpacity
@@ -175,7 +175,7 @@ const styles = StyleSheet.create({
   scrim: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.6)',
-    zIndex: 105,
+    zIndex: 300,
   },
   sheet: {
     position: 'absolute',
@@ -185,7 +185,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0ECEC',
     borderTopLeftRadius: 20,
     borderTopRightRadius: 20,
-    zIndex: 106,
+    zIndex: 301,
     paddingHorizontal: 24,
     alignItems: 'center',
   },

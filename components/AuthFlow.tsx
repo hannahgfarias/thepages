@@ -734,7 +734,7 @@ const styles = StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: '#F0ECEC',
-    zIndex: 120,
+    zIndex: 310,
   },
   keyboardView: {
     flex: 1,

@@ -44,7 +44,8 @@ export function parseEventDate(dateText: string): Date | null {
 }
 
 /**
- * Sort posts by event date: today/upcoming first, then future, then past at the bottom.
+ * Sort posts by proximity to today — events closest to today appear first,
+ * whether they just happened or are coming up soon.
  */
 function sortByEventDate(posts: Post[]): Post[] {
   const now = new Date();
@@ -59,16 +60,10 @@ function sortByEventDate(posts: Post[]): Post[] {
     if (!dateA) return 1;
     if (!dateB) return -1;
 
-    const diffA = dateA.getTime() - todayStart.getTime();
-    const diffB = dateB.getTime() - todayStart.getTime();
-
-    // Both upcoming (>= today): sooner first
-    if (diffA >= 0 && diffB >= 0) return diffA - diffB;
-    // Both past (< today): more recent past first
-    if (diffA < 0 && diffB < 0) return diffB - diffA;
-    // One upcoming, one past: upcoming wins
-    if (diffA >= 0) return -1;
-    return 1;
+    // Sort by absolute distance from today — closest events first
+    const distA = Math.abs(dateA.getTime() - todayStart.getTime());
+    const distB = Math.abs(dateB.getTime() - todayStart.getTime());
+    return distA - distB;
   });
 }
 
