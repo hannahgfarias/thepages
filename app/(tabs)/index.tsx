@@ -488,17 +488,17 @@ export default function FeedScreen() {
                   activeOpacity={0.7}
                   onPress={() => setActiveTopTab(tab)}
                 >
-                  <Text style={[styles.topTabText, activeTopTab === tab && styles.topTabTextActive]}>
+                  <Text style={[styles.topTabText, { color: activeTopTab === tab ? headerColor : headerInactiveColor }]}>
                     {tab.charAt(0).toUpperCase() + tab.slice(1)}
                   </Text>
-                  {activeTopTab === tab && <View style={styles.topTabIndicator} />}
+                  {activeTopTab === tab && <View style={[styles.topTabIndicator, { backgroundColor: headerColor }]} />}
                 </TouchableOpacity>
               ))}
             </View>
 
             {/* Search icon — no background */}
             <TouchableOpacity style={styles.searchButton} activeOpacity={0.7} onPress={() => setShowSearch(true)}>
-              <SearchIcon />
+              <SearchIcon color={headerColor} />
             </TouchableOpacity>
           </View>
 
