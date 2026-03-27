@@ -487,7 +487,7 @@ export function ProfilePanel() {
               <Text style={styles.communityArrow}>{'\u203A'}</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={styles.statLabel}>COMMUNITY</Text>
+              <Text style={styles.statLabel}>MUTUALS</Text>
               {pendingFollowCount > 0 && (
                 <View style={{ minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#E63946', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 }}>
                   <Text style={{ fontFamily: FONTS.mono, fontSize: 9, fontWeight: '700', color: '#fff' }}>{pendingFollowCount > 9 ? '9+' : pendingFollowCount}</Text>

@@ -839,7 +839,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 6,
     paddingVertical: 12,
-    borderRadius: 4,
+    borderRadius: 0,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.25)',
   },
