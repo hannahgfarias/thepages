@@ -17,12 +17,12 @@ interface ActionRailProps {
 
 function BookmarkIcon({ filled }: { filled: boolean }) {
   return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
       <Path
         d="M5 2h14a1 1 0 011 1v19.143a.5.5 0 01-.766.424L12 18.03l-7.234 4.537A.5.5 0 014 22.143V3a1 1 0 011-1z"
         stroke="#ffffff"
-        strokeWidth={1.5}
-        fill={filled ? '#ffffff' : 'none'}
+        strokeWidth={1.8}
+        fill={filled ? '#EB736C' : 'none'}
       />
     </Svg>
   );
@@ -30,11 +30,11 @@ function BookmarkIcon({ filled }: { filled: boolean }) {
 
 function ShareIcon() {
   return (
-    <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+    <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
       <Path
         d="M12 3v12M12 3l4 4M12 3L8 7M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"
         stroke="#ffffff"
-        strokeWidth={1.5}
+        strokeWidth={1.8}
         strokeLinecap="round"
         strokeLinejoin="round"
       />
@@ -100,12 +100,8 @@ const styles = StyleSheet.create({
   actionButton: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(2,4,15,0.4)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  actionButtonSaved: {
-    backgroundColor: '#EB736C',
-  },
+  actionButtonSaved: {},
 });

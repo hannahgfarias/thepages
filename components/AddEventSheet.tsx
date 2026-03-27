@@ -238,6 +238,53 @@ export function AddEventSheet() {
     setLocationResults([]);
   };
 
+  // Auto-resolve a location query to its best match (used after AI scan prefills)
+  const autoResolveLocation = async (query: string): Promise<string> => {
+    if (query.length < 2) return query;
+    try {
+      const [photonRes, nominatimRes] = await Promise.allSettled([
+        fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1&lang=en&osm_tag=amenity&osm_tag=shop&osm_tag=tourism&osm_tag=leisure`),
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&addressdetails=1&countrycodes=us`, { headers: { 'User-Agent': 'ThePages/1.0' } }),
+      ]);
+      // Try Photon first (better for venue names)
+      if (photonRes.status === 'fulfilled') {
+        const data = await photonRes.value.json();
+        const f = data.features?.[0];
+        if (f) {
+          const p = f.properties;
+          const name = p.name || '';
+          const street = p.housenumber ? `${p.housenumber} ${p.street || ''}` : (p.street || '');
+          const city = p.city || p.town || p.village || '';
+          const state = p.state || '';
+          const addressParts = [street, city, state].filter(Boolean).join(', ');
+          if (name || addressParts) {
+            return name && addressParts ? `${name}, ${addressParts}` : (name || addressParts);
+          }
+        }
+      }
+      // Fall back to Nominatim
+      if (nominatimRes.status === 'fulfilled') {
+        const nomData = await nominatimRes.value.json();
+        const r = nomData?.[0];
+        if (r) {
+          const a = r.address || {};
+          const name = r.name || a.amenity || a.shop || a.tourism || '';
+          const houseNum = a.house_number || '';
+          const road = a.road || '';
+          const street = houseNum ? `${houseNum} ${road}` : road;
+          const city = a.city || a.town || a.village || a.hamlet || '';
+          const state = a.state || '';
+          const addressParts = [street, city, state].filter(Boolean).join(', ');
+          if (name && name !== road && addressParts) return `${name}, ${addressParts}`;
+          return addressParts || name || query;
+        }
+      }
+    } catch {
+      // Silently fall back to original query
+    }
+    return query;
+  };
+
   // Search location for an occurrence
   const searchOccLocation = (query: string, index: number) => {
     const updated = [...occurrences];
@@ -339,19 +386,40 @@ export function AddEventSheet() {
         if (data.subtitle) setSubtitle(data.subtitle);
         if (data.description) setDescription(data.description);
         if (data.date) setDateTime(data.date);
-        if (data.location) setLocation(data.location);
         if (data.category) setSelectedCategory(data.category);
         if (data.tags && data.tags.length > 0) {
           setTags(data.tags.map((t: string) => t.replace(/^#/, '')));
         }
+
+        // Auto-resolve location to full address
+        if (data.location) {
+          setLocation(data.location);
+          autoResolveLocation(data.location).then((resolved) => {
+            setLocation(resolved);
+          });
+        }
+
         // If multiple dates/locations detected, store them for multi-post creation
         if (data.occurrences && data.occurrences.length > 1) {
-          setOccurrences(data.occurrences.map((occ: any) => ({
+          const occs = data.occurrences.map((occ: any) => ({
             title: occ.title || data.title || '',
             subtitle: occ.subtitle || '',
             date: occ.date || '',
             location: occ.location || '',
-          })));
+          }));
+          setOccurrences(occs);
+          // Auto-resolve each occurrence's location
+          occs.forEach((occ: any, idx: number) => {
+            if (occ.location) {
+              autoResolveLocation(occ.location).then((resolved) => {
+                setOccurrences((prev) => {
+                  const updated = [...prev];
+                  if (updated[idx]) updated[idx] = { ...updated[idx], location: resolved };
+                  return updated;
+                });
+              });
+            }
+          });
         } else {
           setOccurrences([]);
         }
@@ -1260,7 +1328,7 @@ export function AddEventSheet() {
                     )}
 
                     {/* Location — searchable with dropdown */}
-                    <View style={styles.locationField}>
+                    <View style={[styles.locationField, editingOccLocation === i && { zIndex: 9999, elevation: 9999 }]}>
                       <TextInput
                         style={[styles.input, { marginBottom: 0 }]}
                         value={occ.location}
@@ -1754,6 +1822,7 @@ const styles = StyleSheet.create({
   locationField: {
     zIndex: 100,
     elevation: 100,
+    position: 'relative',
   },
   locationDropdown: {
     position: 'absolute',
@@ -1764,9 +1833,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#ddd',
-    zIndex: 200,
-    elevation: 200,
-    overflow: 'hidden',
+    zIndex: 9999,
+    elevation: 9999,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
