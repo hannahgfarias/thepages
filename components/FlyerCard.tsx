@@ -16,6 +16,7 @@ import {
   Alert,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { ActionRail, MoreIcon } from './ActionRail';
 import { ExternalLinkWarning } from './ExternalLinkWarning';
@@ -80,6 +81,7 @@ const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
 export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSave, onShare, onActiveChange, onTagPress, onEdit, onDelete }: FlyerCardProps) {
   const { width } = useWindowDimensions();
+  const router = useRouter();
   const [active, setActive] = useState(false);
   const [saved, setSaved] = useState(flyer.is_saved ?? false);
   useEffect(() => {
@@ -510,8 +512,7 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
               style={styles.postedByRow}
               activeOpacity={0.7}
               onPress={() => {
-                // Open poster's profile panel
-                // For now, no-op — profile navigation requires a dedicated screen
+                router.push(`/profile/${flyer.profile!.id}`);
               }}
             >
               {flyer.profile.avatar_url ? (

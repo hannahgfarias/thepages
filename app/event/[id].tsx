@@ -159,11 +159,22 @@ export default function EventPage() {
 
         {/* Posted by */}
         {post.profile && !post.is_anonymous ? (
-          <View style={styles.postedBy}>
+          <TouchableOpacity
+            style={styles.postedBy}
+            activeOpacity={0.7}
+            onPress={() => router.push(`/profile/${post.profile.id}`)}
+          >
+            {post.profile.avatar_url ? (
+              <Image source={{ uri: post.profile.avatar_url }} style={styles.postedByAvatar} />
+            ) : (
+              <View style={[styles.postedByAvatarFallback, { backgroundColor: post.profile.avatar_color || '#EB736C' }]}>
+                <Text style={styles.postedByInitial}>{post.profile.avatar_initials || '?'}</Text>
+              </View>
+            )}
             <Text style={[styles.postedByText, { color: textColor, opacity: 0.5 }]}>
-              Posted by {post.profile.display_name || post.profile.handle || 'someone'}
+              {post.profile.display_name || post.profile.handle || 'someone'}
             </Text>
-          </View>
+          </TouchableOpacity>
         ) : null}
       </ScrollView>
 
@@ -272,7 +283,27 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
   },
   postedBy: {
-    marginTop: 8,
+    marginTop: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  postedByAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  postedByAvatarFallback: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  postedByInitial: {
+    fontFamily: FONTS.display,
+    fontSize: 10,
+    color: '#fff',
   },
   postedByText: {
     fontFamily: FONTS.mono,
