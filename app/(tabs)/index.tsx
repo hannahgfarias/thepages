@@ -486,7 +486,13 @@ export default function FeedScreen() {
                   key={tab}
                   style={styles.topTab}
                   activeOpacity={0.7}
-                  onPress={() => setActiveTopTab(tab)}
+                  onPress={() => {
+                    if ((tab === 'mutuals' || tab === 'following') && !isAuthenticated) {
+                      setShowAuthPrompt(true);
+                      return;
+                    }
+                    setActiveTopTab(tab);
+                  }}
                 >
                   <Text style={[styles.topTabText, { color: activeTopTab === tab ? headerColor : headerInactiveColor }]}>
                     {tab.charAt(0).toUpperCase() + tab.slice(1)}
