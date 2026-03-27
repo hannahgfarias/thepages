@@ -20,6 +20,7 @@ import { pickImageFromLibrary, pickImageFromCamera, readFileAsBase64 } from '../
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
+import { useSharedFlyers } from '../hooks/useFlyers';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
 
@@ -41,6 +42,7 @@ function hasBasicPII(text: string): { found: boolean; type: string } {
 
 export function AddEventSheet() {
   const { showAddEvent, setShowAddEvent, editingPost, setEditingPost } = useOverlay();
+  const { refetch } = useSharedFlyers();
   const insets = useSafeAreaInsets();
 
   const [imageUri, setImageUri] = useState<string | null>(null);
@@ -753,6 +755,7 @@ export function AddEventSheet() {
 
         setPublishing(false);
         handleClose();
+        refetch();
       } else {
         // INSERT new post(s)
         // If multiple occurrences detected, create one post per occurrence with its own title/subtitle/date/location
@@ -806,6 +809,7 @@ export function AddEventSheet() {
           else Alert.alert('Posted!', msg);
         }
         handleClose();
+        refetch();
       }
     } catch (e) {
       console.log('[POST] Exception:', e);

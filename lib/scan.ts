@@ -62,11 +62,13 @@ export async function moderateContent(
     });
 
     if (!response.ok) {
-      return { status: 'held', confidence: 0.5 };
+      // Moderation service unavailable — allow post through rather than silently blocking
+      return { status: 'approved', confidence: 0 };
     }
 
     return response.json();
   } catch {
-    return { status: 'held', confidence: 0.5 };
+    // Moderation service unavailable — allow post through rather than silently blocking
+    return { status: 'approved', confidence: 0 };
   }
 }
