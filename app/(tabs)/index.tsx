@@ -81,6 +81,8 @@ export default function FeedScreen() {
   // Handle deep link: ?focus={postId} from /event/[id] redirect
   useEffect(() => {
     if (focus) {
+      // Switch to "all" tab so the post isn't filtered out
+      setActiveTopTab('all');
       setFocusPostId(focus);
     }
   }, [focus, setFocusPostId]);
@@ -103,18 +105,20 @@ export default function FeedScreen() {
   const insets = useSafeAreaInsets();
   const cardHeight = height - NAV_HEIGHT - insets.bottom;
 
-  // Scroll to a specific post when focusPostId is set (e.g. tapping a saved post)
+  // Scroll to a specific post when focusPostId is set (e.g. tapping a saved post or deep link)
   useEffect(() => {
-    if (focusPostId && filteredFlyersRef.current.length > 0) {
-      const index = filteredFlyersRef.current.findIndex((f) => f.id === focusPostId);
-      if (index >= 0) {
-        setTimeout(() => {
-          flatListRef.current?.scrollToIndex({ index, animated: true });
-        }, 450); // wait for profile panel close animation
-      }
-      setFocusPostId(null);
+    if (!focusPostId) return;
+    // Wait for flyers to load before trying to scroll
+    if (filteredFlyersRef.current.length === 0 && loading) return;
+
+    const index = filteredFlyersRef.current.findIndex((f) => f.id === focusPostId);
+    if (index >= 0) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToIndex({ index, animated: true });
+      }, 450);
     }
-  }, [focusPostId, setFocusPostId]);
+    setFocusPostId(null);
+  }, [focusPostId, setFocusPostId, loading]);
 
   // Feed tabs: Following / Mutuals / All
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());

@@ -67,7 +67,7 @@ export default function EventPage() {
   }, [id]);
 
   const handleOpenInFeed = () => {
-    router.replace(`/?focus=${id}`);
+    router.replace({ pathname: '/(tabs)', params: { focus: id } });
   };
 
   if (loading) {
