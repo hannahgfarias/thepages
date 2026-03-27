@@ -165,7 +165,10 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
 
   const handleShare = useCallback(async () => {
     try {
-      const pagesUrl = `https://thepages.app/event/${flyer.id}`;
+      const origin = Platform.OS === 'web' && typeof window !== 'undefined'
+        ? window.location.origin
+        : 'https://thepages.app';
+      const pagesUrl = `${origin}/event/${flyer.id}`;
       const message = [
         flyer.title,
         flyer.date_text,

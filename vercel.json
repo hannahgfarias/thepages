@@ -7,7 +7,17 @@
     }
   },
   "rewrites": [
-    { "source": "/event/:id", "destination": "/api/event/:id" },
+    {
+      "source": "/event/:id",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": "(?i).*(bot|crawler|spider|preview|facebookexternalhit|twitterbot|slackbot|linkedinbot|whatsapp|telegrambot|discordbot|applebot).*"
+        }
+      ],
+      "destination": "/api/event/:id"
+    },
     { "source": "/(.*)", "destination": "/index.html" }
   ]
 }
