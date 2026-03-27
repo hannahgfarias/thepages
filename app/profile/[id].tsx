@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,11 +9,13 @@ import {
   useWindowDimensions,
   Platform,
   FlatList,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle } from 'react-native-svg';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../hooks/useAuth';
 import { FONTS } from '../../constants/fonts';
 import { COLORS } from '../../constants/colors';
 import type { Profile } from '../../types';
@@ -41,18 +43,30 @@ function BackIcon() {
 
 /**
  * Public profile page — viewable by anyone for public profiles.
- * Shows profile info and their public posts.
+ * Shows profile info, follow button, stats, and their public posts.
  */
 export default function PublicProfilePage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
+  const { session, isAuthenticated } = useAuth();
+  const myUserId = session?.user?.id;
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Follow state
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followsMe, setFollowsMe] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
+
+  // Stats
+  const [followerCount, setFollowerCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [mutualCount, setMutualCount] = useState(0);
 
   useEffect(() => {
     if (!id) return;
@@ -86,6 +100,38 @@ export default function PublicProfilePage() {
           .limit(30);
 
         setPosts(postsData || []);
+
+        // Fetch follow stats
+        const [{ data: followers }, { data: following }] = await Promise.all([
+          supabase.from('follows').select('follower_id').eq('following_id', id),
+          supabase.from('follows').select('following_id').eq('follower_id', id),
+        ]);
+
+        const followerIds = new Set((followers || []).map((f: any) => f.follower_id));
+        const followingIds = new Set((following || []).map((f: any) => f.following_id));
+
+        setFollowerCount(followerIds.size);
+        setFollowingCount(followingIds.size);
+
+        // Mutuals = people in both sets
+        let mutuals = 0;
+        followerIds.forEach((fid) => { if (followingIds.has(fid)) mutuals++; });
+        setMutualCount(mutuals);
+
+        // Check if current user follows this profile
+        if (myUserId) {
+          setIsFollowing(followerIds.has(myUserId));
+
+          // Check if this profile follows current user
+          const { data: theyFollowMe } = await supabase
+            .from('follows')
+            .select('id')
+            .eq('follower_id', id)
+            .eq('following_id', myUserId)
+            .maybeSingle();
+
+          setFollowsMe(!!theyFollowMe);
+        }
       } catch {
         setError('Failed to load profile');
       } finally {
@@ -94,7 +140,49 @@ export default function PublicProfilePage() {
     };
 
     fetchProfile();
-  }, [id]);
+  }, [id, myUserId]);
+
+  const handleFollow = useCallback(async () => {
+    if (!myUserId || !id) return;
+    setFollowLoading(true);
+    try {
+      const { error: err } = await supabase.from('follows').insert({
+        follower_id: myUserId,
+        following_id: id,
+      });
+      if (err) throw err;
+      setIsFollowing(true);
+      setFollowerCount((c) => c + 1);
+      if (followsMe) setMutualCount((c) => c + 1);
+    } catch {
+      const msg = 'Could not follow. Please try again.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Error', msg);
+    } finally {
+      setFollowLoading(false);
+    }
+  }, [myUserId, id, followsMe]);
+
+  const handleUnfollow = useCallback(async () => {
+    if (!myUserId || !id) return;
+    setFollowLoading(true);
+    try {
+      const { error: err } = await supabase
+        .from('follows')
+        .delete()
+        .match({ follower_id: myUserId, following_id: id });
+      if (err) throw err;
+      setIsFollowing(false);
+      setFollowerCount((c) => Math.max(0, c - 1));
+      if (followsMe) setMutualCount((c) => Math.max(0, c - 1));
+    } catch {
+      const msg = 'Could not unfollow. Please try again.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Error', msg);
+    } finally {
+      setFollowLoading(false);
+    }
+  }, [myUserId, id, followsMe]);
 
   if (loading) {
     return (
@@ -118,7 +206,25 @@ export default function PublicProfilePage() {
     );
   }
 
+  const isOwnProfile = myUserId === id;
+  const isMutual = isFollowing && followsMe;
   const postWidth = (width - 48) / 2;
+
+  // Determine follow button state
+  let followLabel = 'FOLLOW';
+  let followStyle = styles.followButton;
+  let followTextStyle = styles.followButtonText;
+  if (isFollowing && followsMe) {
+    followLabel = 'MUTUALS';
+    followStyle = styles.followingButton;
+    followTextStyle = styles.followingButtonText;
+  } else if (isFollowing) {
+    followLabel = 'FOLLOWING';
+    followStyle = styles.followingButton;
+    followTextStyle = styles.followingButtonText;
+  } else if (followsMe) {
+    followLabel = 'FOLLOW BACK';
+  }
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -148,6 +254,18 @@ export default function PublicProfilePage() {
             <Text style={styles.displayName}>{profile.display_name || profile.handle}</Text>
             <Text style={styles.handle}>{profile.handle}</Text>
 
+            {/* Follow button — only show if not own profile */}
+            {!isOwnProfile && (
+              <TouchableOpacity
+                style={[followStyle, followLoading && { opacity: 0.5 }]}
+                activeOpacity={0.7}
+                disabled={followLoading}
+                onPress={isFollowing ? handleUnfollow : handleFollow}
+              >
+                <Text style={followTextStyle}>{followLabel}</Text>
+              </TouchableOpacity>
+            )}
+
             {/* Bio */}
             {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
 
@@ -159,10 +277,25 @@ export default function PublicProfilePage() {
               </View>
             ) : null}
 
-            {/* Post count */}
-            <Text style={styles.postCount}>
-              {posts.length} post{posts.length !== 1 ? 's' : ''}
-            </Text>
+            {/* Stats row */}
+            <View style={styles.statsRow}>
+              <View style={styles.stat}>
+                <Text style={styles.statNumber}>{posts.length}</Text>
+                <Text style={styles.statLabel}>POSTS</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statNumber}>{followerCount}</Text>
+                <Text style={styles.statLabel}>FOLLOWERS</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statNumber}>{followingCount}</Text>
+                <Text style={styles.statLabel}>FOLLOWING</Text>
+              </View>
+              <View style={styles.stat}>
+                <Text style={styles.statNumber}>{mutualCount}</Text>
+                <Text style={styles.statLabel}>MUTUALS</Text>
+              </View>
+            </View>
           </View>
         }
         ListEmptyComponent={
@@ -253,6 +386,37 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.5)',
     marginBottom: 12,
   },
+  // Follow button styles
+  followButton: {
+    backgroundColor: COLORS.red,
+    paddingVertical: 10,
+    paddingHorizontal: 32,
+    borderRadius: 0,
+    marginBottom: 16,
+  },
+  followButtonText: {
+    fontFamily: FONTS.display,
+    fontSize: 13,
+    color: '#fff',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  followingButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+    paddingVertical: 10,
+    paddingHorizontal: 32,
+    borderRadius: 0,
+    marginBottom: 16,
+  },
+  followingButtonText: {
+    fontFamily: FONTS.display,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.6)',
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
   bio: {
     fontFamily: FONTS.body,
     fontSize: 14,
@@ -273,11 +437,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255,255,255,0.5)',
   },
-  postCount: {
+  // Stats
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 24,
+    marginTop: 8,
+    marginBottom: 8,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+    borderColor: 'rgba(255,255,255,0.08)',
+    alignSelf: 'stretch',
+  },
+  stat: {
+    alignItems: 'center',
+  },
+  statNumber: {
     fontFamily: FONTS.display,
-    fontSize: 12,
+    fontSize: 20,
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  statLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
     color: 'rgba(255,255,255,0.4)',
-    letterSpacing: 2,
+    letterSpacing: 1.5,
+    marginTop: 2,
     textTransform: 'uppercase',
   },
   emptyText: {
