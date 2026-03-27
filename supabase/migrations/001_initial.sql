@@ -48,7 +48,7 @@ create table public.posts (
   tags                  text[] not null default '{}',
   is_public             boolean not null default true,
   is_anonymous          boolean not null default false,
-  moderation_status     text not null default 'pending'
+  moderation_status     text not null default 'approved'
                           check (moderation_status in ('pending', 'approved', 'held', 'rejected')),
   moderation_reason     text,
   moderation_confidence float,
