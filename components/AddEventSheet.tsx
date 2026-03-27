@@ -595,7 +595,8 @@ export function AddEventSheet() {
       }
 
       // 4. Run AI moderation before publishing
-      let moderationStatus = 'pending';
+      // Default to approved — moderation will reject/hold if it runs successfully
+      let moderationStatus = 'approved';
       try {
         const allText = [title, subtitle, description, dateTime, location].filter(Boolean).join(' ');
         let imageBase64ForMod: string | null = null;
@@ -607,19 +608,19 @@ export function AddEventSheet() {
           }
         }
         const modResult = await moderateContent(imageBase64ForMod, imageBase64ForMod ? 'image/jpeg' : null, allText);
-        moderationStatus = modResult.status || 'held';
-
-        if (moderationStatus === 'rejected') {
+        if (modResult.status === 'rejected') {
           const msg = 'This content does not meet our community standards and cannot be posted.';
           if (Platform.OS === 'web') window.alert(msg);
           else Alert.alert('Content Not Allowed', msg);
           setPublishing(false);
           return;
         }
+        if (modResult.status === 'held') {
+          moderationStatus = 'held';
+        }
       } catch (e) {
-        console.log('[MODERATION] Error:', e);
-        // Default to held if moderation fails — never auto-approve on error
-        moderationStatus = 'held';
+        console.log('[MODERATION] Error, auto-approving:', e);
+        // If moderation service is unavailable, allow the post through
       }
 
       // 5. Build post data
