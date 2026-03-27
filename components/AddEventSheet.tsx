@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
   Alert,
   ActionSheetIOS,
   Switch,
+  ActivityIndicator,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { scanFlyer, moderateContent } from '../lib/scan';
@@ -54,6 +55,9 @@ export function AddEventSheet() {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState('');
+  const [tagSuggestions, setTagSuggestions] = useState<{ tag: string; count: number }[]>([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const tagSuggestDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [isPublic, setIsPublic] = useState(true);
@@ -82,12 +86,79 @@ export function AddEventSheet() {
     if (cleaned && !tags.includes(cleaned) && tags.length < 10) {
       setTags([...tags, cleaned]);
       setTagInput('');
+      setTagSuggestions([]);
     }
   };
 
   const removeTag = (tag: string) => {
     setTags(tags.filter((t) => t !== tag));
   };
+
+  // Fetch existing tags matching input from Supabase
+  const fetchTagSuggestions = useCallback(async (query: string) => {
+    const cleaned = query.trim().replace(/^#/, '').toLowerCase();
+    if (!cleaned || cleaned.length < 1) {
+      setTagSuggestions([]);
+      setLoadingSuggestions(false);
+      return;
+    }
+
+    setLoadingSuggestions(true);
+    try {
+      // Fetch all approved public posts' tags to aggregate counts
+      const { data, error } = await supabase
+        .from('posts')
+        .select('tags')
+        .eq('is_public', true)
+        .eq('moderation_status', 'approved');
+
+      if (error || !data) {
+        setTagSuggestions([]);
+        setLoadingSuggestions(false);
+        return;
+      }
+
+      // Count occurrences of each tag
+      const tagCounts: Record<string, number> = {};
+      for (const row of data) {
+        if (row.tags && Array.isArray(row.tags)) {
+          for (const t of row.tags) {
+            const normalized = t.replace(/^#/, '').toLowerCase();
+            tagCounts[normalized] = (tagCounts[normalized] || 0) + 1;
+          }
+        }
+      }
+
+      // Filter tags matching the query, exclude already-added tags
+      const matches = Object.entries(tagCounts)
+        .filter(([tag]) => tag.includes(cleaned) && !tags.map(t => t.toLowerCase()).includes(tag))
+        .sort((a, b) => b[1] - a[1]) // Sort by count descending
+        .slice(0, 8)
+        .map(([tag, count]) => ({ tag, count }));
+
+      setTagSuggestions(matches);
+    } catch {
+      setTagSuggestions([]);
+    } finally {
+      setLoadingSuggestions(false);
+    }
+  }, [tags]);
+
+  // Debounced tag input handler
+  const handleTagInputChange = useCallback((text: string) => {
+    setTagInput(text);
+    if (tagSuggestDebounce.current) clearTimeout(tagSuggestDebounce.current);
+    tagSuggestDebounce.current = setTimeout(() => fetchTagSuggestions(text), 300);
+  }, [fetchTagSuggestions]);
+
+  // Select a suggested tag
+  const selectSuggestedTag = useCallback((tag: string) => {
+    if (!tags.includes(tag) && tags.length < 10) {
+      setTags(prev => [...prev, tag]);
+    }
+    setTagInput('');
+    setTagSuggestions([]);
+  }, [tags]);
 
   // Generate calendar days for the date picker
   const [calendarMonth, setCalendarMonth] = useState(new Date());
@@ -1444,7 +1515,7 @@ export function AddEventSheet() {
                 <TextInput
                   style={[styles.input, { flex: 1 }]}
                   value={tagInput}
-                  onChangeText={setTagInput}
+                  onChangeText={handleTagInputChange}
                   placeholder="Add a hashtag"
                   placeholderTextColor="#999"
                   autoCapitalize="none"
@@ -1455,6 +1526,30 @@ export function AddEventSheet() {
                   <Text style={styles.tagAddBtnText}>+</Text>
                 </TouchableOpacity>
               </View>
+              {/* Tag suggestions dropdown */}
+              {tagInput.trim().length > 0 && (tagSuggestions.length > 0 || loadingSuggestions) && (
+                <View style={styles.tagSuggestionsContainer}>
+                  {loadingSuggestions && tagSuggestions.length === 0 ? (
+                    <View style={styles.tagSuggestionLoading}>
+                      <ActivityIndicator size="small" color="#999" />
+                    </View>
+                  ) : (
+                    tagSuggestions.map(({ tag, count }) => (
+                      <TouchableOpacity
+                        key={tag}
+                        style={styles.tagSuggestionRow}
+                        activeOpacity={0.7}
+                        onPress={() => selectSuggestedTag(tag)}
+                      >
+                        <Text style={styles.tagSuggestionText}>#{tag}</Text>
+                        <Text style={styles.tagSuggestionCount}>
+                          {count} {count === 1 ? 'post' : 'posts'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))
+                  )}
+                </View>
+              )}
               {tags.length > 0 && (
                 <View style={styles.categoryChips}>
                   {tags.map((tag) => (
@@ -1469,7 +1564,7 @@ export function AddEventSheet() {
                   ))}
                 </View>
               )}
-              {tags.length === 0 && (
+              {tags.length === 0 && tagSuggestions.length === 0 && (
                 <Text style={styles.tagHint}>Tap + or press return to add. Max 10.</Text>
               )}
             </View>
@@ -1677,6 +1772,37 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: 'rgba(2,4,15,0.3)',
     marginTop: 4,
+  },
+  tagSuggestionsContainer: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 12,
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  tagSuggestionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#eee',
+  },
+  tagSuggestionText: {
+    fontFamily: FONTS.body,
+    fontSize: 15,
+    color: '#02040F',
+  },
+  tagSuggestionCount: {
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    color: '#999',
+  },
+  tagSuggestionLoading: {
+    paddingVertical: 12,
+    alignItems: 'center',
   },
   calendarContainer: {
     backgroundColor: '#ffffff',
