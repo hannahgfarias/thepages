@@ -13,7 +13,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // Check if this is a bot/crawler (iMessage, Twitter, Slack, etc.)
   const ua = (req.headers['user-agent'] || '').toLowerCase();
-  const isCrawler = /iphone|ipad|facebookexternalhit|twitterbot|slackbot|linkedinbot|whatsapp|telegrambot|discordbot|applebot|preview/i.test(ua);
+  const isCrawler = /facebookexternalhit|twitterbot|slackbot|linkedinbot|whatsapp|telegrambot|discordbot|applebot|bot|crawler|spider|preview/i.test(ua);
 
   if (!isCrawler) {
     // Regular user — redirect to the SPA which will scroll to the flyer

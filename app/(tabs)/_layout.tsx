@@ -57,6 +57,8 @@ interface OverlayState {
   setSearchFilters: (f: SearchFilters | null) => void;
   editingPost: any | null;
   setEditingPost: (p: any | null) => void;
+  focusPostId: string | null;
+  setFocusPostId: (id: string | null) => void;
   scrollToTopRef: React.MutableRefObject<(() => void) | null>;
 }
 
@@ -79,6 +81,8 @@ export const OverlayContext = createContext<OverlayState>({
   setSearchFilters: () => {},
   editingPost: null,
   setEditingPost: () => {},
+  focusPostId: null,
+  setFocusPostId: () => {},
   scrollToTopRef: { current: null },
 });
 
@@ -117,6 +121,7 @@ function OverlayProvider({ children }: { children: React.ReactNode }) {
   const [showAuthPrompt, setShowAuthPrompt] = useState(false);
   const [searchFilters, setSearchFilters] = useState<SearchFilters | null>(null);
   const [editingPost, setEditingPost] = useState<any | null>(null);
+  const [focusPostId, setFocusPostId] = useState<string | null>(null);
   const scrollToTopRef = useRef<(() => void) | null>(null);
 
   const value = useMemo(
@@ -139,6 +144,8 @@ function OverlayProvider({ children }: { children: React.ReactNode }) {
       setSearchFilters,
       editingPost,
       setEditingPost,
+      focusPostId,
+      setFocusPostId,
       scrollToTopRef,
     }),
     [
@@ -149,6 +156,7 @@ function OverlayProvider({ children }: { children: React.ReactNode }) {
       showCommunity,
       showAuth,
       showAuthPrompt,
+      focusPostId,
       searchFilters,
       editingPost,
     ]
