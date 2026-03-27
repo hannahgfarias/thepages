@@ -116,16 +116,8 @@ export function ProfilePanel() {
   // Track if we're currently dragging to skip animation
   const isDragging = useRef(false);
 
-  // If profile panel is shown but user is not authenticated, redirect to auth
   useEffect(() => {
-    if (showProfile && !isAuthenticated) {
-      setShowProfile(false);
-      setShowAuthPrompt(true);
-    }
-  }, [showProfile, isAuthenticated, setShowProfile, setShowAuthPrompt]);
-
-  useEffect(() => {
-    if (showProfile && isAuthenticated) {
+    if (showProfile) {
       translateX.setValue(width);
       Animated.timing(translateX, {
         toValue: 0,
@@ -134,7 +126,7 @@ export function ProfilePanel() {
         useNativeDriver: true,
       }).start();
     }
-  }, [showProfile, isAuthenticated, translateX, width]);
+  }, [showProfile, translateX, width]);
 
   const close = () => {
     Animated.timing(translateX, {
@@ -203,8 +195,53 @@ export function ProfilePanel() {
 
   const sectionOrder: DateSection[] = ['HAPPENING TODAY', 'THIS WEEK', 'UPCOMING', 'PAST'];
 
-  // Never show profile panel if not authenticated
-  if (!showProfile || !isAuthenticated) return null;
+  if (!showProfile) return null;
+
+  // Not authenticated — show login prompt inside the panel
+  if (!isAuthenticated) {
+    return (
+      <Animated.View
+        style={[
+          styles.overlay,
+          { transform: [{ translateX }] },
+        ]}
+      >
+        <View style={[styles.scrollContent, { paddingTop: insets.top + 60, alignItems: 'center', flex: 1, justifyContent: 'center' }]}>
+          <Text style={[styles.wordmark, { marginBottom: 16 }]}>THE PAGES</Text>
+          <Text style={[styles.handle, { marginBottom: 24, textAlign: 'center' }]}>
+            Sign in to view your profile, saved events, and posted flyers.
+          </Text>
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#E9D25E',
+              borderRadius: 14,
+              paddingVertical: 16,
+              paddingHorizontal: 40,
+              marginBottom: 12,
+            }}
+            activeOpacity={0.8}
+            onPress={() => {
+              setShowProfile(false);
+              setShowAuthPrompt(true);
+            }}
+          >
+            <Text style={{
+              fontFamily: FONTS.display,
+              fontSize: 15,
+              letterSpacing: 1.5,
+              color: '#02040F',
+            }}>CONTINUE WITH PHONE</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setShowProfile(false)}
+          >
+            <Text style={{ fontFamily: FONTS.body, fontSize: 13, color: 'rgba(2,4,15,0.4)' }}>not now</Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    );
+  }
 
   const handleEditPost = useCallback((post: Post) => {
     setEditingPost(post);
