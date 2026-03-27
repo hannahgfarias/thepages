@@ -68,6 +68,20 @@ function categorizePosts(posts: Post[]): Record<DateSection, Post[]> {
     }
   }
 
+  // Sort each section chronologically by event date
+  const sortByEventDate = (a: Post, b: Post) => {
+    const dateA = parseEventDate(a.date_text || '');
+    const dateB = parseEventDate(b.date_text || '');
+    if (!dateA && !dateB) return 0;
+    if (!dateA) return 1;
+    if (!dateB) return -1;
+    return dateA.getTime() - dateB.getTime();
+  };
+
+  for (const key of Object.keys(sections) as DateSection[]) {
+    sections[key].sort(key === 'PAST' ? (a, b) => sortByEventDate(b, a) : sortByEventDate);
+  }
+
   return sections;
 }
 

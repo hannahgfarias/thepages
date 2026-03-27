@@ -21,6 +21,7 @@ import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
+import { parseEventDate } from '../hooks/useFlyers';
 import type { Profile } from '../types';
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
@@ -212,7 +213,16 @@ export function CommunitySheet() {
       .eq('moderation_status', 'approved')
       .order('created_at', { ascending: false })
       .limit(20);
-    setViewingUserPosts(posts || []);
+    // Sort by event date chronologically (soonest first, unparseable at end)
+    const sorted = (posts || []).sort((a: any, b: any) => {
+      const dateA = parseEventDate(a.date_text || '');
+      const dateB = parseEventDate(b.date_text || '');
+      if (!dateA && !dateB) return 0;
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+      return dateA.getTime() - dateB.getTime();
+    });
+    setViewingUserPosts(sorted);
     setLoadingUserPosts(false);
   }, []);
 
