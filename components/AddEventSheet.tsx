@@ -15,7 +15,7 @@ import {
   Switch,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { scanFlyer, moderateContent } from '../lib/scan';
+import { scanFlyer } from '../lib/scan';
 import { pickImageFromLibrary, pickImageFromCamera, readFileAsBase64 } from '../lib/platform';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -662,34 +662,8 @@ export function AddEventSheet() {
         }
       }
 
-      // 4. Run AI moderation before publishing
-      // Default to approved — moderation will reject/hold if it runs successfully
-      let moderationStatus = 'approved';
-      try {
-        const allText = [title, subtitle, description, dateTime, location].filter(Boolean).join(' ');
-        let imageBase64ForMod: string | null = null;
-        if (imageUri) {
-          try {
-            imageBase64ForMod = await readFileAsBase64(imageUri);
-          } catch {
-            // Continue without image moderation
-          }
-        }
-        const modResult = await moderateContent(imageBase64ForMod, imageBase64ForMod ? 'image/jpeg' : null, allText);
-        if (modResult.status === 'rejected') {
-          const msg = 'This content does not meet our community standards and cannot be posted.';
-          if (Platform.OS === 'web') window.alert(msg);
-          else Alert.alert('Content Not Allowed', msg);
-          setPublishing(false);
-          return;
-        }
-        if (modResult.status === 'held') {
-          moderationStatus = 'held';
-        }
-      } catch (e) {
-        console.log('[MODERATION] Error, auto-approving:', e);
-        // If moderation service is unavailable, allow the post through
-      }
+      // 4. Auto-approve all posts — community reports handle moderation
+      const moderationStatus = 'approved';
 
       // 5. Build post data
       // Pick a random color preset for new posts
