@@ -6,10 +6,10 @@ import {
   StyleSheet,
   Animated,
   Easing,
-  SectionList,
   ScrollView,
   Alert,
   Platform,
+  PanResponder,
   ActivityIndicator,
   Image,
   useWindowDimensions,
@@ -45,22 +45,26 @@ export function CommunitySheet() {
   const [viewingUserPosts, setViewingUserPosts] = useState<any[]>([]);
   const [loadingUserPosts, setLoadingUserPosts] = useState(false);
 
+  // Collapsible sections
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+
   const slideY = useRef(new Animated.Value(height)).current;
   const scrimOpacity = useRef(new Animated.Value(0)).current;
 
   const userId = session?.user?.id;
 
+  // Max height: never cover full screen — always leave top 15% visible
+  const sheetMaxHeight = height * 0.82 - insets.top;
+
   const fetchCommunity = useCallback(async () => {
     if (!userId) return;
     setLoading(true);
     try {
-      // Fetch people I follow
       const { data: following } = await supabase
         .from('follows')
         .select('following_id, profile:profiles!follows_following_id_fkey(id, handle, display_name, avatar_color, avatar_initials)')
         .eq('follower_id', userId);
 
-      // Fetch people who follow me
       const { data: followers } = await supabase
         .from('follows')
         .select('follower_id, profile:profiles!follows_follower_id_fkey(id, handle, display_name, avatar_color, avatar_initials)')
@@ -71,7 +75,6 @@ export function CommunitySheet() {
 
       const allProfiles = new Map<string, any>();
 
-      // Map following
       for (const f of (following || [])) {
         const p = f.profile;
         if (!p) continue;
@@ -86,7 +89,6 @@ export function CommunitySheet() {
         });
       }
 
-      // Map followers not already in the list
       for (const f of (followers || [])) {
         const p = f.profile;
         if (!p || allProfiles.has(p.id)) continue;
@@ -111,6 +113,7 @@ export function CommunitySheet() {
     if (showCommunity) {
       setViewingUser(null);
       setViewingUserPosts([]);
+      setCollapsedSections({});
       fetchCommunity();
       Animated.parallel([
         Animated.timing(slideY, {
@@ -132,7 +135,7 @@ export function CommunitySheet() {
     }
   }, [showCommunity, slideY, scrimOpacity, height, fetchCommunity]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     Animated.parallel([
       Animated.timing(slideY, {
         toValue: height,
@@ -149,12 +152,37 @@ export function CommunitySheet() {
     ]).start(() => {
       setShowCommunity(false);
     });
-  };
+  }, [slideY, scrimOpacity, height, setShowCommunity]);
+
+  // Swipe down to close
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => false,
+      onMoveShouldSetPanResponder: (_, gs) =>
+        gs.dy > 10 && Math.abs(gs.dy) > Math.abs(gs.dx),
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) {
+          slideY.setValue(gs.dy);
+        }
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 80 || gs.vy > 0.5) {
+          handleClose();
+        } else {
+          Animated.timing(slideY, {
+            toValue: 0,
+            duration: 200,
+            easing: EASING,
+            useNativeDriver: true,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   // Open a user's profile
   const openProfile = useCallback(async (member: CommunityMember) => {
     setLoadingUserPosts(true);
-    // Fetch full profile
     const { data: profileData } = await supabase
       .from('profiles')
       .select('*')
@@ -176,7 +204,6 @@ export function CommunitySheet() {
         created_at: '',
       });
     }
-    // Fetch their public posts
     const { data: posts } = await supabase
       .from('posts')
       .select('*')
@@ -198,11 +225,9 @@ export function CommunitySheet() {
       });
       if (error) throw error;
 
-      // Update local state
       setMembers((prev) =>
         prev.map((m) => {
           if (m.id === targetId) {
-            // Check if they already follow us — if so, now mutual
             return { ...m, status: m.status === 'follows_you' ? 'mutual' : 'following' };
           }
           return m;
@@ -228,12 +253,9 @@ export function CommunitySheet() {
         .match({ follower_id: userId, following_id: targetId });
       if (error) throw error;
 
-      // Update local state
       setMembers((prev) =>
         prev.map((m) => {
           if (m.id === targetId) {
-            // If mutual, they still follow us → becomes follows_you
-            // If just following, remove them
             return m.status === 'mutual' ? { ...m, status: 'follows_you' as const } : null;
           }
           return m;
@@ -252,6 +274,10 @@ export function CommunitySheet() {
     follows_you: 'Follows you',
   };
 
+  const toggleSection = (title: string) => {
+    setCollapsedSections((prev) => ({ ...prev, [title]: !prev[title] }));
+  };
+
   const requests = members.filter((m) => m.status === 'follows_you');
   const mutuals = members.filter((m) => m.status === 'mutual');
   const following = members.filter((m) => m.status === 'following');
@@ -262,8 +288,8 @@ export function CommunitySheet() {
     ...(following.length > 0 ? [{ title: 'FOLLOWING', data: following }] : []),
   ];
 
-  const renderItem = ({ item }: { item: CommunityMember }) => (
-    <View style={styles.memberRow}>
+  const renderMember = (item: CommunityMember) => (
+    <View key={item.id} style={styles.memberRow}>
       <TouchableOpacity
         style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}
         activeOpacity={0.7}
@@ -298,12 +324,6 @@ export function CommunitySheet() {
     </View>
   );
 
-  const renderSectionHeader = ({ section }: { section: { title: string } }) => (
-    <View style={styles.sectionHeader}>
-      <Text style={styles.sectionTitle}>{section.title}</Text>
-    </View>
-  );
-
   if (!showCommunity) return null;
 
   return (
@@ -316,23 +336,21 @@ export function CommunitySheet() {
         style={[
           styles.sheet,
           {
-            maxHeight: height * 0.75,
+            maxHeight: sheetMaxHeight,
             paddingBottom: insets.bottom + 16,
             transform: [{ translateY: slideY }],
           },
         ]}
       >
-        <View style={styles.handleContainer}>
-          <View style={styles.handle} />
-        </View>
+        {/* Drag handle — swipe down to close */}
+        <View {...panResponder.panHandlers}>
+          <View style={styles.handleContainer}>
+            <View style={styles.handle} />
+          </View>
 
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>MUTUALS</Text>
-          <TouchableOpacity style={styles.closeButton} activeOpacity={0.7} onPress={handleClose}>
-            <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-              <Path d="M18 6L6 18M6 6l12 12" stroke="#02040F" strokeWidth={2} strokeLinecap="round" />
-            </Svg>
-          </TouchableOpacity>
+          <View style={styles.header}>
+            <Text style={styles.headerTitle}>COMMUNITY</Text>
+          </View>
         </View>
 
         {viewingUser ? (
@@ -411,18 +429,30 @@ export function CommunitySheet() {
         ) : members.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No connections yet</Text>
-            <Text style={styles.emptySubtext}>Follow people to build your mutuals</Text>
+            <Text style={styles.emptySubtext}>Follow people to build your community</Text>
           </View>
         ) : (
-          <SectionList
-            sections={sections}
-            renderItem={renderItem}
-            renderSectionHeader={renderSectionHeader}
-            keyExtractor={(item) => item.id}
+          <ScrollView
             showsVerticalScrollIndicator={false}
             contentContainerStyle={styles.listContent}
-            stickySectionHeadersEnabled={false}
-          />
+          >
+            {sections.map((section) => {
+              const isCollapsed = collapsedSections[section.title] || false;
+              return (
+                <View key={section.title}>
+                  <TouchableOpacity
+                    style={styles.sectionHeader}
+                    activeOpacity={0.7}
+                    onPress={() => toggleSection(section.title)}
+                  >
+                    <Text style={styles.sectionTitle}>{section.title}</Text>
+                    <Text style={styles.sectionChevron}>{isCollapsed ? '›' : '‹'}</Text>
+                  </TouchableOpacity>
+                  {!isCollapsed && section.data.map((item) => renderMember(item))}
+                </View>
+              );
+            })}
+          </ScrollView>
         )}
       </Animated.View>
     </View>
@@ -448,7 +478,7 @@ const styles = StyleSheet.create({
   handleContainer: {
     alignItems: 'center',
     paddingTop: 12,
-    paddingBottom: 8,
+    paddingBottom: 4,
   },
   handle: {
     width: 36,
@@ -457,12 +487,9 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(2,4,15,0.15)',
   },
   header: {
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 24,
     paddingBottom: 8,
-    position: 'relative',
   },
   headerTitle: {
     fontFamily: FONTS.display,
@@ -470,18 +497,6 @@ const styles = StyleSheet.create({
     color: '#02040F',
     textTransform: 'uppercase',
     letterSpacing: 2,
-  },
-  closeButton: {
-    position: 'absolute',
-    right: 24,
-    width: 28,
-    height: 28,
-    borderRadius: 0,
-    borderWidth: 1,
-    borderColor: 'rgba(2,4,15,0.15)',
-    backgroundColor: '#fff',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   loadingContainer: {
     paddingVertical: 40,
@@ -509,7 +524,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    justifyContent: 'space-between',
     paddingTop: 16,
     paddingBottom: 8,
     borderBottomWidth: 1,
@@ -522,6 +537,12 @@ const styles = StyleSheet.create({
     color: 'rgba(2,4,15,0.4)',
     letterSpacing: 1.5,
     textTransform: 'uppercase',
+  },
+  sectionChevron: {
+    fontFamily: FONTS.mono,
+    fontSize: 18,
+    color: 'rgba(2,4,15,0.3)',
+    transform: [{ rotate: '-90deg' }],
   },
   memberRow: {
     flexDirection: 'row',
