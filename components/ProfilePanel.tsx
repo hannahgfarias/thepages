@@ -188,6 +188,24 @@ export function ProfilePanel() {
     [allFlyers]
   );
 
+  // Community count (followers + following + mutuals)
+  const [communityCount, setCommunityCount] = useState(0);
+  useEffect(() => {
+    if (!userId) { setCommunityCount(0); return; }
+    const fetchCount = async () => {
+      const [{ data: followers }, { data: following }] = await Promise.all([
+        supabase.from('follows').select('follower_id').eq('following_id', userId),
+        supabase.from('follows').select('following_id').eq('follower_id', userId),
+      ]);
+      // Unique people connected to you (union of followers + following)
+      const ids = new Set<string>();
+      (followers || []).forEach((f: any) => ids.add(f.follower_id));
+      (following || []).forEach((f: any) => ids.add(f.following_id));
+      setCommunityCount(ids.size);
+    };
+    fetchCount();
+  }, [userId, showProfile]);
+
   const savedByDate = useMemo(() => categorizePosts(savedPosts), [savedPosts]);
 
   const thumbWidth = (width - 24 * 2 - 12) / 2;
@@ -465,11 +483,11 @@ export function ProfilePanel() {
             onPress={() => setShowCommunity(true)}
           >
             <View style={styles.communityStatRow}>
-              <Text style={styles.statNumber}>0</Text>
+              <Text style={styles.statNumber}>{communityCount}</Text>
               <Text style={styles.communityArrow}>{'\u203A'}</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <Text style={styles.statLabel}>MUTUALS</Text>
+              <Text style={styles.statLabel}>COMMUNITY</Text>
               {pendingFollowCount > 0 && (
                 <View style={{ minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#E63946', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 }}>
                   <Text style={{ fontFamily: FONTS.mono, fontSize: 9, fontWeight: '700', color: '#fff' }}>{pendingFollowCount > 9 ? '9+' : pendingFollowCount}</Text>

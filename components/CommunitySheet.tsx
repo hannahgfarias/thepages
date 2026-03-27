@@ -7,18 +7,21 @@ import {
   Animated,
   Easing,
   SectionList,
+  ScrollView,
   Alert,
   Platform,
   ActivityIndicator,
+  Image,
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path } from 'react-native-svg';
+import Svg, { Path, Circle } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
+import type { Profile } from '../types';
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
@@ -38,6 +41,9 @@ export function CommunitySheet() {
   const { height } = useWindowDimensions();
   const [members, setMembers] = useState<CommunityMember[]>([]);
   const [loading, setLoading] = useState(false);
+  const [viewingUser, setViewingUser] = useState<Profile | null>(null);
+  const [viewingUserPosts, setViewingUserPosts] = useState<any[]>([]);
+  const [loadingUserPosts, setLoadingUserPosts] = useState(false);
 
   const slideY = useRef(new Animated.Value(height)).current;
   const scrimOpacity = useRef(new Animated.Value(0)).current;
@@ -103,6 +109,8 @@ export function CommunitySheet() {
 
   useEffect(() => {
     if (showCommunity) {
+      setViewingUser(null);
+      setViewingUserPosts([]);
       fetchCommunity();
       Animated.parallel([
         Animated.timing(slideY, {
@@ -142,6 +150,44 @@ export function CommunitySheet() {
       setShowCommunity(false);
     });
   };
+
+  // Open a user's profile
+  const openProfile = useCallback(async (member: CommunityMember) => {
+    setLoadingUserPosts(true);
+    // Fetch full profile
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', member.id)
+      .single();
+    if (profileData) {
+      setViewingUser(profileData);
+    } else {
+      setViewingUser({
+        id: member.id,
+        handle: member.handle,
+        display_name: member.name,
+        bio: null,
+        location: null,
+        avatar_url: null,
+        avatar_color: member.color,
+        avatar_initials: member.initials,
+        is_public: true,
+        created_at: '',
+      });
+    }
+    // Fetch their public posts
+    const { data: posts } = await supabase
+      .from('posts')
+      .select('*')
+      .eq('user_id', member.id)
+      .eq('is_public', true)
+      .eq('moderation_status', 'approved')
+      .order('created_at', { ascending: false })
+      .limit(20);
+    setViewingUserPosts(posts || []);
+    setLoadingUserPosts(false);
+  }, []);
 
   const handleFollow = async (targetId: string, targetName: string) => {
     if (!userId) return;
@@ -186,10 +232,12 @@ export function CommunitySheet() {
       setMembers((prev) =>
         prev.map((m) => {
           if (m.id === targetId) {
-            return { ...m, status: m.status === 'mutual' ? 'follows_you' : 'follows_you' };
+            // If mutual, they still follow us → becomes follows_you
+            // If just following, remove them
+            return m.status === 'mutual' ? { ...m, status: 'follows_you' as const } : null;
           }
           return m;
-        }).filter((m) => m.status !== 'follows_you' || m.id === targetId)
+        }).filter(Boolean) as CommunityMember[]
       );
     } catch {
       const msg = 'Could not unfollow. Please try again.';
@@ -216,14 +264,19 @@ export function CommunitySheet() {
 
   const renderItem = ({ item }: { item: CommunityMember }) => (
     <View style={styles.memberRow}>
-      <View style={[styles.memberAvatar, { backgroundColor: item.color }]}>
-        <Text style={styles.memberInitials}>{item.initials}</Text>
-      </View>
-
-      <View style={styles.memberInfo}>
-        <Text style={styles.memberName}>{item.name}</Text>
-        <Text style={styles.memberHandle}>{item.handle}</Text>
-      </View>
+      <TouchableOpacity
+        style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}
+        activeOpacity={0.7}
+        onPress={() => openProfile(item)}
+      >
+        <View style={[styles.memberAvatar, { backgroundColor: item.color }]}>
+          <Text style={styles.memberInitials}>{item.initials}</Text>
+        </View>
+        <View style={styles.memberInfo}>
+          <Text style={styles.memberName}>{item.name}</Text>
+          <Text style={styles.memberHandle}>{item.handle}</Text>
+        </View>
+      </TouchableOpacity>
 
       {item.status === 'follows_you' ? (
         <TouchableOpacity
@@ -234,9 +287,13 @@ export function CommunitySheet() {
           <Text style={styles.followBackText}>FOLLOW BACK</Text>
         </TouchableOpacity>
       ) : (
-        <View style={styles.badge}>
+        <TouchableOpacity
+          style={styles.badge}
+          activeOpacity={0.7}
+          onPress={() => handleUnfollow(item.id)}
+        >
           <Text style={styles.badgeText}>{STATUS_LABELS[item.status]}</Text>
-        </View>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -278,7 +335,76 @@ export function CommunitySheet() {
           </TouchableOpacity>
         </View>
 
-        {loading ? (
+        {viewingUser ? (
+          /* ── Profile viewer ── */
+          <View style={{ flex: 1 }}>
+            <View style={styles.profileBackRow}>
+              <TouchableOpacity
+                style={styles.profileBackButton}
+                activeOpacity={0.7}
+                onPress={() => { setViewingUser(null); setViewingUserPosts([]); }}
+              >
+                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+                  <Path d="M19 12H5M12 19l-7-7 7-7" stroke="#02040F" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+                </Svg>
+                <Text style={styles.profileBackText}>BACK</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
+            >
+              <View style={styles.profileHeaderBlock}>
+                {viewingUser.avatar_url ? (
+                  <Image source={{ uri: viewingUser.avatar_url }} style={styles.profileAvatarImg} />
+                ) : (
+                  <View style={[styles.profileAvatarFallback, { backgroundColor: viewingUser.avatar_color || '#EB736C' }]}>
+                    <Text style={styles.profileAvatarInitials}>{viewingUser.avatar_initials || '?'}</Text>
+                  </View>
+                )}
+                <Text style={styles.profileDisplayName}>{viewingUser.display_name || viewingUser.handle}</Text>
+                <Text style={styles.profileHandle}>{viewingUser.handle}</Text>
+                {viewingUser.bio ? <Text style={styles.profileBio}>{viewingUser.bio}</Text> : null}
+                {viewingUser.location ? (
+                  <View style={styles.profileLocationRow}>
+                    <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+                      <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="rgba(2,4,15,0.5)" strokeWidth={2} />
+                      <Circle cx={12} cy={9} r={2.5} stroke="rgba(2,4,15,0.5)" strokeWidth={2} />
+                    </Svg>
+                    <Text style={styles.profileLocationText}>{viewingUser.location}</Text>
+                  </View>
+                ) : null}
+                <Text style={styles.profilePostCount}>
+                  {viewingUserPosts.length} post{viewingUserPosts.length !== 1 ? 's' : ''}
+                </Text>
+              </View>
+
+              {loadingUserPosts ? (
+                <ActivityIndicator color="rgba(2,4,15,0.3)" style={{ marginTop: 20 }} />
+              ) : viewingUserPosts.length > 0 ? (
+                <View style={styles.postsGrid}>
+                  {viewingUserPosts.map((post) => (
+                    <View key={post.id} style={styles.postThumb}>
+                      {post.image_url ? (
+                        <Image source={{ uri: post.image_url }} style={styles.postThumbImage} resizeMode="cover" />
+                      ) : (
+                        <View style={[styles.postThumbImage, { backgroundColor: post.bg_color || '#1a1a2e' }]} />
+                      )}
+                      <View style={styles.postThumbOverlay}>
+                        <Text style={styles.postThumbTitle} numberOfLines={2}>{post.title}</Text>
+                        {post.date_text ? <Text style={styles.postThumbDate} numberOfLines={1}>{post.date_text}</Text> : null}
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={{ alignItems: 'center', paddingTop: 20 }}>
+                  <Text style={styles.emptyText}>No public posts yet</Text>
+                </View>
+              )}
+            </ScrollView>
+          </View>
+        ) : loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator color="rgba(2,4,15,0.3)" />
           </View>
@@ -457,5 +583,120 @@ const styles = StyleSheet.create({
     color: '#02040F',
     letterSpacing: 1,
     textTransform: 'uppercase',
+  },
+  /* Profile viewer */
+  profileBackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 8,
+  },
+  profileBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  profileBackText: {
+    fontFamily: FONTS.display,
+    fontSize: 11,
+    color: '#02040F',
+    letterSpacing: 1,
+  },
+  profileHeaderBlock: {
+    alignItems: 'center',
+    paddingTop: 8,
+    paddingBottom: 16,
+    gap: 4,
+  },
+  profileAvatarImg: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    marginBottom: 8,
+  },
+  profileAvatarFallback: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  profileAvatarInitials: {
+    fontFamily: FONTS.display,
+    fontSize: 22,
+    color: '#ffffff',
+  },
+  profileDisplayName: {
+    fontFamily: FONTS.display,
+    fontSize: 18,
+    color: '#02040F',
+    letterSpacing: 0.5,
+  },
+  profileHandle: {
+    fontFamily: FONTS.mono,
+    fontSize: 12,
+    color: 'rgba(2,4,15,0.4)',
+  },
+  profileBio: {
+    fontFamily: FONTS.body,
+    fontSize: 13,
+    color: 'rgba(2,4,15,0.6)',
+    textAlign: 'center',
+    marginTop: 4,
+    paddingHorizontal: 16,
+  },
+  profileLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  profileLocationText: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: 'rgba(2,4,15,0.4)',
+  },
+  profilePostCount: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: 'rgba(2,4,15,0.35)',
+    marginTop: 8,
+  },
+  postsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  postThumb: {
+    width: '48%' as any,
+    aspectRatio: 0.75,
+    borderRadius: 8,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  postThumbImage: {
+    width: '100%',
+    height: '100%',
+  },
+  postThumbOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 8,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  postThumbTitle: {
+    fontFamily: FONTS.display,
+    fontSize: 11,
+    color: '#ffffff',
+    letterSpacing: 0.5,
+  },
+  postThumbDate: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
   },
 });
