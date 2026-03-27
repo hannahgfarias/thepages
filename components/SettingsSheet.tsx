@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
+import { Linking } from 'react-native';
 import { useAuth } from '../hooks/useAuth';
 import { useOverlay } from '../app/(tabs)/_layout';
 import { supabase } from '../lib/supabase';
@@ -23,6 +24,7 @@ import { pickImageFromLibrary, readFileAsBase64 } from '../lib/platform';
 import { decode } from 'base64-arraybuffer';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
+import type { BioLink } from '../types';
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 const HANDLE_COOLDOWN_DAYS = 30;
@@ -140,6 +142,7 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
   const [bio, setBio] = useState('');
   const [city, setCity] = useState('');
   const [isPrivate, setIsPrivate] = useState(false);
+  const [bioLinks, setBioLinks] = useState<BioLink[]>([]);
   const [handleLastChanged, setHandleLastChanged] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -149,6 +152,7 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
       setDisplayName(profile.display_name || '');
       setHandle(profile.handle || '');
       setBio(profile.bio || '');
+      setBioLinks(profile.bio_links || []);
       setCity(profile.location || '');
       setIsPrivate(!profile.is_public);
       setSaveError(null);
@@ -279,6 +283,50 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
     } catch {
       setSaveError('Could not change photo');
     }
+  };
+
+  // Bio links management
+  const MAX_BIO_LINKS = 5;
+
+  const saveBioLinks = async (links: BioLink[]) => {
+    setBioLinks(links);
+    const result = await updateProfile({ bio_links: links } as any);
+    if (result?.error) {
+      setSaveError('Failed to save links');
+    }
+  };
+
+  const addBioLink = () => {
+    if (bioLinks.length >= MAX_BIO_LINKS) return;
+    const updated = [...bioLinks, { label: '', url: '' }];
+    setBioLinks(updated);
+  };
+
+  const updateBioLink = (index: number, field: 'label' | 'url', value: string) => {
+    const updated = [...bioLinks];
+    updated[index] = { ...updated[index], [field]: value };
+    setBioLinks(updated);
+  };
+
+  const saveBioLink = (index: number) => {
+    const link = bioLinks[index];
+    // Validate URL
+    let url = link.url.trim();
+    if (url && !url.match(/^https?:\/\//)) {
+      url = 'https://' + url;
+    }
+    const updated = [...bioLinks];
+    updated[index] = { label: link.label.trim(), url };
+    // Remove if both empty
+    if (!updated[index].label && !updated[index].url) {
+      updated.splice(index, 1);
+    }
+    saveBioLinks(updated);
+  };
+
+  const removeBioLink = (index: number) => {
+    const updated = bioLinks.filter((_, i) => i !== index);
+    saveBioLinks(updated);
   };
 
   const togglePrivate = async (value: boolean) => {
@@ -439,6 +487,57 @@ export function SettingsSheet({ visible, onClose }: SettingsSheetProps) {
             <Text style={styles.settingLabel}>Phone Number</Text>
             <Text style={styles.settingValue}>{maskedPhone}</Text>
           </View>
+        </View>
+
+        {/* ─── Bio Links ─── */}
+        <SectionHeader title="LINKS" />
+
+        <View style={styles.settingGroup}>
+          {bioLinks.map((link, index) => (
+            <View key={index} style={styles.bioLinkRow}>
+              <View style={styles.bioLinkFields}>
+                <TextInput
+                  style={styles.bioLinkInput}
+                  value={link.label}
+                  onChangeText={(v) => updateBioLink(index, 'label', v)}
+                  onBlur={() => saveBioLink(index)}
+                  placeholder="Label (e.g. Instagram)"
+                  placeholderTextColor="rgba(2,4,15,0.3)"
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                />
+                <TextInput
+                  style={styles.bioLinkInput}
+                  value={link.url}
+                  onChangeText={(v) => updateBioLink(index, 'url', v)}
+                  onBlur={() => saveBioLink(index)}
+                  placeholder="https://..."
+                  placeholderTextColor="rgba(2,4,15,0.3)"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.bioLinkRemove}
+                onPress={() => removeBioLink(index)}
+                activeOpacity={0.6}
+              >
+                <Text style={styles.bioLinkRemoveText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+          {bioLinks.length < MAX_BIO_LINKS && (
+            <TouchableOpacity
+              style={styles.settingRow}
+              activeOpacity={0.6}
+              onPress={addBioLink}
+            >
+              <Text style={[styles.settingLabel, { color: 'rgba(2,4,15,0.5)' }]}>
+                + Add link
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         {/* ─── Preferences ─── */}
@@ -699,6 +798,40 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
     marginBottom: 4,
+  },
+
+  /* Bio Links */
+  bioLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(2,4,15,0.06)',
+    gap: 10,
+  },
+  bioLinkFields: {
+    flex: 1,
+    gap: 6,
+  },
+  bioLinkInput: {
+    fontFamily: FONTS.mono,
+    fontSize: 13,
+    color: '#02040F',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(2,4,15,0.08)',
+    paddingVertical: 4,
+  },
+  bioLinkRemove: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bioLinkRemoveText: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: 'rgba(2,4,15,0.3)',
   },
 
   destructiveText: {

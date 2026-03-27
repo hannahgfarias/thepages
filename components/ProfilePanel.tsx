@@ -15,6 +15,7 @@ import {
   ActionSheetIOS,
   Platform,
 } from 'react-native';
+import { Linking } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
@@ -111,6 +112,27 @@ function PinIcon() {
         strokeWidth={2}
       />
       <Circle cx={12} cy={9} r={2.5} stroke="rgba(2,4,15,0.5)" strokeWidth={2} />
+    </Svg>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <Svg width={11} height={11} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"
+        stroke="rgba(2,4,15,0.4)"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <Path
+        d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"
+        stroke="rgba(2,4,15,0.4)"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
     </Svg>
   );
 }
@@ -472,6 +494,25 @@ export function ProfilePanel() {
             <Text style={styles.bio}>{profile.bio}</Text>
           ) : null}
 
+          {/* Bio Links */}
+          {profile?.bio_links && profile.bio_links.length > 0 ? (
+            <View style={styles.bioLinksRow}>
+              {profile.bio_links.filter((l: any) => l.url).map((link: any, i: number) => (
+                <TouchableOpacity
+                  key={i}
+                  style={styles.bioLinkChip}
+                  activeOpacity={0.7}
+                  onPress={() => Linking.openURL(link.url)}
+                >
+                  <LinkIcon />
+                  <Text style={styles.bioLinkLabel} numberOfLines={1}>
+                    {link.label || link.url.replace(/^https?:\/\/(www\.)?/, '').split('/')[0]}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+
           {/* Location */}
           {profile?.location ? (
             <View style={styles.locationRow}>
@@ -705,6 +746,29 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     maxWidth: 280,
     marginBottom: 10,
+  },
+  bioLinksRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 10,
+    maxWidth: 300,
+  },
+  bioLinkChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    backgroundColor: 'rgba(2,4,15,0.05)',
+    borderRadius: 12,
+  },
+  bioLinkLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: 'rgba(2,4,15,0.6)',
+    maxWidth: 120,
   },
   locationRow: {
     flexDirection: 'row',

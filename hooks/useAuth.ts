@@ -11,7 +11,7 @@ interface AuthContextValue {
   loading: boolean;
   signIn: (phone: string) => Promise<{ error?: string }>;
   verifyOTP: (code: string) => Promise<boolean>;
-  updateProfile: (data: Partial<Pick<Profile, 'display_name' | 'handle' | 'bio' | 'location' | 'avatar_url' | 'avatar_initials' | 'avatar_color' | 'is_public'>>) => Promise<{ error?: string }>;
+  updateProfile: (data: Partial<Pick<Profile, 'display_name' | 'handle' | 'bio' | 'bio_links' | 'location' | 'avatar_url' | 'avatar_initials' | 'avatar_color' | 'is_public'>>) => Promise<{ error?: string }>;
   setPreferences: (prefs: { categories: string[]; is_over_18?: boolean }) => Promise<void>;
   signOut: () => Promise<void>;
   skip: () => void;
@@ -153,7 +153,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [session]);
 
   // Update profile fields (display name, handle, bio, location, avatar)
-  const updateProfile = useCallback(async (data: Partial<Pick<Profile, 'display_name' | 'handle' | 'bio' | 'location' | 'avatar_url' | 'avatar_initials' | 'avatar_color' | 'is_public'>>) => {
+  const updateProfile = useCallback(async (data: Partial<Pick<Profile, 'display_name' | 'handle' | 'bio' | 'bio_links' | 'location' | 'avatar_url' | 'avatar_initials' | 'avatar_color' | 'is_public'>>) => {
     if (!session?.user?.id) return { error: 'Not authenticated' };
 
     // Ensure handle has @ prefix

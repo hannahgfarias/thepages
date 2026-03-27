@@ -5,11 +5,17 @@ export type ModerationStatus = 'pending' | 'approved' | 'held' | 'rejected';
 export type ReportReason = 'harmful' | 'misleading' | 'inappropriate' | 'spam' | 'pii' | 'other';
 export type Visibility = 'public' | 'private';
 
+export interface BioLink {
+  label: string;
+  url: string;
+}
+
 export interface Profile {
   id: string;
   handle: string;
   display_name: string | null;
   bio: string | null;
+  bio_links: BioLink[];
   location: string | null;
   avatar_url: string | null;
   avatar_color: string;
