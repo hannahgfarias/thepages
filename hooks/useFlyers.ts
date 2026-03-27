@@ -68,8 +68,7 @@ function sortByEventDate(posts: Post[]): Post[] {
 }
 
 /**
- * Fetches approved public posts from Supabase.
- * Falls back to seed data if the table is empty or unreachable.
+ * Fetches approved public posts from Supabase (real user data only).
  */
 export function useFlyers(userId?: string) {
   const [flyers, setFlyers] = useState<Post[]>([]);
@@ -95,6 +94,7 @@ export function useFlyers(userId?: string) {
         `)
         .eq('is_public', true)
         .eq('moderation_status', 'approved')
+        .neq('user_id', '00000000-0000-0000-0000-000000000001') // exclude seed data
         .gte('created_at', fiveYearsAgo.toISOString())
         .order('created_at', { ascending: false })
         .limit(50);
@@ -155,7 +155,7 @@ export function useFlyers(userId?: string) {
 
       setFlyers(sortByEventDate(mapped));
     } catch (err) {
-      console.warn('Network error, using seed data');
+      console.warn('Network error fetching posts');
       setFlyers([]);
       setError('Network error');
     } finally {
