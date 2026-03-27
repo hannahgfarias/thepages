@@ -892,7 +892,7 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
                     <View style={styles.followStatusRow}>
                       <View style={styles.followBadge}>
                         <Text style={styles.followBadgeText}>
-                          {followStatus === 'mutual' ? 'Community' : 'Following'}
+                          {followStatus === 'mutual' ? 'Mutuals' : 'Following'}
                         </Text>
                       </View>
                       <TouchableOpacity

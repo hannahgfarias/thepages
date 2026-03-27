@@ -15,6 +15,7 @@ import { FONTS } from '../../constants/fonts';
 import { COLORS } from '../../constants/colors';
 import { useAuth as useAuthContext } from '../../hooks/useAuth';
 import { FlyersProvider } from '../../hooks/useFlyers';
+import { supabase } from '../../lib/supabase';
 
 /* ─── Overlay Components ─── */
 import { SearchOverlay } from '../../components/SearchOverlay';
@@ -59,6 +60,8 @@ interface OverlayState {
   setEditingPost: (p: any | null) => void;
   focusPostId: string | null;
   setFocusPostId: (id: string | null) => void;
+  pendingFollowCount: number;
+  setPendingFollowCount: (n: number) => void;
   scrollToTopRef: React.MutableRefObject<(() => void) | null>;
 }
 
@@ -83,6 +86,8 @@ export const OverlayContext = createContext<OverlayState>({
   setEditingPost: () => {},
   focusPostId: null,
   setFocusPostId: () => {},
+  pendingFollowCount: 0,
+  setPendingFollowCount: () => {},
   scrollToTopRef: { current: null },
 });
 
@@ -122,6 +127,7 @@ function OverlayProvider({ children }: { children: React.ReactNode }) {
   const [searchFilters, setSearchFilters] = useState<SearchFilters | null>(null);
   const [editingPost, setEditingPost] = useState<any | null>(null);
   const [focusPostId, setFocusPostId] = useState<string | null>(null);
+  const [pendingFollowCount, setPendingFollowCount] = useState(0);
   const scrollToTopRef = useRef<(() => void) | null>(null);
 
   const value = useMemo(
@@ -146,6 +152,8 @@ function OverlayProvider({ children }: { children: React.ReactNode }) {
       setEditingPost,
       focusPostId,
       setFocusPostId,
+      pendingFollowCount,
+      setPendingFollowCount,
       scrollToTopRef,
     }),
     [
@@ -157,6 +165,7 @@ function OverlayProvider({ children }: { children: React.ReactNode }) {
       showAuth,
       showAuthPrompt,
       focusPostId,
+      pendingFollowCount,
       searchFilters,
       editingPost,
     ]
@@ -200,10 +209,34 @@ function ProfileIcon({ active }: { active: boolean }) {
 
 function CustomTabBar({ state }: BottomTabBarProps) {
   const insets = useSafeAreaInsets();
-  const { showProfile, setShowAddEvent, setShowProfile, setShowAuthPrompt, scrollToTopRef } = useOverlay();
-  const { isAuthenticated } = useAuthContext();
+  const { showProfile, setShowAddEvent, setShowProfile, setShowAuthPrompt, scrollToTopRef, pendingFollowCount, setPendingFollowCount } = useOverlay();
+  const { isAuthenticated, user } = useAuthContext();
   const isProfileActive = showProfile;
   const isBrowseActive = !isProfileActive;
+
+  // Fetch pending follow requests (people who follow me but I don't follow back)
+  useEffect(() => {
+    if (!isAuthenticated || !user?.id) {
+      setPendingFollowCount(0);
+      return;
+    }
+    const fetchPending = async () => {
+      // People who follow me
+      const { data: followers } = await supabase
+        .from('follows')
+        .select('follower_id')
+        .eq('following_id', user.id);
+      // People I follow
+      const { data: following } = await supabase
+        .from('follows')
+        .select('following_id')
+        .eq('follower_id', user.id);
+      const iFollow = new Set((following || []).map((f: any) => f.following_id));
+      const pendingCount = (followers || []).filter((f: any) => !iFollow.has(f.follower_id)).length;
+      setPendingFollowCount(pendingCount);
+    };
+    fetchPending();
+  }, [isAuthenticated, user?.id, showProfile]);
 
   return (
     <View
@@ -275,7 +308,14 @@ function CustomTabBar({ state }: BottomTabBarProps) {
           }
         }}
       >
-        <ProfileIcon active={isProfileActive} />
+        <View>
+          <ProfileIcon active={isProfileActive} />
+          {pendingFollowCount > 0 && (
+            <View style={styles.badgeDot}>
+              <Text style={styles.badgeText}>{pendingFollowCount > 9 ? '9+' : pendingFollowCount}</Text>
+            </View>
+          )}
+        </View>
         <Text style={[styles.navLabel, { color: isProfileActive ? '#02040F' : 'rgba(2,4,15,0.35)' }]}>Profile</Text>
       </TouchableOpacity>
     </View>
@@ -398,5 +438,23 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.teal,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  badgeDot: {
+    position: 'absolute',
+    top: -4,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#E63946',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 3,
+  },
+  badgeText: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    fontWeight: '700' as const,
+    color: '#ffffff',
   },
 });

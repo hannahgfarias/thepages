@@ -298,7 +298,7 @@ export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
 
           {/* Description */}
           <Text style={styles.description}>
-            Upload event posters and share it to the community
+            Upload event posters and share with your mutuals
           </Text>
 
           {/* Features */}
@@ -306,7 +306,7 @@ export function WelcomeScreen({ onDismiss }: WelcomeScreenProps) {
             <FeatureRow
               icon={<BrowseIcon />}
               title="Browse Events"
-              description="Flip through the bulletin from your community"
+              description="Flip through the bulletin from your mutuals"
             />
             <FeatureRow
               icon={<ScanIcon />}

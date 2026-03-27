@@ -199,17 +199,19 @@ export function CommunitySheet() {
   };
 
   const STATUS_LABELS: Record<string, string> = {
-    mutual: 'Community',
+    mutual: 'Mutuals',
     following: 'Following',
     follows_you: 'Follows you',
   };
 
+  const requests = members.filter((m) => m.status === 'follows_you');
   const mutuals = members.filter((m) => m.status === 'mutual');
-  const others = members.filter((m) => m.status !== 'mutual');
+  const following = members.filter((m) => m.status === 'following');
 
   const sections = [
-    ...(mutuals.length > 0 ? [{ title: 'YOUR COMMUNITY', data: mutuals }] : []),
-    ...(others.length > 0 ? [{ title: 'CONNECTIONS', data: others }] : []),
+    ...(requests.length > 0 ? [{ title: `REQUESTS (${requests.length})`, data: requests }] : []),
+    ...(mutuals.length > 0 ? [{ title: 'YOUR MUTUALS', data: mutuals }] : []),
+    ...(following.length > 0 ? [{ title: 'FOLLOWING', data: following }] : []),
   ];
 
   const renderItem = ({ item }: { item: CommunityMember }) => (
@@ -268,7 +270,7 @@ export function CommunitySheet() {
         </View>
 
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>COMMUNITY</Text>
+          <Text style={styles.headerTitle}>MUTUALS</Text>
           <TouchableOpacity style={styles.closeButton} activeOpacity={0.7} onPress={handleClose}>
             <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
               <Path d="M18 6L6 18M6 6l12 12" stroke="#02040F" strokeWidth={2} strokeLinecap="round" />
@@ -283,7 +285,7 @@ export function CommunitySheet() {
         ) : members.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>No connections yet</Text>
-            <Text style={styles.emptySubtext}>Follow people to build your community</Text>
+            <Text style={styles.emptySubtext}>Follow people to build your mutuals</Text>
           </View>
         ) : (
           <SectionList

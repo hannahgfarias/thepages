@@ -104,7 +104,7 @@ function PinIcon() {
 /* ─── ProfilePanel Component ─── */
 
 export function ProfilePanel() {
-  const { showProfile, setShowProfile, setShowCommunity, setEditingPost, setShowAddEvent, setShowAuthPrompt } = useOverlay();
+  const { showProfile, setShowProfile, setShowCommunity, setEditingPost, setShowAddEvent, setShowAuthPrompt, pendingFollowCount } = useOverlay();
   const { profile, isAuthenticated, session } = useAuth();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
@@ -468,7 +468,14 @@ export function ProfilePanel() {
               <Text style={styles.statNumber}>0</Text>
               <Text style={styles.communityArrow}>{'\u203A'}</Text>
             </View>
-            <Text style={styles.statLabel}>COMMUNITY</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={styles.statLabel}>MUTUALS</Text>
+              {pendingFollowCount > 0 && (
+                <View style={{ minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#E63946', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 }}>
+                  <Text style={{ fontFamily: FONTS.mono, fontSize: 9, fontWeight: '700', color: '#fff' }}>{pendingFollowCount > 9 ? '9+' : pendingFollowCount}</Text>
+                </View>
+              )}
+            </View>
           </TouchableOpacity>
         </View>
 

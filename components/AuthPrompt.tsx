@@ -143,7 +143,7 @@ export function AuthPrompt({ message }: AuthPromptProps) {
         {/* Contextual message */}
         <Text style={styles.message}>
           {message ||
-            'Sign in or create an account to save events, post flyers, and connect with your community.'}
+            'Sign in or create an account to save events, post flyers, and connect with your mutuals.'}
         </Text>
 
         {/* Sign in button */}

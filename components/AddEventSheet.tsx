@@ -1170,7 +1170,7 @@ export function AddEventSheet() {
               </View>
             )}
 
-            <View style={[styles.field, styles.locationField]}>
+            <View style={[styles.field, styles.locationField, showLocationResults && editingOccLocation < 0 && { zIndex: 9999, elevation: 9999 }]}>
               <TextInput
                 style={styles.input}
                 value={location}
@@ -1178,6 +1178,7 @@ export function AddEventSheet() {
                 placeholder="Search venue or address"
                 placeholderTextColor="#999"
                 onFocus={() => {
+                  setEditingOccLocation(-1);
                   if (locationResults.length > 0) setShowLocationResults(true);
                 }}
                 onBlur={() => {
@@ -1219,7 +1220,7 @@ export function AddEventSheet() {
                   {occurrences.length} EVENTS DETECTED — EDIT EACH BELOW
                 </Text>
                 {occurrences.map((occ, i) => (
-                  <View key={i} style={styles.occurrenceCard}>
+                  <View key={i} style={[styles.occurrenceCard, editingOccLocation === i && { zIndex: 9999, elevation: 9999 }]}>
                     <View style={styles.occurrenceHeader}>
                       <Text style={styles.occurrenceLabel}>
                         EVENT {i + 1} OF {occurrences.length}

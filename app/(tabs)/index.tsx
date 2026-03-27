@@ -27,7 +27,7 @@ import { FONTS } from '../../constants/fonts';
 import { COLORS } from '../../constants/colors';
 import type { Post } from '../../types';
 
-type FeedTab = 'following' | 'community' | 'all';
+type FeedTab = 'following' | 'mutuals' | 'all';
 
 /** Returns true if a hex color is light (needs dark text on top) */
 function isLightColor(hex: string): boolean {
@@ -68,7 +68,7 @@ export default function FeedScreen() {
   const flatListRef = useRef<FlatList>(null);
   const [refreshing, setRefreshing] = useState(false);
   const prevShowAddEvent = useRef(false);
-  const [activeTopTab, setActiveTopTab] = useState<'community' | 'following' | 'all'>('all');
+  const [activeTopTab, setActiveTopTab] = useState<'mutuals' | 'following' | 'all'>('all');
 
   // Register scroll-to-top
   useEffect(() => {
@@ -116,15 +116,15 @@ export default function FeedScreen() {
     }
   }, [focusPostId, setFocusPostId]);
 
-  // Feed tabs: Following / Community / All
+  // Feed tabs: Following / Mutuals / All
   const [followingIds, setFollowingIds] = useState<Set<string>>(new Set());
-  const [communityIds, setCommunityIds] = useState<Set<string>>(new Set());
+  const [mutualIds, setMutualIds] = useState<Set<string>>(new Set());
 
   // Fetch follow graph for the current user
   useEffect(() => {
     if (!user?.id) {
       setFollowingIds(new Set());
-      setCommunityIds(new Set());
+      setMutualIds(new Set());
       return;
     }
 
@@ -146,12 +146,12 @@ export default function FeedScreen() {
 
       const followMe = new Set<string>((theirFollows || []).map((f: any) => f.follower_id));
 
-      // Community = mutual follows
+      // Mutuals = mutual follows
       const mutual = new Set<string>();
       iFollow.forEach((id) => {
         if (followMe.has(id)) mutual.add(id);
       });
-      setCommunityIds(mutual);
+      setMutualIds(mutual);
     };
 
     fetchFollows();
@@ -164,8 +164,8 @@ export default function FeedScreen() {
     // Feed tab filter (using follow graph)
     if (activeTopTab === 'following' && user?.id) {
       if (!followingIds.has(f.user_id) && f.user_id !== user.id) return false;
-    } else if (activeTopTab === 'community' && user?.id) {
-      if (!communityIds.has(f.user_id) && f.user_id !== user.id) return false;
+    } else if (activeTopTab === 'mutuals' && user?.id) {
+      if (!mutualIds.has(f.user_id) && f.user_id !== user.id) return false;
     }
 
     // Tag filter
@@ -481,7 +481,7 @@ export default function FeedScreen() {
           <View style={styles.topBarContent}>
             {/* TikTok-style centered tabs */}
             <View style={styles.topTabs}>
-              {(['community', 'following', 'all'] as const).map((tab) => (
+              {(['mutuals', 'following', 'all'] as const).map((tab) => (
                 <TouchableOpacity
                   key={tab}
                   style={styles.topTab}
@@ -563,11 +563,15 @@ export default function FeedScreen() {
             <Path d="M20 20l-4-4" stroke="rgba(2,4,15,0.15)" strokeWidth={1.5} strokeLinecap="round" />
           </Svg>
           <Text style={styles.stateTitle}>
-            {activeTopTab === 'following' ? 'No one followed yet' : 'No events found'}
+            {activeTopTab === 'following' ? 'No one followed yet'
+              : activeTopTab === 'mutuals' ? 'No mutuals yet'
+              : 'No events found'}
           </Text>
           <Text style={styles.stateSubtitle}>
             {activeTopTab === 'following'
               ? 'Follow people to see their events here'
+              : activeTopTab === 'mutuals'
+              ? 'Follow people back to see their events here'
               : activeTag ? `No events with ${activeTag}`
               : searchFilters ? 'Try adjusting your filters'
               : 'Check back soon for new events'}
