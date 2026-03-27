@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -164,7 +164,7 @@ export default function FeedScreen() {
   // Tag filtering
   const [activeTag, setActiveTag] = useState<string | null>(null);
 
-  const filteredFlyers = flyers.filter((f) => {
+  const filteredFlyers = useMemo(() => flyers.filter((f) => {
     // Feed tab filter (using follow graph) — only show posts from people in that group
     if (activeTopTab === 'following' && user?.id) {
       if (!followingIds.has(f.user_id)) return false;
@@ -263,7 +263,7 @@ export default function FeedScreen() {
     }
 
     return true;
-  });
+  }), [flyers, activeTopTab, user?.id, followingIds, mutualIds, activeTag, searchFilters]);
 
   const filteredFlyersRef = useRef(filteredFlyers);
   filteredFlyersRef.current = filteredFlyers;
@@ -297,18 +297,26 @@ export default function FeedScreen() {
   // Top bar hide-on-scroll-down / show-on-scroll-up
   const topBarTranslateY = useRef(new Animated.Value(0)).current;
 
-  // Hide top bar when card details are showing
-  const [cardActive, setCardActive] = useState(false);
+  // Hide top bar when card details are showing (use ref to avoid re-renders)
+  const cardActiveRef = useRef(false);
+  const topBarOpacity = useRef(new Animated.Value(1)).current;
 
   const handleCardActiveChange = useCallback((isActive: boolean) => {
-    setCardActive(isActive);
-    Animated.timing(topBarTranslateY, {
-      toValue: isActive ? -(insets.top + 60) : 0,
-      duration: 250,
-      easing: Easing.out(Easing.ease),
-      useNativeDriver: true,
-    }).start();
-  }, [topBarTranslateY, insets.top]);
+    cardActiveRef.current = isActive;
+    Animated.parallel([
+      Animated.timing(topBarTranslateY, {
+        toValue: isActive ? -(insets.top + 60) : 0,
+        duration: 250,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      }),
+      Animated.timing(topBarOpacity, {
+        toValue: isActive ? 0 : 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [topBarTranslateY, topBarOpacity, insets.top]);
   const lastScrollY = useRef(0);
   const scrollDirection = useRef<'up' | 'down'>('up');
 
@@ -475,10 +483,9 @@ export default function FeedScreen() {
 
   return (
     <View style={styles.container} {...swipePanResponder.panHandlers}>
-      {/* Top bar — hidden when card details are active */}
-      {!cardActive && (
+      {/* Top bar — animated out when card details are active */}
         <Animated.View
-          style={[styles.topBar, { paddingTop: insets.top + 8, transform: [{ translateY: topBarTranslateY }] }]}
+          style={[styles.topBar, { paddingTop: insets.top + 8, opacity: topBarOpacity, transform: [{ translateY: topBarTranslateY }] }]}
           pointerEvents="box-none"
         >
           <View style={styles.topBarGradient} />
@@ -545,7 +552,6 @@ export default function FeedScreen() {
             </View>
           )}
         </Animated.View>
-      )}
 
       {/* Error state */}
       {error && filteredFlyers.length === 0 && (
