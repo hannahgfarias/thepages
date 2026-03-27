@@ -94,7 +94,6 @@ export function useFlyers(userId?: string) {
         `)
         .eq('is_public', true)
         .eq('moderation_status', 'approved')
-        .neq('user_id', '00000000-0000-0000-0000-000000000001') // exclude seed data
         .gte('created_at', fiveYearsAgo.toISOString())
         .order('created_at', { ascending: false })
         .limit(50);
@@ -106,11 +105,7 @@ export function useFlyers(userId?: string) {
         return;
       }
 
-      // Filter out seed data client-side (belt-and-suspenders with .neq() query filter)
-      const SEED_USER_ID = '00000000-0000-0000-0000-000000000001';
-      const filtered = (data || []).filter((row: any) => row.user_id !== SEED_USER_ID);
-
-      if (filtered.length === 0) {
+      if (!data || data.length === 0) {
         setFlyers([]);
         return;
       }
@@ -128,7 +123,7 @@ export function useFlyers(userId?: string) {
       }
 
       // Map DB rows to Post type
-      const mapped: Post[] = filtered.map((row: any) => ({
+      const mapped: Post[] = data.map((row: any) => ({
         id: row.id,
         user_id: row.user_id,
         title: row.title,

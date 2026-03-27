@@ -195,54 +195,6 @@ export function ProfilePanel() {
 
   const sectionOrder: DateSection[] = ['HAPPENING TODAY', 'THIS WEEK', 'UPCOMING', 'PAST'];
 
-  if (!showProfile) return null;
-
-  // Not authenticated — show login prompt inside the panel
-  if (!isAuthenticated) {
-    return (
-      <Animated.View
-        style={[
-          styles.overlay,
-          { transform: [{ translateX }] },
-        ]}
-      >
-        <View style={[styles.scrollContent, { paddingTop: insets.top + 60, alignItems: 'center', flex: 1, justifyContent: 'center' }]}>
-          <Text style={[styles.wordmark, { marginBottom: 16 }]}>THE PAGES</Text>
-          <Text style={[styles.handle, { marginBottom: 24, textAlign: 'center' }]}>
-            Sign in to view your profile, saved events, and posted flyers.
-          </Text>
-          <TouchableOpacity
-            style={{
-              backgroundColor: '#E9D25E',
-              borderRadius: 14,
-              paddingVertical: 16,
-              paddingHorizontal: 40,
-              marginBottom: 12,
-            }}
-            activeOpacity={0.8}
-            onPress={() => {
-              setShowProfile(false);
-              setShowAuthPrompt(true);
-            }}
-          >
-            <Text style={{
-              fontFamily: FONTS.display,
-              fontSize: 15,
-              letterSpacing: 1.5,
-              color: '#02040F',
-            }}>CONTINUE WITH PHONE</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            activeOpacity={0.7}
-            onPress={() => setShowProfile(false)}
-          >
-            <Text style={{ fontFamily: FONTS.body, fontSize: 13, color: 'rgba(2,4,15,0.4)' }}>not now</Text>
-          </TouchableOpacity>
-        </View>
-      </Animated.View>
-    );
-  }
-
   const handleEditPost = useCallback((post: Post) => {
     setEditingPost(post);
     setShowAddEvent(true);
@@ -311,6 +263,56 @@ export function ProfilePanel() {
   const handleViewerSave = useCallback((id: string) => {
     toggleSave(id);
   }, [toggleSave]);
+
+  // ── Early returns AFTER all hooks ──
+
+  if (!showProfile) return null;
+
+  // Not authenticated — show login prompt inside the panel
+  if (!isAuthenticated) {
+    return (
+      <Animated.View
+        style={[
+          styles.overlay,
+          { transform: [{ translateX }] },
+        ]}
+      >
+        <View style={[styles.scrollContent, { paddingTop: insets.top + 60, alignItems: 'center', flex: 1, justifyContent: 'center' }]}>
+          <Text style={[styles.wordmark, { marginBottom: 16 }]}>THE PAGES</Text>
+          <Text style={[styles.handle, { marginBottom: 24, textAlign: 'center' }]}>
+            Sign in to view your profile, saved events, and posted flyers.
+          </Text>
+          <TouchableOpacity
+            style={{
+              backgroundColor: '#E9D25E',
+              borderRadius: 14,
+              paddingVertical: 16,
+              paddingHorizontal: 40,
+              marginBottom: 12,
+            }}
+            activeOpacity={0.8}
+            onPress={() => {
+              setShowProfile(false);
+              setShowAuthPrompt(true);
+            }}
+          >
+            <Text style={{
+              fontFamily: FONTS.display,
+              fontSize: 15,
+              letterSpacing: 1.5,
+              color: '#02040F',
+            }}>CONTINUE WITH PHONE</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            activeOpacity={0.7}
+            onPress={() => setShowProfile(false)}
+          >
+            <Text style={{ fontFamily: FONTS.body, fontSize: 13, color: 'rgba(2,4,15,0.4)' }}>not now</Text>
+          </TouchableOpacity>
+        </View>
+      </Animated.View>
+    );
+  }
 
   const renderPostGrid = (posts: Post[], isOwnPosts: boolean = false) => (
     <View style={styles.grid}>
