@@ -857,6 +857,7 @@ export function AddEventSheet() {
                 styles.uploadZone,
                 imageUri && styles.uploadZoneWithImage,
                 scanning && styles.uploadZoneScanning,
+                imageUri && !scanning && title ? styles.uploadZoneCompact : null,
               ]}
               activeOpacity={0.8}
               onPress={pickImage}
@@ -1568,6 +1569,9 @@ const styles = StyleSheet.create({
   uploadZoneWithImage: {
     borderStyle: 'solid',
     borderColor: '#78B896',
+  },
+  uploadZoneCompact: {
+    aspectRatio: 3 / 2,
   },
   uploadZoneScanning: {
     borderColor: '#78B896',
