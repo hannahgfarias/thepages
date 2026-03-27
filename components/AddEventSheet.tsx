@@ -714,7 +714,7 @@ export function AddEventSheet() {
         title: title.trim(),
         subtitle: subtitle.trim() || null,
         description: description.trim() || null,
-        event_url: link || null,
+        event_url: link ? (!/^https?:\/\//i.test(link.trim()) ? 'https://' + link.trim() : link.trim()) : null,
         image_url: uploadedImageUrl || (editingPost?.image_url ?? null),
         bg_color: preset.bg,
         accent_color: preset.accent,

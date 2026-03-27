@@ -297,7 +297,16 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
 
   const handleConfirmLink = useCallback(() => {
     if (flyer.event_url) {
-      Linking.openURL(flyer.event_url);
+      // Ensure URL has a protocol — without it, browsers open a relative/blank page
+      let url = flyer.event_url.trim();
+      if (!/^https?:\/\//i.test(url)) {
+        url = 'https://' + url;
+      }
+      if (Platform.OS === 'web') {
+        window.open(url, '_blank', 'noopener,noreferrer');
+      } else {
+        Linking.openURL(url);
+      }
     }
     setShowLinkWarning(false);
   }, [flyer.event_url]);
@@ -417,7 +426,11 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
                 // Use the date_text as-is for the event (Google Calendar will parse it)
                 const dateText = encodeURIComponent(flyer.date_text || '');
                 const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dateText}&location=${location}&details=${details}`;
-                Linking.openURL(url);
+                if (Platform.OS === 'web') {
+                  window.open(url, '_blank', 'noopener,noreferrer');
+                } else {
+                  Linking.openURL(url);
+                }
               }}
             >
               <CalendarIcon />
@@ -437,7 +450,13 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
                   android: `geo:0,0?q=${query}`,
                   default: `https://www.google.com/maps/search/?api=1&query=${query}`,
                 });
-                if (url) Linking.openURL(url);
+                if (url) {
+                  if (Platform.OS === 'web') {
+                    window.open(url, '_blank', 'noopener,noreferrer');
+                  } else {
+                    Linking.openURL(url);
+                  }
+                }
               }}
             >
               <PinIcon />
