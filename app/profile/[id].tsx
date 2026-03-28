@@ -18,7 +18,8 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { FONTS } from '../../constants/fonts';
 import { COLORS } from '../../constants/colors';
-import type { Profile } from '../../types';
+import { FlyerCard } from '../../components/FlyerCard';
+import type { Profile, Post } from '../../types';
 
 function PinIcon() {
   return (
@@ -49,14 +50,18 @@ export default function PublicProfilePage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const { session, isAuthenticated } = useAuth();
   const myUserId = session?.user?.id;
 
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [posts, setPosts] = useState<any[]>([]);
+  const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Fullscreen post viewer
+  const [viewerPosts, setViewerPosts] = useState<Post[] | null>(null);
+  const [viewerInitialIndex, setViewerInitialIndex] = useState(0);
 
   // Follow state
   const [isFollowing, setIsFollowing] = useState(false);
@@ -99,7 +104,25 @@ export default function PublicProfilePage() {
           .order('created_at', { ascending: false })
           .limit(30);
 
-        setPosts(postsData || []);
+        let postsWithSaved = (postsData || []) as Post[];
+
+        // Load saved state for current user
+        if (myUserId && postsWithSaved.length > 0) {
+          const postIds = postsWithSaved.map((p) => p.id);
+          const { data: saves } = await supabase
+            .from('saves')
+            .select('post_id')
+            .eq('user_id', myUserId)
+            .in('post_id', postIds);
+
+          const savedIds = new Set((saves || []).map((s: any) => s.post_id));
+          postsWithSaved = postsWithSaved.map((p) => ({
+            ...p,
+            is_saved: savedIds.has(p.id),
+          }));
+        }
+
+        setPosts(postsWithSaved);
 
         // Fetch follow stats
         const [{ data: followers }, { data: following }] = await Promise.all([
@@ -141,6 +164,40 @@ export default function PublicProfilePage() {
 
     fetchProfile();
   }, [id, myUserId]);
+
+  const openPostViewer = useCallback((index: number) => {
+    setViewerPosts(posts);
+    setViewerInitialIndex(index);
+  }, [posts]);
+
+  const closePostViewer = useCallback(() => {
+    setViewerPosts(null);
+  }, []);
+
+  const handleViewerSave = useCallback(async (postId: string) => {
+    if (!myUserId) return;
+    const post = posts.find((p) => p.id === postId);
+    if (!post) return;
+    const wasSaved = post.is_saved;
+
+    // Optimistic update
+    setPosts((prev) =>
+      prev.map((p) => (p.id === postId ? { ...p, is_saved: !wasSaved } : p))
+    );
+
+    try {
+      if (wasSaved) {
+        await supabase.from('saves').delete().match({ user_id: myUserId, post_id: postId });
+      } else {
+        await supabase.from('saves').insert({ user_id: myUserId, post_id: postId });
+      }
+    } catch {
+      // Rollback
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, is_saved: wasSaved } : p))
+      );
+    }
+  }, [myUserId, posts]);
 
   const handleFollow = useCallback(async () => {
     if (!myUserId || !id) return;
@@ -301,13 +358,11 @@ export default function PublicProfilePage() {
         ListEmptyComponent={
           <Text style={styles.emptyText}>No public posts yet</Text>
         }
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <TouchableOpacity
             style={[styles.postCard, { width: postWidth, backgroundColor: item.bg_color || '#1a1a2e' }]}
             activeOpacity={0.8}
-            onPress={() => {
-              router.push(`/event/${item.id}`);
-            }}
+            onPress={() => openPostViewer(index)}
           >
             {item.image_url ? (
               <Image source={{ uri: item.image_url }} style={styles.postImage} resizeMode="cover" />
@@ -325,6 +380,45 @@ export default function PublicProfilePage() {
           </TouchableOpacity>
         )}
       />
+
+      {/* Fullscreen post viewer */}
+      {viewerPosts && (
+        <View style={styles.viewerOverlay}>
+          {/* Close button */}
+          <TouchableOpacity
+            style={[styles.viewerClose, { top: insets.top + 12 }]}
+            activeOpacity={0.7}
+            onPress={closePostViewer}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+              <Path d="M18 6L6 18M6 6l12 12" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" />
+            </Svg>
+          </TouchableOpacity>
+
+          <FlatList
+            data={viewerPosts}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <FlyerCard
+                flyer={{ ...item, profile: profile || undefined }}
+                cardHeight={height - insets.bottom}
+                onSave={handleViewerSave}
+              />
+            )}
+            pagingEnabled
+            showsVerticalScrollIndicator={false}
+            snapToAlignment="start"
+            decelerationRate="fast"
+            getItemLayout={(_, index) => ({
+              length: height - insets.bottom,
+              offset: (height - insets.bottom) * index,
+              index,
+            })}
+            initialScrollIndex={viewerInitialIndex}
+            onScrollToIndexFailed={() => {}}
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -535,5 +629,26 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: 'rgba(255,255,255,0.5)',
     marginTop: 2,
+  },
+  // Fullscreen post viewer
+  viewerOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#000',
+    zIndex: 50,
+  },
+  viewerClose: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 60,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
