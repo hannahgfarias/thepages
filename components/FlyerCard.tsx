@@ -20,6 +20,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../lib/supabase';
 import { ActionRail, MoreIcon } from './ActionRail';
 import { ExternalLinkWarning } from './ExternalLinkWarning';
+import { useAuth } from '../hooks/useAuth';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
 import type { Post } from '../types';
@@ -83,6 +84,9 @@ const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSave, onShare, onActiveChange, onTagPress, onCategoryPress, onEdit, onDelete }: FlyerCardProps) {
   const { width } = useWindowDimensions();
   const router = useRouter();
+  const { user } = useAuth();
+  // Determine ownership: check both the pre-computed flag and live auth
+  const isMine = flyer.is_mine === true || (!!user?.id && user.id === flyer.user_id);
   const [active, setActive] = useState(false);
   const [saved, setSaved] = useState(flyer.is_saved ?? false);
   useEffect(() => {
@@ -226,7 +230,7 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
   }, [flyer.id, onDelete]);
 
   const handleMore = useCallback(() => {
-    const isMine = flyer.is_mine === true;
+    // isMine is already computed at the component level
 
     if (Platform.OS === 'ios') {
       const options = isMine
@@ -269,7 +273,7 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
           ];
       Alert.alert('Options', undefined, buttons);
     }
-  }, [flyer, onEdit, handleDelete]);
+  }, [flyer, isMine, onEdit, handleDelete]);
 
   const handleReport = useCallback(async (reason: string) => {
     setReportReason(reason);
@@ -403,9 +407,17 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
             style={styles.categoryBadge}
             activeOpacity={0.7}
             onPress={() => {
-              if (active) {
+              // Close details with animation first, then filter
+              if (activeRef.current) {
                 setActive(false);
+                activeRef.current = false;
                 onActiveChange?.(false);
+                Animated.parallel([
+                  Animated.timing(overlayOpacity, { toValue: 0, duration: 150, easing: EASING, useNativeDriver: true }),
+                  Animated.timing(infoTranslateY, { toValue: 16, duration: 150, easing: EASING, useNativeDriver: true }),
+                  Animated.timing(infoOpacity, { toValue: 0, duration: 150, easing: EASING, useNativeDriver: true }),
+                  Animated.timing(imageScale, { toValue: 1, duration: 150, easing: EASING, useNativeDriver: true }),
+                ]).start();
               }
               onCategoryPress?.(flyer.category);
             }}
@@ -491,10 +503,17 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
                     style={[styles.tagPill, { backgroundColor: color.bg }]}
                     activeOpacity={0.7}
                     onPress={() => {
-                      // Close details, then activate tag filter
-                      if (active) {
+                      // Close details with animation, then activate tag filter
+                      if (activeRef.current) {
                         setActive(false);
+                        activeRef.current = false;
                         onActiveChange?.(false);
+                        Animated.parallel([
+                          Animated.timing(overlayOpacity, { toValue: 0, duration: 150, easing: EASING, useNativeDriver: true }),
+                          Animated.timing(infoTranslateY, { toValue: 16, duration: 150, easing: EASING, useNativeDriver: true }),
+                          Animated.timing(infoOpacity, { toValue: 0, duration: 150, easing: EASING, useNativeDriver: true }),
+                          Animated.timing(imageScale, { toValue: 1, duration: 150, easing: EASING, useNativeDriver: true }),
+                        ]).start();
                       }
                       onTagPress?.(tag);
                     }}
@@ -585,7 +604,7 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
               activeOpacity={0.7}
             >
               <MoreIcon />
-              <Text style={styles.detailsActionText}>{flyer.is_mine ? 'More' : 'Report'}</Text>
+              <Text style={styles.detailsActionText}>{isMine ? 'More' : 'Report'}</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>
