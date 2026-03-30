@@ -467,21 +467,19 @@ async function pickImageNative(options?: {
   const ImagePicker = require('expo-image-picker');
   const FileSystem = require('expo-file-system');
 
-  // Ensure permissions are granted before opening picker
-  const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+  // Check permissions (don't re-request if already granted)
+  const { status } = await ImagePicker.getMediaLibraryPermissionsAsync();
   if (status !== 'granted') {
-    // Try requesting again — sometimes first request dismisses the picker
-    const retry = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (retry.status !== 'granted') return null;
+    const { status: newStatus } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (newStatus !== 'granted') return null;
   }
 
-  // Small delay to ensure permission UI is fully dismissed before opening picker
-  await new Promise((r) => setTimeout(r, 100));
-
+  // Launch picker — use lower quality to avoid crop editor timeout on large images
   const result = await ImagePicker.launchImageLibraryAsync({
     allowsEditing: true,
-    aspect: options?.aspect || [1, 1],
-    quality: options?.quality || 0.8,
+    aspect: options?.aspect || [4, 5],
+    quality: options?.quality || 0.7,
+    exif: false,
   });
 
   if (result.canceled || !result.assets?.[0]) return null;
