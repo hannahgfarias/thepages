@@ -99,5 +99,6 @@ export interface ScanResult {
   date: string;
   category: Category;
   tags: string[];
+  event_url?: string;
   occurrences?: ScanOccurrence[];
 }

@@ -19,7 +19,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { supabase } from '../lib/supabase';
 import { useOverlay } from '../app/(tabs)/_layout';
-import { useSharedFlyers, parseEventDate } from '../hooks/useFlyers';
+import { useSharedFlyers, parseEventDate, isEventPast } from '../hooks/useFlyers';
 import { useAuth } from '../hooks/useAuth';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
@@ -123,7 +123,7 @@ export function ProfilePanel() {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
 
-  const [activeTab, setActiveTab] = useState<'posts' | 'saved'>('posts');
+  const [activeTab, setActiveTab] = useState<'posts' | 'saved' | 'past'>('posts');
   const [showSettings, setShowSettings] = useState(false);
 
   const translateX = useRef(new Animated.Value(width)).current;
@@ -190,9 +190,15 @@ export function ProfilePanel() {
   const userId = session?.user?.id;
   const { flyers: allFlyers, refetch, toggleSave } = useSharedFlyers();
 
-  // Your posts — filter all flyers by current user
+  // Your posts — filter all flyers by current user (exclude past events)
   const yourPosts = useMemo(() =>
-    allFlyers.filter((f) => f.user_id === userId),
+    allFlyers.filter((f) => f.user_id === userId && !isEventPast(f.date_text || '')),
+    [allFlyers, userId]
+  );
+
+  // Past flyers — your posts where event date has passed
+  const pastPosts = useMemo(() =>
+    allFlyers.filter((f) => f.user_id === userId && isEventPast(f.date_text || '')),
     [allFlyers, userId]
   );
 
@@ -544,12 +550,35 @@ export function ProfilePanel() {
             </Text>
             {activeTab === 'saved' && <View style={styles.tabUnderline} />}
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.tab}
+            activeOpacity={0.7}
+            onPress={() => setActiveTab('past')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'past' && styles.tabTextActive,
+              ]}
+            >
+              PAST FLYERS
+            </Text>
+            {activeTab === 'past' && <View style={styles.tabUnderline} />}
+          </TouchableOpacity>
         </View>
 
         {/* Content */}
         {activeTab === 'posts' ? (
           /* Posts — flat grid */
           renderPostGrid(yourPosts, true)
+        ) : activeTab === 'past' ? (
+          /* Past flyers */
+          pastPosts.length === 0 ? (
+            <View style={{ padding: 40, alignItems: 'center' }}>
+              <Text style={[styles.tabText, { color: 'rgba(2,4,15,0.3)' }]}>No past flyers yet</Text>
+            </View>
+          ) : renderPostGrid(pastPosts)
         ) : (
           /* Saved — grouped by date */
           <View>

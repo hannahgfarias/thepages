@@ -496,7 +496,16 @@ export function SearchOverlay({ onApplyFilters }: SearchOverlayProps) {
   };
 
   const handleEventSearch = () => {
-    setHasSearched(true);
+    // Dispatch filters to browse screen and close overlay (not inline results)
+    const filters: SearchFilters = {
+      query,
+      types: selectedTypes,
+      when: selectedWhen,
+      locations: selectedLocation || (customLocation.trim() || null),
+      customDate: showDateInput ? customDate : undefined,
+    };
+    onApplyFilters?.(filters);
+    setShowSearch(false);
   };
 
   const currentFilters: SearchFilters = {

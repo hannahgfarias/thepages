@@ -30,6 +30,7 @@ interface FlyerCardProps {
   onSave?: (id: string) => void;
   onActiveChange?: (active: boolean) => void;
   onTagPress?: (tag: string) => void;
+  onCategoryPress?: (category: string) => void;
   onEdit?: (post: Post) => void;
   onDelete?: (id: string) => void;
 }
@@ -79,7 +80,7 @@ function PinIcon() {
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
-export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSave, onShare, onActiveChange, onTagPress, onEdit, onDelete }: FlyerCardProps) {
+export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSave, onShare, onActiveChange, onTagPress, onCategoryPress, onEdit, onDelete }: FlyerCardProps) {
   const { width } = useWindowDimensions();
   const router = useRouter();
   const [active, setActive] = useState(false);
@@ -91,7 +92,7 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
 
   // Animation values
   const overlayOpacity = useRef(new Animated.Value(0)).current;
-  const infoTranslateY = useRef(new Animated.Value(30)).current;
+  const infoTranslateY = useRef(new Animated.Value(16)).current;
   const infoOpacity = useRef(new Animated.Value(0)).current;
   const imageScale = useRef(new Animated.Value(1)).current;
 
@@ -139,7 +140,7 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
           useNativeDriver: true,
         }),
         Animated.timing(infoTranslateY, {
-          toValue: 30,
+          toValue: 16,
           duration: 180,
           easing: EASING,
           useNativeDriver: true,
@@ -397,10 +398,20 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
           ]}
           pointerEvents={active ? 'auto' : 'none'}
         >
-          {/* Category badge */}
-          <View style={styles.categoryBadge}>
+          {/* Category badge — tappable to filter browse */}
+          <TouchableOpacity
+            style={styles.categoryBadge}
+            activeOpacity={0.7}
+            onPress={() => {
+              if (active) {
+                setActive(false);
+                onActiveChange?.(false);
+              }
+              onCategoryPress?.(flyer.category);
+            }}
+          >
             <Text style={styles.categoryText}>{flyer.category}</Text>
-          </View>
+          </TouchableOpacity>
 
           {/* Title */}
           <Text
@@ -574,7 +585,7 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
               activeOpacity={0.7}
             >
               <MoreIcon />
-              <Text style={styles.detailsActionText}>Report</Text>
+              <Text style={styles.detailsActionText}>{flyer.is_mine ? 'More' : 'Report'}</Text>
             </TouchableOpacity>
           </View>
         </Animated.View>

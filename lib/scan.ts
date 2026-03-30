@@ -10,7 +10,8 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
  */
 export async function scanFlyer(
   base64: string,
-  mediaType: string
+  mediaType: string,
+  userLocation?: string
 ): Promise<ScanResult> {
   const url = `${SUPABASE_URL}/functions/v1/scan-flyer`;
 
@@ -23,7 +24,7 @@ export async function scanFlyer(
         'apikey': SUPABASE_ANON_KEY,
         'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
       },
-      body: JSON.stringify({ imageBase64: base64, mediaType }),
+      body: JSON.stringify({ imageBase64: base64, mediaType, userLocation }),
     });
   } catch (networkError: any) {
     throw new Error(`Network error: ${networkError.message}`);

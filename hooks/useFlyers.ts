@@ -44,8 +44,9 @@ export function parseEventDate(dateText: string): Date | null {
 }
 
 /**
- * Sort posts by proximity to today — events closest to today appear first,
- * whether they just happened or are coming up soon.
+ * Sort posts chronologically: upcoming events first (soonest → furthest),
+ * then past events after (most recent past first).
+ * Posts without parseable dates go to the end.
  */
 function sortByEventDate(posts: Post[]): Post[] {
   const now = new Date();
@@ -60,11 +61,30 @@ function sortByEventDate(posts: Post[]): Post[] {
     if (!dateA) return 1;
     if (!dateB) return -1;
 
-    // Sort by absolute distance from today — closest events first
-    const distA = Math.abs(dateA.getTime() - todayStart.getTime());
-    const distB = Math.abs(dateB.getTime() - todayStart.getTime());
-    return distA - distB;
+    const aIsUpcoming = dateA >= todayStart;
+    const bIsUpcoming = dateB >= todayStart;
+
+    // Upcoming events come before past events
+    if (aIsUpcoming && !bIsUpcoming) return -1;
+    if (!aIsUpcoming && bIsUpcoming) return 1;
+
+    // Both upcoming: soonest first
+    if (aIsUpcoming && bIsUpcoming) return dateA.getTime() - dateB.getTime();
+
+    // Both past: most recent first
+    return dateB.getTime() - dateA.getTime();
   });
+}
+
+/**
+ * Check if an event date is in the past.
+ */
+export function isEventPast(dateText: string): boolean {
+  const d = parseEventDate(dateText);
+  if (!d) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return d < today;
 }
 
 /**
@@ -164,6 +184,23 @@ export function useFlyers(userId?: string) {
 
   useEffect(() => {
     fetchFlyers();
+  }, [fetchFlyers]);
+
+  // Real-time subscription: refetch when posts are inserted or updated
+  useEffect(() => {
+    const channel = supabase
+      .channel('posts-realtime')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'posts' }, () => {
+        fetchFlyers();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'posts' }, () => {
+        fetchFlyers();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [fetchFlyers]);
 
   const toggleSave = useCallback(async (postId: string) => {

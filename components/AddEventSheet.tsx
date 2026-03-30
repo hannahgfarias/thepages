@@ -377,7 +377,17 @@ export function AddEventSheet() {
       const timeout = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Scan timed out — fill in details manually')), 30000)
       );
-      const scanPromise = scanFlyer(imageBase64, 'image/jpeg');
+      // Fetch user's profile location for proximity-aware venue resolution
+      let userLocation: string | undefined;
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser?.id) {
+          const { data: profile } = await supabase.from('profiles').select('location').eq('id', authUser.id).single();
+          if (profile?.location) userLocation = profile.location;
+        }
+      } catch {}
+
+      const scanPromise = scanFlyer(imageBase64, 'image/jpeg', userLocation);
 
       const data = await Promise.race([scanPromise, timeout]);
 
@@ -397,6 +407,11 @@ export function AddEventSheet() {
           autoResolveLocation(data.location).then((resolved) => {
             setLocation(resolved);
           });
+        }
+
+        // Auto-populate event link from flyer
+        if (data.event_url && !link) {
+          setLink(data.event_url);
         }
 
         // If multiple dates/locations detected, store them for multi-post creation

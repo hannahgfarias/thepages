@@ -23,7 +23,7 @@ serve(async (req) => {
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
     if (!apiKey) throw new Error('ANTHROPIC_API_KEY not set');
 
-    const { imageBase64, mediaType } = await req.json();
+    const { imageBase64, mediaType, userLocation } = await req.json();
 
     if (!imageBase64 || !mediaType) {
       return new Response(
@@ -51,7 +51,7 @@ serve(async (req) => {
             },
             {
               type: 'text',
-              text: `You are reading a community event flyer. Extract the key details and return ONLY a valid JSON object with no markdown, no backticks, no explanation.
+              text: `You are reading a community event flyer. Extract the key details and return ONLY a valid JSON object with no markdown, no backticks, no explanation.${userLocation ? `\n\nIMPORTANT: The user is posting from ${userLocation}. When you identify a venue name, assume it is the location nearest to ${userLocation} — not the most popular or well-known one globally. For example, if the flyer says "El Rio" and the user is in San Francisco, it means El Rio in San Francisco.` : ''}
 
 Return exactly this structure:
 {
@@ -62,6 +62,7 @@ Return exactly this structure:
   "date": "Abbreviated format like SAT MAR 18 • 7PM or just the date if no time",
   "category": "Exactly one of: Party, Music, Community, Arts, Wellness, Food, Free, Theatre, Fitness, Nightlife, Volunteer, Sports, Tech, Film, Comedy, Markets, Workshop, Other",
   "tags": ["#relevant", "#hashtags", "#max5"],
+  "event_url": "Any URL, link, or website visible on the flyer (empty string if none)",
   "occurrences": [
     { "title": "EVENT NAME or performer for this date", "subtitle": "specific details for this date", "date": "SAT MAR 18 • 7PM", "location": "Venue name" }
   ]

@@ -270,7 +270,16 @@ export default function FeedScreen() {
 
   const handleTagPress = useCallback((tag: string) => {
     setActiveTag(tag);
+    // Scroll to top so user can browse filtered results
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
   }, []);
+
+  const handleCategoryPress = useCallback((category: string) => {
+    // Filter by category using the search filters mechanism
+    setSearchFilters({ query: '', types: [category], locations: null, when: null, customDate: null });
+    setActiveTag(null);
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+  }, [setSearchFilters]);
 
   // Swipe left to open profile, swipe right to close (if somehow open)
   const swipePanResponder = useRef(
@@ -452,9 +461,9 @@ export default function FeedScreen() {
 
   const renderItem = useCallback(
     ({ item }: { item: Post }) => (
-      <FlyerCard flyer={item} cardHeight={cardHeight} onSave={handleSave} onShare={handleShare} onActiveChange={handleCardActiveChange} onTagPress={handleTagPress} onEdit={handleEdit} onDelete={handleDelete} />
+      <FlyerCard flyer={item} cardHeight={cardHeight} onSave={handleSave} onShare={handleShare} onActiveChange={handleCardActiveChange} onTagPress={handleTagPress} onCategoryPress={handleCategoryPress} onEdit={handleEdit} onDelete={handleDelete} />
     ),
-    [cardHeight, handleSave, handleShare, handleCardActiveChange, handleTagPress, handleEdit, handleDelete]
+    [cardHeight, handleSave, handleShare, handleCardActiveChange, handleTagPress, handleCategoryPress, handleEdit, handleDelete]
   );
 
   const getItemLayout = useCallback(
@@ -521,7 +530,7 @@ export default function FeedScreen() {
                 activeOpacity={0.7}
                 onPress={() => setActiveTag(null)}
               >
-                <Text style={styles.tagFilterResetText}>SHOW ALL</Text>
+                <Text style={styles.tagFilterResetText}>CLEAR</Text>
               </TouchableOpacity>
             </View>
           )}

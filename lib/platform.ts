@@ -467,8 +467,16 @@ async function pickImageNative(options?: {
   const ImagePicker = require('expo-image-picker');
   const FileSystem = require('expo-file-system');
 
+  // Ensure permissions are granted before opening picker
   const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-  if (status !== 'granted') return null;
+  if (status !== 'granted') {
+    // Try requesting again — sometimes first request dismisses the picker
+    const retry = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (retry.status !== 'granted') return null;
+  }
+
+  // Small delay to ensure permission UI is fully dismissed before opening picker
+  await new Promise((r) => setTimeout(r, 100));
 
   const result = await ImagePicker.launchImageLibraryAsync({
     allowsEditing: true,
