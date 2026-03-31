@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -62,6 +62,8 @@ export default function PublicProfilePage() {
   // Fullscreen post viewer
   const [viewerPosts, setViewerPosts] = useState<Post[] | null>(null);
   const [viewerInitialIndex, setViewerInitialIndex] = useState(0);
+  const [viewerKey, setViewerKey] = useState(0);
+  const viewerListRef = useRef<FlatList>(null);
 
   // Follow state
   const [isFollowing, setIsFollowing] = useState(false);
@@ -166,8 +168,9 @@ export default function PublicProfilePage() {
   }, [id, myUserId]);
 
   const openPostViewer = useCallback((index: number) => {
-    setViewerPosts(posts);
     setViewerInitialIndex(index);
+    setViewerPosts(posts);
+    setViewerKey((k) => k + 1);
   }, [posts]);
 
   const closePostViewer = useCallback(() => {
@@ -396,6 +399,8 @@ export default function PublicProfilePage() {
           </TouchableOpacity>
 
           <FlatList
+            ref={viewerListRef}
+            key={viewerKey}
             data={viewerPosts}
             keyExtractor={(item) => item.id}
             renderItem={({ item }) => (
@@ -415,7 +420,14 @@ export default function PublicProfilePage() {
               index,
             })}
             initialScrollIndex={viewerInitialIndex}
-            onScrollToIndexFailed={() => {}}
+            onScrollToIndexFailed={(info) => {
+              setTimeout(() => {
+                viewerListRef.current?.scrollToIndex({
+                  index: info.index,
+                  animated: false,
+                });
+              }, 100);
+            }}
           />
         </View>
       )}

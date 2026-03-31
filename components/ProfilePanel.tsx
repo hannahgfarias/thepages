@@ -278,14 +278,17 @@ export function ProfilePanel() {
   const [viewerPosts, setViewerPosts] = useState<Post[] | null>(null);
   const [viewerInitialIndex, setViewerInitialIndex] = useState(0);
   const [viewerIsOwn, setViewerIsOwn] = useState(false);
+  const [viewerKey, setViewerKey] = useState(0);
+  const viewerListRef = useRef<FlatList>(null);
 
   const NAV_HEIGHT = 64;
   const viewerCardHeight = height - NAV_HEIGHT - insets.bottom;
 
   const openPostViewer = useCallback((posts: Post[], index: number, isOwn: boolean) => {
-    setViewerPosts(posts);
     setViewerInitialIndex(index);
     setViewerIsOwn(isOwn);
+    setViewerPosts(posts);
+    setViewerKey((k) => k + 1);
   }, []);
 
   const closePostViewer = useCallback(() => {
@@ -584,6 +587,8 @@ export function ProfilePanel() {
         </TouchableOpacity>
 
         <FlatList
+          ref={viewerListRef}
+          key={viewerKey}
           data={viewerPosts}
           keyExtractor={(item) => item.id}
           renderItem={({ item }) => (
@@ -610,9 +615,10 @@ export function ProfilePanel() {
           initialScrollIndex={viewerInitialIndex}
           onScrollToIndexFailed={(info) => {
             setTimeout(() => {
-              if (viewerPosts) {
-                // no-op — gracefully handle failed scroll
-              }
+              viewerListRef.current?.scrollToIndex({
+                index: info.index,
+                animated: false,
+              });
             }, 100);
           }}
         />
