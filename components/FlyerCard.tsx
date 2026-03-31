@@ -3,6 +3,7 @@ import {
   View,
   Text,
   Image,
+  ScrollView,
   TouchableWithoutFeedback,
   TouchableOpacity,
   Animated,
@@ -14,6 +15,7 @@ import {
   Share,
   ActionSheetIOS,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { useRouter } from 'expo-router';
@@ -29,6 +31,7 @@ interface FlyerCardProps {
   flyer: Post;
   cardHeight: number;
   onSave?: (id: string) => void;
+  onShare?: (id: string) => void;
   onActiveChange?: (active: boolean) => void;
   onTagPress?: (tag: string) => void;
   onCategoryPress?: (category: string) => void;
@@ -99,9 +102,27 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
   const infoTranslateY = useRef(new Animated.Value(16)).current;
   const infoOpacity = useRef(new Animated.Value(0)).current;
   const imageScale = useRef(new Animated.Value(1)).current;
+  // Details redesign: progress 0→1 drives image compress + details slide-up
+  const detailsProgress = useRef(new Animated.Value(0)).current;
+  const [detailsLoaded, setDetailsLoaded] = useState(false);
+  const [buttonsEnabled, setButtonsEnabled] = useState(false);
 
   const activeRef = useRef(active);
   activeRef.current = active;
+
+  // Derived animated values from detailsProgress
+  const imageHeight = detailsProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [cardHeight, cardHeight * 0.35],
+  });
+  const detailsPanelTranslateY = detailsProgress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [cardHeight * 0.65, 0],
+  });
+  const sideIconsOpacity = detailsProgress.interpolate({
+    inputRange: [0, 0.5, 1],
+    outputRange: [0, 0, 1],
+  });
 
   const toggleActive = useCallback(() => {
     const nextActive = !activeRef.current;
@@ -109,47 +130,49 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
     onActiveChange?.(nextActive);
 
     if (nextActive) {
+      // Details opening: image compresses instantly, details slide up
+      setDetailsLoaded(false);
+      setButtonsEnabled(false);
+
       Animated.parallel([
-        Animated.timing(overlayOpacity, {
+        // Image compress — fast, CSS-like
+        Animated.timing(detailsProgress, {
           toValue: 1,
+          duration: 300,
+          easing: EASING,
+          useNativeDriver: false, // layout animation
+        }),
+        // Legacy overlay (kept for image dimming)
+        Animated.timing(overlayOpacity, {
+          toValue: 0.4,
           duration: 220,
           easing: EASING,
           useNativeDriver: true,
         }),
-        Animated.timing(infoTranslateY, {
-          toValue: 0,
-          duration: 250,
-          easing: EASING,
-          useNativeDriver: true,
-        }),
-        Animated.timing(infoOpacity, {
+        Animated.timing(imageScale, {
           toValue: 1,
           duration: 250,
           easing: EASING,
           useNativeDriver: true,
         }),
-        Animated.timing(imageScale, {
-          toValue: 1.02,
-          duration: 250,
-          easing: EASING,
-          useNativeDriver: true,
-        }),
-      ]).start();
+      ]).start(() => {
+        // Simulate content load
+        setDetailsLoaded(true);
+        // Enable calendar/maps buttons after 100ms delay
+        setTimeout(() => setButtonsEnabled(true), 100);
+      });
     } else {
+      setDetailsLoaded(false);
+      setButtonsEnabled(false);
+
       Animated.parallel([
-        Animated.timing(overlayOpacity, {
+        Animated.timing(detailsProgress, {
           toValue: 0,
-          duration: 180,
+          duration: 220,
           easing: EASING,
-          useNativeDriver: true,
+          useNativeDriver: false,
         }),
-        Animated.timing(infoTranslateY, {
-          toValue: 16,
-          duration: 180,
-          easing: EASING,
-          useNativeDriver: true,
-        }),
-        Animated.timing(infoOpacity, {
+        Animated.timing(overlayOpacity, {
           toValue: 0,
           duration: 180,
           easing: EASING,
@@ -163,7 +186,7 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
         }),
       ]).start();
     }
-  }, [overlayOpacity, infoTranslateY, infoOpacity, imageScale, onActiveChange]);
+  }, [detailsProgress, overlayOpacity, imageScale, onActiveChange, cardHeight]);
 
   const handleSave = useCallback(() => {
     setSaved((prev) => !prev);
@@ -175,7 +198,9 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
       const origin = Platform.OS === 'web' && typeof window !== 'undefined'
         ? window.location.origin
         : 'https://thepages.app';
-      const pagesUrl = `${origin}/event/${flyer.id}`;
+      // Share targets the EventGroup if grouped, otherwise the specific post
+      const shareId = flyer.event_group_id || flyer.id;
+      const pagesUrl = `${origin}/event/${shareId}`;
       const message = [
         flyer.title,
         flyer.date_text,
@@ -229,13 +254,43 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
     }
   }, [flyer.id, onDelete]);
 
+  // Dispute: "Not the same event" — detaches post from group at 5 disputes
+  const handleDispute = useCallback(async () => {
+    try {
+      const { data: { user: authUser } } = await supabase.auth.getUser();
+      if (!authUser) {
+        Alert.alert('Sign In Required', 'You need to be signed in to report this.');
+        return;
+      }
+      const { error } = await supabase.from('disputes').insert({
+        event_post_id: flyer.id,
+        reported_by: authUser.id,
+      });
+      if (error) {
+        if (error.code === '23505') {
+          // Unique violation — already disputed
+          Alert.alert('Already Reported', "You've already reported this as a different event.");
+        } else {
+          throw error;
+        }
+        return;
+      }
+      Alert.alert('Thanks', "We'll review whether this belongs in this group.");
+    } catch {
+      Alert.alert('Error', 'Could not submit. Please try again.');
+    }
+  }, [flyer.id]);
+
   const handleMore = useCallback(() => {
     // isMine is already computed at the component level
+    const isGrouped = !!flyer.event_group_id;
 
     if (Platform.OS === 'ios') {
       const options = isMine
         ? ['Cancel', 'Edit Event', 'Delete Event']
-        : ['Cancel', 'Report this flyer', "Don't show me this again", "Don't show from this poster"];
+        : isGrouped
+          ? ['Cancel', 'Report this flyer', 'Not the same event', "Don't show me this again", "Don't show from this poster"]
+          : ['Cancel', 'Report this flyer', "Don't show me this again", "Don't show from this poster"];
       const destructiveIndex = isMine ? 2 : 1;
 
       ActionSheetIOS.showActionSheetWithOptions(
@@ -244,6 +299,11 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
           if (isMine) {
             if (buttonIndex === 1) onEdit?.(flyer);
             else if (buttonIndex === 2) handleDelete();
+          } else if (isGrouped) {
+            if (buttonIndex === 1) setShowReport(true);
+            else if (buttonIndex === 2) handleDispute();
+            else if (buttonIndex === 3) Alert.alert('Hidden', "You won't see this event again.");
+            else if (buttonIndex === 4) Alert.alert('Poster Hidden', "You won't see events from this poster anymore.");
           } else {
             if (buttonIndex === 1) setShowReport(true);
             else if (buttonIndex === 2) Alert.alert('Hidden', "You won't see this event again.");
@@ -253,13 +313,12 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
       );
     } else if (Platform.OS === 'web') {
       if (isMine) {
-        // Show a simple web menu for own posts
         setShowWebMenu(true);
       } else {
         setShowReport(true);
       }
     } else {
-      const buttons = isMine
+      const baseButtons = isMine
         ? [
             { text: 'Edit Event', onPress: () => onEdit?.(flyer) },
             { text: 'Delete Event', onPress: handleDelete, style: 'destructive' as const },
@@ -267,13 +326,14 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
           ]
         : [
             { text: 'Report this flyer', onPress: () => setShowReport(true), style: 'destructive' as const },
+            ...(isGrouped ? [{ text: 'Not the same event', onPress: handleDispute }] : []),
             { text: "Don't show me this again", onPress: () => Alert.alert('Hidden', "You won't see this event again.") },
             { text: "Don't show from this poster", onPress: () => Alert.alert('Poster Hidden', "You won't see events from this poster anymore.") },
             { text: 'Cancel', style: 'cancel' as const },
           ];
-      Alert.alert('Options', undefined, buttons);
+      Alert.alert('Options', undefined, baseButtons);
     }
-  }, [flyer, isMine, onEdit, handleDelete]);
+  }, [flyer, isMine, onEdit, handleDelete, handleDispute]);
 
   const handleReport = useCallback(async (reason: string) => {
     setReportReason(reason);
@@ -332,169 +392,212 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
     : null;
 
   return (
-    <TouchableWithoutFeedback onPress={toggleActive}>
-      <View style={[styles.card, { width, height: cardHeight }]}>
-        {/* Layer 1: Blur background */}
-        {imageSource && (
-          <View style={styles.blurContainer}>
-            {Platform.OS === 'web' ? (
-              <Image
-                source={imageSource}
-                style={[
-                  styles.blurImage,
-                  {
-                    // @ts-ignore web-only CSS
-                    filter: 'blur(40px) brightness(0.6) saturate(1.2)',
-                  } as any,
-                ]}
-                resizeMode="cover"
-              />
-            ) : (
-              <Image
-                source={imageSource}
-                style={styles.blurImage}
-                blurRadius={15}
-                resizeMode="cover"
-              />
-            )}
-          </View>
-        )}
-        {/* Fallback background color */}
-        <View
-          style={[
-            styles.bgFallback,
-            { backgroundColor: flyer.bgColor },
-          ]}
-        />
+    <View style={[styles.card, { width, height: cardHeight }]}>
+      {/* ─── Image Area (compresses to 35% in details) ─── */}
+      <TouchableWithoutFeedback onPress={toggleActive}>
+        <Animated.View style={[styles.imageArea, { height: imageHeight }]}>
+          {/* Blur background */}
+          {imageSource && (
+            <View style={styles.blurContainer}>
+              {Platform.OS === 'web' ? (
+                <Image
+                  source={imageSource}
+                  style={[
+                    styles.blurImage,
+                    {
+                      // @ts-ignore web-only CSS
+                      filter: 'blur(40px) brightness(0.6) saturate(1.2)',
+                    } as any,
+                  ]}
+                  resizeMode="cover"
+                />
+              ) : (
+                <Image
+                  source={imageSource}
+                  style={styles.blurImage}
+                  blurRadius={15}
+                  resizeMode="cover"
+                />
+              )}
+            </View>
+          )}
+          {/* Fallback background color */}
+          <View
+            style={[
+              styles.bgFallback,
+              { backgroundColor: flyer.bgColor },
+            ]}
+          />
 
-        {/* Layer 2: Main flyer image */}
-        {imageSource && (
+          {/* Main flyer image */}
+          {imageSource && (
+            <Animated.View
+              style={[
+                styles.mainImageContainer,
+                { transform: [{ scale: imageScale }] },
+              ]}
+            >
+              <Image
+                source={imageSource}
+                style={styles.mainImage}
+                resizeMode="contain"
+              />
+            </Animated.View>
+          )}
+
+          {/* Dark overlay (subtle dimming in details) */}
           <Animated.View
             style={[
-              styles.mainImageContainer,
-              { transform: [{ scale: imageScale }] },
+              styles.darkOverlay,
+              { opacity: overlayOpacity },
             ]}
-          >
-            <Image
-              source={imageSource}
-              style={styles.mainImage}
-              resizeMode="contain"
-            />
-          </Animated.View>
-        )}
+          />
 
-        {/* Layer 3: Dark overlay (animates on tap) */}
+          {/* Mini title overlaid on compressed image (details only) */}
+          {active && (
+            <View style={styles.miniTitleOverlay}>
+              <Text style={styles.miniTitleText} numberOfLines={1}>{flyer.title}</Text>
+            </View>
+          )}
+        </Animated.View>
+      </TouchableWithoutFeedback>
+
+      {/* ─── Details Panel (slides up, covers bottom ~65%) ─── */}
+      {active && (
         <Animated.View
           style={[
-            styles.darkOverlay,
-            { opacity: overlayOpacity },
+            styles.detailsPanel,
+            { height: cardHeight * 0.65, transform: [{ translateY: detailsPanelTranslateY }] },
           ]}
-        />
-
-        {/* Layer 4: Info panel (animates on tap) */}
-        <Animated.View
-          style={[
-            styles.infoPanel,
-            {
-              opacity: infoOpacity,
-              transform: [{ translateY: infoTranslateY }],
-            },
-          ]}
-          pointerEvents={active ? 'auto' : 'none'}
         >
-          {/* Category badge — tappable to filter browse */}
-          <TouchableOpacity
-            style={styles.categoryBadge}
-            activeOpacity={0.7}
-            onPress={() => {
-              // Close details with animation first, then filter
-              if (activeRef.current) {
-                setActive(false);
-                activeRef.current = false;
-                onActiveChange?.(false);
-                Animated.parallel([
-                  Animated.timing(overlayOpacity, { toValue: 0, duration: 150, easing: EASING, useNativeDriver: true }),
-                  Animated.timing(infoTranslateY, { toValue: 16, duration: 150, easing: EASING, useNativeDriver: true }),
-                  Animated.timing(infoOpacity, { toValue: 0, duration: 150, easing: EASING, useNativeDriver: true }),
-                  Animated.timing(imageScale, { toValue: 1, duration: 150, easing: EASING, useNativeDriver: true }),
-                ]).start();
-              }
-              onCategoryPress?.(flyer.category);
-            }}
-          >
-            <Text style={styles.categoryText}>{flyer.category}</Text>
-          </TouchableOpacity>
-
-          {/* Title */}
-          <Text
-            style={[styles.title, { fontSize: titleFontSize, lineHeight: titleFontSize * 0.95 }]}
-            numberOfLines={3}
-          >
-            {flyer.title}
-          </Text>
-
-          {/* Subtitle */}
-          {flyer.subtitle ? (
-            <Text style={styles.subtitle}>{flyer.subtitle}</Text>
-          ) : null}
-
-          {/* Date row — tap to add to calendar */}
-          {flyer.date_text ? (
-            <TouchableOpacity
-              style={styles.metaRow}
-              activeOpacity={0.7}
-              onPress={() => {
-                // Build a Google Calendar "create event" URL
-                const title = encodeURIComponent(flyer.title || 'Event');
-                const location = encodeURIComponent(flyer.location || '');
-                const details = encodeURIComponent(
-                  [flyer.subtitle, flyer.event_url ? `Link: ${flyer.event_url}` : '', `Found on The Pages`]
-                    .filter(Boolean).join('\n')
-                );
-                // Use the date_text as-is for the event (Google Calendar will parse it)
-                const dateText = encodeURIComponent(flyer.date_text || '');
-                const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dateText}&location=${location}&details=${details}`;
-                if (Platform.OS === 'web') {
-                  window.open(url, '_blank', 'noopener,noreferrer');
-                } else {
-                  Linking.openURL(url);
-                }
-              }}
+          {!detailsLoaded ? (
+            /* Loading spinner while content loads */
+            <View style={styles.detailsSpinner}>
+              <ActivityIndicator size="small" color={COLORS.text60} />
+            </View>
+          ) : (
+            /* Details content — fades in */
+            <ScrollView
+              style={styles.detailsScroll}
+              contentContainerStyle={styles.detailsScrollContent}
+              showsVerticalScrollIndicator={false}
             >
-              <CalendarIcon />
-              <Text style={[styles.metaText, styles.metaTextTappable]}>{flyer.date_text}</Text>
-            </TouchableOpacity>
-          ) : null}
+              {/* Category label */}
+              <TouchableOpacity
+                style={styles.categoryBadge}
+                activeOpacity={0.7}
+                onPress={() => {
+                  toggleActive();
+                  onCategoryPress?.(flyer.category);
+                }}
+              >
+                <Text style={styles.categoryText}>{flyer.category}</Text>
+              </TouchableOpacity>
 
-          {/* Location row */}
-          {flyer.location ? (
-            <TouchableOpacity
-              style={styles.metaRow}
-              activeOpacity={0.7}
-              onPress={() => {
-                const query = encodeURIComponent(flyer.location!);
-                const url = Platform.select({
-                  ios: `maps:0,0?q=${query}`,
-                  android: `geo:0,0?q=${query}`,
-                  default: `https://www.google.com/maps/search/?api=1&query=${query}`,
-                });
-                if (url) {
-                  if (Platform.OS === 'web') {
-                    window.open(url, '_blank', 'noopener,noreferrer');
-                  } else {
-                    Linking.openURL(url);
-                  }
-                }
-              }}
+              {/* Event name */}
+              <Text
+                style={[styles.title, { fontSize: titleFontSize * 0.9, lineHeight: titleFontSize * 0.88 }]}
+                numberOfLines={2}
+              >
+                {flyer.title}
+              </Text>
+
+              {/* Venue */}
+              {flyer.location ? (
+                <Text style={styles.detailsVenue}>{flyer.location}</Text>
+              ) : null}
+
+              {/* Date / Time */}
+              {flyer.date_text ? (
+                <Text style={styles.detailsDateTime}>{flyer.date_text}</Text>
+              ) : null}
+
+              {/* Caption with accent border */}
+              {flyer.description ? (
+                <View style={styles.captionContainer}>
+                  <Text style={styles.captionText}>{flyer.description}</Text>
+                </View>
+              ) : flyer.subtitle ? (
+                <View style={styles.captionContainer}>
+                  <Text style={styles.captionText}>{flyer.subtitle}</Text>
+                </View>
+              ) : null}
+
+              {/* Calendar row — tappable */}
+              {flyer.date_text ? (
+                <TouchableOpacity
+                  style={[styles.metaActionRow, !buttonsEnabled && styles.metaActionDisabled]}
+                  activeOpacity={buttonsEnabled ? 0.7 : 1}
+                  disabled={!buttonsEnabled}
+                  onPress={() => {
+                    const title = encodeURIComponent(flyer.title || 'Event');
+                    const location = encodeURIComponent(flyer.location || '');
+                    const details = encodeURIComponent(
+                      [flyer.subtitle, flyer.event_url ? `Link: ${flyer.event_url}` : '', `Found on The Pages`]
+                        .filter(Boolean).join('\n')
+                    );
+                    const dateText = encodeURIComponent(flyer.date_text || '');
+                    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dateText}&location=${location}&details=${details}`;
+                    if (Platform.OS === 'web') {
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    } else {
+                      Linking.openURL(url);
+                    }
+                  }}
+                >
+                  <CalendarIcon />
+                  <Text style={[styles.metaActionText, !buttonsEnabled && { opacity: 0.4 }]}>Add to Calendar</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {/* Maps row — tappable */}
+              {flyer.location ? (
+                <TouchableOpacity
+                  style={[styles.metaActionRow, !buttonsEnabled && styles.metaActionDisabled]}
+                  activeOpacity={buttonsEnabled ? 0.7 : 1}
+                  disabled={!buttonsEnabled}
+                  onPress={() => {
+                    const query = encodeURIComponent(flyer.location!);
+                    const url = Platform.select({
+                      ios: `maps:0,0?q=${query}`,
+                      android: `geo:0,0?q=${query}`,
+                      default: `https://www.google.com/maps/search/?api=1&query=${query}`,
+                    });
+                    if (url) {
+                      if (Platform.OS === 'web') {
+                        window.open(url, '_blank', 'noopener,noreferrer');
+                      } else {
+                        Linking.openURL(url);
+                      }
+                    }
+                  }}
+                >
+                  <PinIcon />
+                  <Text style={[styles.metaActionText, !buttonsEnabled && { opacity: 0.4 }]}>Open in Maps</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {/* CTA */}
+              {flyer.link ? (
+                <TouchableOpacity
+                  style={styles.ctaButton}
+                  activeOpacity={0.8}
+                  onPress={handleCTA}
+                >
+                  <Text style={styles.ctaText}>{flyer.link}</Text>
+                </TouchableOpacity>
+              ) : null}
+            </ScrollView>
+          )}
+
+          {/* Hashtag pills — pinned to bottom, horizontal scroll */}
+          {flyer.tags && flyer.tags.length > 0 && detailsLoaded ? (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.tagsScrollContainer}
+              contentContainerStyle={styles.tagsScrollContent}
             >
-              <PinIcon />
-              <Text style={[styles.metaText, styles.metaTextTappable]}>{flyer.location}</Text>
-            </TouchableOpacity>
-          ) : null}
-
-          {/* Tags */}
-          {flyer.tags && flyer.tags.length > 0 ? (
-            <View style={styles.tagsRow}>
               {flyer.tags.map((tag, index) => {
                 const color = TAG_COLORS[index % TAG_COLORS.length];
                 return (
@@ -503,18 +606,7 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
                     style={[styles.tagPill, { backgroundColor: color.bg }]}
                     activeOpacity={0.7}
                     onPress={() => {
-                      // Close details with animation, then activate tag filter
-                      if (activeRef.current) {
-                        setActive(false);
-                        activeRef.current = false;
-                        onActiveChange?.(false);
-                        Animated.parallel([
-                          Animated.timing(overlayOpacity, { toValue: 0, duration: 150, easing: EASING, useNativeDriver: true }),
-                          Animated.timing(infoTranslateY, { toValue: 16, duration: 150, easing: EASING, useNativeDriver: true }),
-                          Animated.timing(infoOpacity, { toValue: 0, duration: 150, easing: EASING, useNativeDriver: true }),
-                          Animated.timing(imageScale, { toValue: 1, duration: 150, easing: EASING, useNativeDriver: true }),
-                        ]).start();
-                      }
+                      toggleActive();
                       onTagPress?.(tag);
                     }}
                   >
@@ -522,116 +614,87 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
                   </TouchableOpacity>
                 );
               })}
-            </View>
+            </ScrollView>
           ) : null}
+        </Animated.View>
+      )}
 
-          {/* CTA button */}
-          {flyer.link ? (
-            <TouchableOpacity
-              style={styles.ctaButton}
-              activeOpacity={0.8}
-              onPress={handleCTA}
-            >
-              <Text style={styles.ctaText}>{flyer.link}</Text>
-            </TouchableOpacity>
-          ) : null}
-
-          {/* Posted by — hidden for anonymous posts */}
+      {/* ─── Side Icons (details state only, right edge) ─── */}
+      {active && detailsLoaded && (
+        <Animated.View style={[styles.sideIcons, { opacity: sideIconsOpacity }]}>
+          {/* User avatar */}
           {flyer.profile && !flyer.is_anonymous ? (
             <TouchableOpacity
-              style={styles.postedByRow}
+              style={styles.sideIconButton}
               activeOpacity={0.7}
-              onPress={() => {
-                router.push(`/profile/${flyer.profile!.id}`);
-              }}
+              onPress={() => router.push(`/profile/${flyer.profile!.id}`)}
             >
               {flyer.profile.avatar_url ? (
-                <Image
-                  source={{ uri: flyer.profile.avatar_url }}
-                  style={styles.postedByAvatar}
-                />
+                <Image source={{ uri: flyer.profile.avatar_url }} style={styles.sideAvatar} />
               ) : (
-                <View style={[styles.postedByAvatarFallback, { backgroundColor: flyer.profile.avatar_color || '#EB736C' }]}>
-                  <Text style={styles.postedByInitial}>{flyer.profile.avatar_initials || '?'}</Text>
+                <View style={[styles.sideAvatarFallback, { backgroundColor: flyer.profile.avatar_color || '#EB736C' }]}>
+                  <Text style={styles.sideAvatarInitial}>{flyer.profile.avatar_initials || '?'}</Text>
                 </View>
               )}
-              <Text style={styles.postedByText}>
-                {flyer.profile.display_name || flyer.profile.handle || 'Anonymous'}
+              <Text style={styles.sideIconLabel} numberOfLines={1}>
+                {flyer.profile.display_name || flyer.profile.handle || ''}
               </Text>
             </TouchableOpacity>
-          ) : flyer.is_anonymous ? (
-            <View style={styles.postedByRow}>
-              <View style={[styles.postedByAvatarFallback, { backgroundColor: '#666' }]}>
-                <Text style={styles.postedByInitial}>?</Text>
-              </View>
-              <Text style={styles.postedByText}>Anonymous</Text>
-            </View>
           ) : null}
 
-          {/* Actions row inside details */}
-          <View style={styles.detailsActions}>
-            <TouchableOpacity
-              style={[styles.detailsActionButton, saved && styles.detailsActionButtonSaved]}
-              onPress={handleSave}
-              activeOpacity={0.7}
-            >
-              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M5 2h14a1 1 0 011 1v19.143a.5.5 0 01-.766.424L12 18.03l-7.234 4.537A.5.5 0 014 22.143V3a1 1 0 011-1z"
-                  stroke="#fff" strokeWidth={1.5} fill={saved ? '#fff' : 'none'}
-                />
-              </Svg>
-              <Text style={styles.detailsActionText}>{saved ? 'Saved' : 'Save'}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.detailsActionButton}
-              onPress={handleShare}
-              activeOpacity={0.7}
-            >
-              <Svg width={18} height={18} viewBox="0 0 24 24" fill="none">
-                <Path
-                  d="M12 3v12M12 3l4 4M12 3L8 7M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"
-                  stroke="#fff" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"
-                />
-              </Svg>
-              <Text style={styles.detailsActionText}>Share</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.detailsActionButton}
-              onPress={handleMore}
-              activeOpacity={0.7}
-            >
-              <MoreIcon />
-              <Text style={styles.detailsActionText}>{isMine ? 'More' : 'Report'}</Text>
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-
-        {/* Layer 5: Action rail — only when details are closed */}
-        {!active && (
-          <ActionRail
-            visible={true}
-            onSave={handleSave}
-            onShare={handleShare}
-            isSaved={saved}
-          />
-        )}
-
-        {/* Private post badge */}
-        {!flyer.is_public && (
-          <View style={styles.privateBadge}>
-            <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
+          {/* Save */}
+          <TouchableOpacity style={styles.sideIconButton} onPress={handleSave} activeOpacity={0.7}>
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
               <Path
-                d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2zM7 11V7a5 5 0 0110 0v4"
-                stroke="#fff"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
+                d="M5 2h14a1 1 0 011 1v19.143a.5.5 0 01-.766.424L12 18.03l-7.234 4.537A.5.5 0 014 22.143V3a1 1 0 011-1z"
+                stroke="#fff" strokeWidth={1.5} fill={saved ? '#EB736C' : 'none'}
               />
             </Svg>
-            <Text style={styles.privateBadgeText}>PRIVATE</Text>
+          </TouchableOpacity>
+
+          {/* Share */}
+          <TouchableOpacity style={styles.sideIconButton} onPress={handleShare} activeOpacity={0.7}>
+            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
+              <Path
+                d="M12 3v12M12 3l4 4M12 3L8 7M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"
+                stroke="#fff" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"
+              />
+            </Svg>
+          </TouchableOpacity>
+
+          {/* More */}
+          <TouchableOpacity style={styles.sideIconButton} onPress={handleMore} activeOpacity={0.7}>
+            <MoreIcon />
+          </TouchableOpacity>
+        </Animated.View>
+      )}
+
+      {/* Action rail — browse state only */}
+      {!active && (
+        <ActionRail
+          visible={true}
+          onSave={handleSave}
+          onShare={handleShare}
+          isSaved={saved}
+        />
+      )}
+
+        {/* Visibility badge — colored indicator for non-public posts */}
+        {flyer.visibility && flyer.visibility !== 'public' && (
+          <View style={[
+            styles.visibilityBadge,
+            { backgroundColor: flyer.visibility === 'mutuals'
+              ? 'rgba(233,210,94,0.85)'
+              : 'rgba(235,115,108,0.85)'
+            },
+          ]}>
+            <View style={{
+              width: 6, height: 6, borderRadius: 3,
+              backgroundColor: '#fff',
+            }} />
+            <Text style={styles.visibilityBadgeText}>
+              {flyer.visibility === 'mutuals' ? 'MUTUALS' : 'FOLLOWERS'}
+            </Text>
           </View>
         )}
 
@@ -699,16 +762,15 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
           </View>
         )}
 
-        {/* External link warning modal */}
-        <ExternalLinkWarning
-          visible={showLinkWarning}
-          url={flyer.event_url ?? ''}
-          eventTitle={flyer.title}
-          onClose={() => setShowLinkWarning(false)}
-          onConfirm={handleConfirmLink}
-        />
-      </View>
-    </TouchableWithoutFeedback>
+      {/* External link warning modal */}
+      <ExternalLinkWarning
+        visible={showLinkWarning}
+        url={flyer.event_url ?? ''}
+        eventTitle={flyer.title}
+        onClose={() => setShowLinkWarning(false)}
+        onConfirm={handleConfirmLink}
+      />
+    </View>
   );
 });
 
@@ -740,6 +802,13 @@ const styles = StyleSheet.create({
     zIndex: -1,
   },
 
+  /* Image area */
+  imageArea: {
+    position: 'relative',
+    overflow: 'hidden',
+    zIndex: 2,
+  },
+
   /* Main image */
   mainImageContainer: {
     ...StyleSheet.absoluteFillObject,
@@ -762,16 +831,156 @@ const styles = StyleSheet.create({
     zIndex: 2,
   },
 
-  /* Info panel */
-  infoPanel: {
+  /* Mini title on compressed image */
+  miniTitleOverlay: {
+    position: 'absolute',
+    bottom: 8,
+    left: 16,
+    right: 16,
+    zIndex: 5,
+  },
+  miniTitleText: {
+    fontFamily: FONTS.display,
+    fontSize: 14,
+    color: '#ffffff',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+
+  /* Details panel — slides up from bottom */
+  detailsPanel: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 24,
-    paddingBottom: 28,
+    backgroundColor: COLORS.dark,
     zIndex: 10,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.08)',
+  },
+  detailsSpinner: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  detailsScroll: {
+    flex: 1,
+  },
+  detailsScrollContent: {
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 60,
+    paddingRight: 60, // room for side icons
+    gap: 8,
+  },
+
+  /* Caption with accent border */
+  captionContainer: {
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.coral,
+    paddingLeft: 12,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  captionText: {
+    fontFamily: FONTS.bodyItalic || FONTS.body,
+    fontSize: 14,
+    color: COLORS.text70,
+    fontStyle: 'italic',
+    lineHeight: 20,
+  },
+
+  /* Details venue/datetime */
+  detailsVenue: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: COLORS.text85,
+  },
+  detailsDateTime: {
+    fontFamily: FONTS.mono,
+    fontSize: 13,
+    color: COLORS.text60,
+  },
+
+  /* Calendar/Maps action rows */
+  metaActionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 10,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  metaActionDisabled: {
+    opacity: 0.4,
+  },
+  metaActionText: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: COLORS.text85,
+  },
+
+  /* Tags horizontal scroll */
+  tagsScrollContainer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    maxHeight: 40,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+  },
+  tagsScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 24,
+    paddingVertical: 8,
+  },
+
+  /* Side icons — right edge, vertically stacked */
+  sideIcons: {
+    position: 'absolute',
+    right: 12,
+    top: '38%', // below compressed image area
+    zIndex: 20,
+    alignItems: 'center',
+    gap: 16,
+  },
+  sideIconButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: 40,
+    height: 40,
+  },
+  sideIconLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 9,
+    color: COLORS.text60,
+    marginTop: 2,
+    maxWidth: 50,
+    textAlign: 'center',
+  },
+  sideAvatar: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#ffffff',
+  },
+  sideAvatarFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sideAvatarInitial: {
+    fontFamily: FONTS.display,
+    fontSize: 12,
+    color: '#ffffff',
   },
   categoryBadge: {
     alignSelf: 'flex-start',
@@ -803,26 +1012,6 @@ const styles = StyleSheet.create({
     color: COLORS.text70,
     marginTop: -2,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  metaText: {
-    fontFamily: FONTS.mono,
-    fontSize: 13,
-    color: COLORS.text85,
-  },
-  metaTextTappable: {
-    textDecorationLine: 'underline' as const,
-    textDecorationColor: 'rgba(255,255,255,0.2)',
-  },
-  tagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginTop: 4,
-  },
   tagPill: {
     borderRadius: 0,
     paddingHorizontal: 10,
@@ -848,63 +1037,6 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
     textTransform: 'uppercase',
     color: '#78B896',
-  },
-  postedByRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 14,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.1)',
-  },
-  postedByAvatar: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-  },
-  postedByAvatarFallback: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  postedByInitial: {
-    fontFamily: FONTS.display,
-    fontSize: 12,
-    color: '#ffffff',
-  },
-  postedByText: {
-    fontFamily: FONTS.mono,
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
-  },
-  detailsActions: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 16,
-  },
-  detailsActionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 0,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.25)',
-  },
-  detailsActionButtonSaved: {
-    backgroundColor: '#EB736C',
-    borderColor: '#EB736C',
-  },
-  detailsActionText: {
-    fontFamily: FONTS.display,
-    fontSize: 12,
-    color: '#ffffff',
-    letterSpacing: 0.8,
   },
   reportOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -953,23 +1085,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: 'rgba(2,4,15,0.4)',
   },
-  privateBadge: {
+  visibilityBadge: {
     position: 'absolute',
     top: 16,
     left: 16,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    gap: 5,
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: 4,
     zIndex: 5,
   },
-  privateBadgeText: {
+  visibilityBadgeText: {
     fontFamily: FONTS.mono,
-    fontSize: 10,
+    fontSize: 9,
     letterSpacing: 1,
     color: '#fff',
+    fontWeight: '600',
   },
 });

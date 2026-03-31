@@ -12,16 +12,16 @@ import {
   Image,
   Alert,
   ActionSheetIOS,
-  Switch,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { scanFlyer, moderateContent } from '../lib/scan';
+import { scanFlyer, moderateContent, matchEvent } from '../lib/scan';
 import { pickImageFromLibrary, pickImageFromCamera, readFileAsBase64 } from '../lib/platform';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
 import { useOverlay } from '../app/(tabs)/_layout';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
+import type { Visibility } from '../types';
 
 const CATEGORIES = [
   'Party', 'Music', 'Community', 'Arts', 'Wellness', 'Food', 'Free', 'Theatre',
@@ -56,7 +56,7 @@ export function AddEventSheet() {
   const [tagInput, setTagInput] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [isPublic, setIsPublic] = useState(true);
+  const [visibility, setVisibility] = useState<Visibility>('public');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
@@ -530,7 +530,7 @@ export function AddEventSheet() {
       setLocation(editingPost.location || '');
       setLink(editingPost.event_url || '');
       setSelectedCategory(editingPost.category || null);
-      setIsPublic(editingPost.is_public !== false);
+      setVisibility(editingPost.visibility || (editingPost.is_public !== false ? 'public' : 'mutuals'));
       setIsAnonymous(editingPost.is_anonymous === true);
       if (editingPost.image_url) {
         setImageUri(editingPost.image_url);
@@ -603,12 +603,12 @@ export function AddEventSheet() {
     setShowEndTime(false);
     setShowLinkField(false);
     setOccurrences([]);
-    setIsPublic(true);
+    setVisibility('public');
     setLocationResults([]);
     setShowLocationResults(false);
     setShowLinkField(false);
     setOccurrences([]);
-    setIsPublic(true);
+    setVisibility('public');
     setIsAnonymous(false);
     setPublishing(false);
     setScanError(null);
@@ -739,7 +739,8 @@ export function AddEventSheet() {
         pattern,
         category: selectedCategory || 'Community',
         tags: tags.map(t => `#${t}`),
-        is_public: isPublic,
+        is_public: visibility === 'public',
+        visibility,
         is_anonymous: isAnonymous,
         moderation_status: moderationStatus,
       };
@@ -812,6 +813,11 @@ export function AddEventSheet() {
             await supabase.from('moderation_log').insert(logEntries);
           } catch {
             // Non-blocking — log failure shouldn't prevent post success
+          }
+
+          // Fire-and-forget: auto-group into EventGroup by venue+date+time
+          for (const p of insertedPosts) {
+            matchEvent(p.id).catch(() => {});
           }
         }
 
@@ -1491,22 +1497,67 @@ export function AddEventSheet() {
               )}
             </View>
 
-            {/* Visibility toggle */}
-            <View style={styles.visibilityRow}>
-              <View>
-                <Text style={styles.visibilityLabel}>
-                  {isPublic ? 'Public Post' : 'Private Post 🔒'}
-                </Text>
-                <Text style={styles.visibilityHint}>
-                  {isPublic ? 'Visible to everyone in the feed' : 'Only visible to you & your community'}
-                </Text>
+            {/* Visibility picker — 3 levels */}
+            <View style={styles.visibilitySection}>
+              <Text style={styles.visibilitySectionLabel}>WHO CAN SEE THIS</Text>
+              <View style={styles.visibilityOptions}>
+                <TouchableOpacity
+                  style={[
+                    styles.visibilityOption,
+                    visibility === 'public' && styles.visibilityOptionActive,
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={() => setVisibility('public')}
+                >
+                  <Text style={[
+                    styles.visibilityOptionText,
+                    visibility === 'public' && styles.visibilityOptionTextActive,
+                  ]}>PUBLIC</Text>
+                  <Text style={styles.visibilityOptionHint}>Everyone in the feed</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.visibilityOption,
+                    visibility === 'followers' && {
+                      borderColor: COLORS.followState,
+                      backgroundColor: 'rgba(235,115,108,0.06)',
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={() => setVisibility('followers')}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.followState }} />
+                    <Text style={[
+                      styles.visibilityOptionText,
+                      visibility === 'followers' && { color: COLORS.followState },
+                    ]}>FOLLOWERS & MUTUALS</Text>
+                  </View>
+                  <Text style={styles.visibilityOptionHint}>Only your followers can see</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[
+                    styles.visibilityOption,
+                    visibility === 'mutuals' && {
+                      borderColor: COLORS.mutuals,
+                      backgroundColor: 'rgba(233,210,94,0.06)',
+                    },
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={() => setVisibility('mutuals')}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.mutuals }} />
+                    <Text style={[
+                      styles.visibilityOptionText,
+                      visibility === 'mutuals' && { color: COLORS.mutuals },
+                    ]}>MUTUALS ONLY</Text>
+                  </View>
+                  <Text style={styles.visibilityOptionHint}>Only people you both follow</Text>
+                </TouchableOpacity>
               </View>
-              <Switch
-                value={isPublic}
-                onValueChange={setIsPublic}
-                trackColor={{ true: '#78B896', false: '#ddd' }}
-                thumbColor="#fff"
-              />
             </View>
 
 
@@ -1963,25 +2014,47 @@ const styles = StyleSheet.create({
   categoryChipTextSelected: {
     color: '#ffffff',
   },
-  visibilityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: 16,
-    marginTop: 8,
+  visibilitySection: {
+    marginTop: 16,
+    paddingTop: 16,
     borderTopWidth: 1,
     borderTopColor: 'rgba(2,4,15,0.06)',
   },
-  visibilityLabel: {
-    fontFamily: FONTS.body,
-    fontSize: 15,
+  visibilitySectionLabel: {
+    fontFamily: FONTS.display,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    color: 'rgba(2,4,15,0.4)',
+    marginBottom: 10,
+  },
+  visibilityOptions: {
+    gap: 8,
+  },
+  visibilityOption: {
+    borderWidth: 1,
+    borderColor: 'rgba(2,4,15,0.1)',
+    borderRadius: 0,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  visibilityOptionActive: {
+    borderColor: '#02040F',
+    backgroundColor: 'rgba(2,4,15,0.03)',
+  },
+  visibilityOptionText: {
+    fontFamily: FONTS.display,
+    fontSize: 12,
+    letterSpacing: 1,
+    color: 'rgba(2,4,15,0.5)',
+  },
+  visibilityOptionTextActive: {
     color: '#02040F',
   },
-  visibilityHint: {
+  visibilityOptionHint: {
     fontFamily: FONTS.mono,
-    fontSize: 11,
-    color: 'rgba(2,4,15,0.4)',
-    marginTop: 2,
+    fontSize: 10,
+    color: 'rgba(2,4,15,0.35)',
+    marginTop: 3,
   },
   submitButton: {
     backgroundColor: '#02040F',

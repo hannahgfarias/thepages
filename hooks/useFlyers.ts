@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useCallback, useContext, createContext } from 'react';
+import React, { useState, useEffect, useCallback, useContext, createContext, useMemo } from 'react';
 import { supabase } from '../lib/supabase';
-import type { Post } from '../types';
+import type { Post, FeedItem, EventGroup } from '../types';
 
 const MONTH_MAP: Record<string, number> = {
   JAN: 0, JANUARY: 0,
@@ -104,15 +104,19 @@ export function useFlyers(userId?: string) {
       const fiveYearsAgo = new Date();
       fiveYearsAgo.setFullYear(fiveYearsAgo.getFullYear() - 5);
 
+      // RLS handles visibility filtering (public, followers, mutuals)
+      // We only need to filter for approved moderation status
       const { data, error: fetchError } = await supabase
         .from('posts')
         .select(`
           *,
           profile:profiles!posts_user_id_fkey (
             id, handle, display_name, avatar_url, avatar_color, avatar_initials
+          ),
+          event_group:event_groups (
+            id, canonical_name, venue_text, venue_id, event_date, start_time, end_time, post_count
           )
         `)
-        .eq('is_public', true)
         .eq('moderation_status', 'approved')
         .gte('created_at', fiveYearsAgo.toISOString())
         .order('created_at', { ascending: false })
@@ -163,10 +167,15 @@ export function useFlyers(userId?: string) {
         tags: row.tags || [],
         is_public: row.is_public,
         is_anonymous: row.is_anonymous,
+        visibility: row.visibility || (row.is_public ? 'public' : 'mutuals'),
         moderation_status: row.moderation_status,
         report_count: row.report_count,
+        save_count: row.save_count || 0,
+        share_count: row.share_count || 0,
         created_at: row.created_at,
         link: row.event_url ? 'Get Tickets' : '',
+        event_group_id: row.event_group_id || null,
+        event_group: row.event_group || null,
         profile: row.profile,
         is_saved: savedPostIds.has(row.id),
         is_mine: userId ? row.user_id === userId : false,
@@ -243,7 +252,7 @@ export function useFlyers(userId?: string) {
     }
   }, [userId]);
 
-  const recordShare = useCallback(async (postId: string) => {
+  const recordShare = useCallback(async (postId: string, eventGroupId?: string | null) => {
     // Optimistic UI update
     setFlyers((prev) =>
       prev.map((f) => (f.id === postId ? { ...f, share_count: f.share_count + 1 } : f))
@@ -253,6 +262,7 @@ export function useFlyers(userId?: string) {
       const { error } = await supabase.from('shares').insert({
         user_id: userId || null,
         post_id: postId,
+        event_group_id: eventGroupId || null,
       });
       if (error) throw error;
     } catch {
@@ -263,25 +273,91 @@ export function useFlyers(userId?: string) {
     }
   }, [userId]);
 
-  return { flyers, loading, error, refetch: fetchFlyers, toggleSave, recordShare };
+  // Derive grouped feed items from flat post list
+  const feedItems: FeedItem[] = useMemo(() => {
+    const groupMap = new Map<string, { group: EventGroup; posts: Post[] }>();
+    const singles: Post[] = [];
+
+    for (const post of flyers) {
+      if (post.event_group_id && post.event_group && post.event_group.post_count > 1) {
+        const existing = groupMap.get(post.event_group_id);
+        if (existing) {
+          existing.posts.push(post);
+        } else {
+          groupMap.set(post.event_group_id, {
+            group: post.event_group,
+            posts: [post],
+          });
+        }
+      } else {
+        singles.push(post);
+      }
+    }
+
+    const items: FeedItem[] = [];
+
+    // Sort carousel posts by engagement: (save_count + share_count) DESC, created_at ASC
+    for (const { group, posts } of groupMap.values()) {
+      posts.sort((a, b) => {
+        const engA = (a.save_count || 0) + (a.share_count || 0);
+        const engB = (b.save_count || 0) + (b.share_count || 0);
+        if (engB !== engA) return engB - engA;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+      items.push({ type: 'group', group, posts });
+    }
+
+    for (const post of singles) {
+      items.push({ type: 'single', post });
+    }
+
+    // Sort all feed items by the earliest post date in each item
+    items.sort((a, b) => {
+      const dateA = a.type === 'single'
+        ? parseEventDate(a.post.date_text || '')
+        : parseEventDate(a.posts[0]?.date_text || '');
+      const dateB = b.type === 'single'
+        ? parseEventDate(b.post.date_text || '')
+        : parseEventDate(b.posts[0]?.date_text || '');
+
+      if (!dateA && !dateB) return 0;
+      if (!dateA) return 1;
+      if (!dateB) return -1;
+
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const aUp = dateA >= todayStart;
+      const bUp = dateB >= todayStart;
+
+      if (aUp && !bUp) return -1;
+      if (!aUp && bUp) return 1;
+      if (aUp && bUp) return dateA.getTime() - dateB.getTime();
+      return dateB.getTime() - dateA.getTime();
+    });
+
+    return items;
+  }, [flyers]);
+
+  return { flyers, feedItems, loading, error, refetch: fetchFlyers, toggleSave, recordShare };
 }
 
 /* ─── Shared Flyers Context ─── */
 
 interface FlyersContextValue {
   flyers: Post[];
+  feedItems: FeedItem[];
   loading: boolean;
   error: string | null;
   refetch: () => Promise<void>;
   toggleSave: (postId: string) => Promise<void>;
-  recordShare: (postId: string) => Promise<void>;
+  recordShare: (postId: string, eventGroupId?: string | null) => Promise<void>;
 }
 
 const FlyersContext = createContext<FlyersContextValue | null>(null);
 
 export function FlyersProvider({ userId, children }: { userId?: string; children: React.ReactNode }) {
   const hookResult = useFlyers(userId);
-  const value = React.useMemo(() => hookResult, [hookResult.flyers, hookResult.loading, hookResult.error, hookResult.refetch, hookResult.toggleSave, hookResult.recordShare]);
+  const value = React.useMemo(() => hookResult, [hookResult.flyers, hookResult.feedItems, hookResult.loading, hookResult.error, hookResult.refetch, hookResult.toggleSave, hookResult.recordShare]);
   return React.createElement(FlyersContext.Provider, { value }, children);
 }
 

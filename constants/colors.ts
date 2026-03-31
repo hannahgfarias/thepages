@@ -57,4 +57,8 @@ export const COLORS = {
   chipDefault: 'rgba(255,255,255,0.06)',
   chipBorder: 'rgba(255,255,255,0.1)',
   chipText: 'rgba(255,255,255,0.7)',
+
+  // Relationship & visibility colors
+  mutuals: '#E9D25E',       // Custard — mutual follows + mutuals-only posts
+  followState: '#EB736C',   // Coral — following / requested + followers-only posts
 };

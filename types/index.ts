@@ -3,7 +3,8 @@ import type { ImageSourcePropType } from 'react-native';
 export type Category = 'Party' | 'Music' | 'Community' | 'Arts' | 'Wellness' | 'Food' | 'Free' | 'Theatre' | 'Fitness' | 'Nightlife' | 'Volunteer' | 'Sports' | 'Tech' | 'Film' | 'Comedy' | 'Markets' | 'Workshop' | 'Other';
 export type ModerationStatus = 'pending' | 'approved' | 'held' | 'rejected';
 export type ReportReason = 'harmful' | 'misleading' | 'inappropriate' | 'spam' | 'pii' | 'other';
-export type Visibility = 'public' | 'private';
+export type Visibility = 'public' | 'followers' | 'mutuals';
+export type FollowStatus = 'pending' | 'accepted';
 
 export interface Profile {
   id: string;
@@ -40,6 +41,7 @@ export interface Post {
   tags: string[];
   is_public: boolean;
   is_anonymous: boolean;
+  visibility: Visibility;
   moderation_status: ModerationStatus;
   report_count: number;
   save_count: number;
@@ -47,10 +49,21 @@ export interface Post {
   created_at: string;
   // CTA button text
   link: string;
+  // Event grouping
+  event_group_id?: string | null;
+  event_group?: EventGroup | null;
   // Joined
   profile?: Profile;
   is_saved?: boolean;
   is_mine?: boolean;
+}
+
+export interface Follow {
+  id: string;
+  follower_id: string;
+  following_id: string;
+  status: FollowStatus;
+  created_at: string;
 }
 
 export interface Save {
@@ -102,3 +115,32 @@ export interface ScanResult {
   event_url?: string;
   occurrences?: ScanOccurrence[];
 }
+
+/* ─── Event Grouping ─── */
+
+export interface EventGroup {
+  id: string;
+  canonical_name: string;
+  venue_text: string | null;
+  venue_id: string | null;
+  event_date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  post_count: number;
+  created_at: string;
+}
+
+export interface Dispute {
+  id: string;
+  event_post_id: string;
+  reported_by: string;
+  created_at: string;
+}
+
+/**
+ * A feed item is either a single post or a group of posts
+ * for the same event (rendered as a carousel).
+ */
+export type FeedItem =
+  | { type: 'single'; post: Post }
+  | { type: 'group'; group: EventGroup; posts: Post[] };

@@ -23,7 +23,7 @@ import { useSharedFlyers, parseEventDate, isEventPast } from '../hooks/useFlyers
 import { useAuth } from '../hooks/useAuth';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
-import type { Post } from '../types';
+import type { Post, Visibility } from '../types';
 import { FlyerCard } from './FlyerCard';
 import { SettingsSheet } from './SettingsSheet';
 
@@ -389,6 +389,13 @@ export function ProfilePanel() {
                 ]}
               />
             )}
+            {/* Visibility indicator dot — coral for followers, custard for mutuals */}
+            {post.visibility && post.visibility !== 'public' && (
+              <View style={[
+                styles.visibilityDot,
+                { backgroundColor: post.visibility === 'mutuals' ? COLORS.mutuals : COLORS.followState },
+              ]} />
+            )}
             {/* Gradient overlay at bottom */}
             <View style={styles.gridOverlay}>
               <Text style={styles.gridTitle} numberOfLines={2}>
@@ -530,7 +537,7 @@ export function ProfilePanel() {
                 activeTab === 'posts' && styles.tabTextActive,
               ]}
             >
-              YOUR POSTS
+              POSTS
             </Text>
             {activeTab === 'posts' && <View style={styles.tabUnderline} />}
           </TouchableOpacity>
@@ -829,6 +836,15 @@ const styles = StyleSheet.create({
   gridImage: {
     width: '100%',
     height: '100%',
+  },
+  visibilityDot: {
+    position: 'absolute',
+    top: 8,
+    left: 8,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    zIndex: 2,
   },
   gridOverlay: {
     position: 'absolute',
