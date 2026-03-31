@@ -441,8 +441,10 @@ export function AuthFlow() {
                 </TouchableOpacity>
 
                 <Text style={styles.legalText}>
-                  By continuing, you agree to our Terms of Service and Privacy
-                  Policy. We'll send a verification code to your phone.
+                  By tapping "Send Code", you consent to receive a one-time
+                  SMS verification code at the number provided. Message and
+                  data rates may apply. By continuing, you agree to our{' '}
+                  Terms of Service and Privacy Policy.
                 </Text>
               </View>
             )}
