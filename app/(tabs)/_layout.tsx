@@ -214,17 +214,17 @@ function CustomTabBar({ state }: BottomTabBarProps) {
   const isProfileActive = showProfile;
   const isBrowseActive = !isProfileActive;
 
-  // Fetch pending follow requests (people who follow me but I don't follow back)
+  // Fetch pending follow requests (pending status + people who follow me but I don't follow back)
   useEffect(() => {
     if (!isAuthenticated || !user?.id) {
       setPendingFollowCount(0);
       return;
     }
     const fetchPending = async () => {
-      // People who follow me
+      // People who follow me (with status)
       const { data: followers } = await supabase
         .from('follows')
-        .select('follower_id')
+        .select('follower_id, status')
         .eq('following_id', user.id);
       // People I follow
       const { data: following } = await supabase
@@ -232,7 +232,10 @@ function CustomTabBar({ state }: BottomTabBarProps) {
         .select('following_id')
         .eq('follower_id', user.id);
       const iFollow = new Set((following || []).map((f: any) => f.following_id));
-      const pendingCount = (followers || []).filter((f: any) => !iFollow.has(f.follower_id)).length;
+      // Count: pending requests + accepted followers I don't follow back
+      const pendingCount = (followers || []).filter((f: any) =>
+        f.status === 'pending' || !iFollow.has(f.follower_id)
+      ).length;
       setPendingFollowCount(pendingCount);
     };
     fetchPending();

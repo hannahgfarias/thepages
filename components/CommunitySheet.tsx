@@ -32,7 +32,7 @@ interface CommunityMember {
   handle: string;
   color: string;
   initials: string;
-  status: 'mutual' | 'following' | 'follows_you';
+  status: 'mutual' | 'following' | 'follows_you' | 'pending_request';
 }
 
 export function CommunitySheet() {
@@ -63,23 +63,28 @@ export function CommunitySheet() {
     try {
       const { data: following } = await supabase
         .from('follows')
-        .select('following_id, profile:profiles!follows_following_id_fkey(id, handle, display_name, avatar_color, avatar_initials)')
+        .select('following_id, status, profile:profiles!follows_following_id_fkey(id, handle, display_name, avatar_color, avatar_initials)')
         .eq('follower_id', userId);
 
       const { data: followers } = await supabase
         .from('follows')
-        .select('follower_id, profile:profiles!follows_follower_id_fkey(id, handle, display_name, avatar_color, avatar_initials)')
+        .select('follower_id, status, profile:profiles!follows_follower_id_fkey(id, handle, display_name, avatar_color, avatar_initials)')
         .eq('following_id', userId);
 
-      const followingIds = new Set((following || []).map((f: any) => f.following_id));
-      const followerIds = new Set((followers || []).map((f: any) => f.follower_id));
+      // Only count accepted follows for mutual/following status
+      const acceptedFollowingIds = new Set(
+        (following || []).filter((f: any) => f.status === 'accepted').map((f: any) => f.following_id)
+      );
+      const acceptedFollowerIds = new Set(
+        (followers || []).filter((f: any) => f.status === 'accepted').map((f: any) => f.follower_id)
+      );
 
       const allProfiles = new Map<string, any>();
 
       for (const f of (following || [])) {
         const p = f.profile;
         if (!p) continue;
-        const isMutual = followerIds.has(p.id);
+        const isMutual = acceptedFollowerIds.has(p.id) && f.status === 'accepted';
         allProfiles.set(p.id, {
           id: p.id,
           name: p.display_name || p.handle || 'User',
@@ -92,7 +97,22 @@ export function CommunitySheet() {
 
       for (const f of (followers || [])) {
         const p = f.profile;
-        if (!p || allProfiles.has(p.id)) continue;
+        if (!p) continue;
+        // Pending follow request — they want to follow us but not yet accepted
+        if (f.status === 'pending') {
+          if (!allProfiles.has(p.id)) {
+            allProfiles.set(p.id, {
+              id: p.id,
+              name: p.display_name || p.handle || 'User',
+              handle: p.handle || '@user',
+              color: p.avatar_color || '#EB736C',
+              initials: p.avatar_initials || '?',
+              status: 'pending_request',
+            });
+          }
+          continue;
+        }
+        if (allProfiles.has(p.id)) continue;
         allProfiles.set(p.id, {
           id: p.id,
           name: p.display_name || p.handle || 'User',
@@ -230,26 +250,87 @@ export function CommunitySheet() {
   const handleFollow = async (targetId: string, targetName: string) => {
     if (!userId) return;
     try {
+      // Check if target profile is private (requires approval)
+      const { data: targetProfile } = await supabase
+        .from('profiles')
+        .select('is_public')
+        .eq('id', targetId)
+        .single();
+
+      const isPending = targetProfile && !targetProfile.is_public;
+      const followStatus = isPending ? 'pending' : 'accepted';
+
       const { error } = await supabase.from('follows').insert({
         follower_id: userId,
         following_id: targetId,
+        status: followStatus,
       });
       if (error) throw error;
 
+      if (isPending) {
+        setMembers((prev) =>
+          prev.map((m) => m.id === targetId ? { ...m, status: 'following' as const } : m)
+        );
+        const msg = `Follow request sent to ${targetName}`;
+        if (Platform.OS === 'web') window.alert(msg);
+        else Alert.alert('Request Sent', msg);
+      } else {
+        setMembers((prev) =>
+          prev.map((m) => {
+            if (m.id === targetId) {
+              return { ...m, status: m.status === 'follows_you' ? 'mutual' : 'following' };
+            }
+            return m;
+          })
+        );
+        const msg = `You're now following ${targetName}`;
+        if (Platform.OS === 'web') window.alert(msg);
+        else Alert.alert('Following', msg);
+      }
+    } catch {
+      const msg = 'Could not follow. Please try again.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Error', msg);
+    }
+  };
+
+  const handleAcceptFollow = async (targetId: string) => {
+    if (!userId) return;
+    try {
+      const { error } = await supabase
+        .from('follows')
+        .update({ status: 'accepted' })
+        .match({ follower_id: targetId, following_id: userId });
+      if (error) throw error;
+      // Update local state
       setMembers((prev) =>
         prev.map((m) => {
           if (m.id === targetId) {
-            return { ...m, status: m.status === 'follows_you' ? 'mutual' : 'following' };
+            // Check if we also follow them → mutual
+            const weFollowThem = prev.some((p) => p.id === targetId && (p.status === 'following' || p.status === 'mutual'));
+            return { ...m, status: weFollowThem ? 'mutual' : 'follows_you' };
           }
           return m;
         })
       );
-
-      const msg = `You're now following ${targetName}`;
-      if (Platform.OS === 'web') window.alert(msg);
-      else Alert.alert('Following', msg);
     } catch {
-      const msg = 'Could not follow. Please try again.';
+      const msg = 'Could not accept request. Please try again.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Error', msg);
+    }
+  };
+
+  const handleDeclineFollow = async (targetId: string) => {
+    if (!userId) return;
+    try {
+      const { error } = await supabase
+        .from('follows')
+        .delete()
+        .match({ follower_id: targetId, following_id: userId });
+      if (error) throw error;
+      setMembers((prev) => prev.filter((m) => m.id !== targetId || m.status !== 'pending_request'));
+    } catch {
+      const msg = 'Could not decline request. Please try again.';
       if (Platform.OS === 'web') window.alert(msg);
       else Alert.alert('Error', msg);
     }
@@ -283,18 +364,21 @@ export function CommunitySheet() {
     mutual: 'Mutuals',
     following: 'Following',
     follows_you: 'Follows you',
+    pending_request: 'Pending',
   };
 
   const toggleSection = (title: string) => {
     setCollapsedSections((prev) => ({ ...prev, [title]: !prev[title] }));
   };
 
+  const pendingRequests = members.filter((m) => m.status === 'pending_request');
   const requests = members.filter((m) => m.status === 'follows_you');
   const mutuals = members.filter((m) => m.status === 'mutual');
   const following = members.filter((m) => m.status === 'following');
 
   const sections = [
-    ...(requests.length > 0 ? [{ title: `REQUESTS (${requests.length})`, data: requests }] : []),
+    ...(pendingRequests.length > 0 ? [{ title: `PENDING REQUESTS (${pendingRequests.length})`, data: pendingRequests }] : []),
+    ...(requests.length > 0 ? [{ title: `FOLLOWS YOU (${requests.length})`, data: requests }] : []),
     ...(mutuals.length > 0 ? [{ title: 'YOUR MUTUALS', data: mutuals }] : []),
     ...(following.length > 0 ? [{ title: 'FOLLOWING', data: following }] : []),
   ];
@@ -315,7 +399,24 @@ export function CommunitySheet() {
         </View>
       </TouchableOpacity>
 
-      {item.status === 'follows_you' ? (
+      {item.status === 'pending_request' ? (
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity
+            style={styles.followBackButton}
+            activeOpacity={0.7}
+            onPress={() => handleAcceptFollow(item.id)}
+          >
+            <Text style={styles.followBackText}>ACCEPT</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.badge}
+            activeOpacity={0.7}
+            onPress={() => handleDeclineFollow(item.id)}
+          >
+            <Text style={styles.badgeText}>DECLINE</Text>
+          </TouchableOpacity>
+        </View>
+      ) : item.status === 'follows_you' ? (
         <TouchableOpacity
           style={styles.followBackButton}
           activeOpacity={0.7}

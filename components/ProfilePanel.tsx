@@ -145,7 +145,7 @@ export function ProfilePanel() {
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
 
-  const [activeTab, setActiveTab] = useState<'posts' | 'saved'>('posts');
+  const [activeTab, setActiveTab] = useState<'public' | 'private' | 'saved'>('public');
   const [showSettings, setShowSettings] = useState(false);
 
   const translateX = useRef(new Animated.Value(width)).current;
@@ -216,6 +216,17 @@ export function ProfilePanel() {
   const yourPosts = useMemo(() =>
     allFlyers.filter((f) => f.user_id === userId),
     [allFlyers, userId]
+  );
+
+  // Split own posts by visibility
+  const yourPublicPosts = useMemo(() =>
+    yourPosts.filter((f) => f.post_visibility === 'public' || (f.is_public && !f.post_visibility)),
+    [yourPosts]
+  );
+
+  const yourPrivatePosts = useMemo(() =>
+    yourPosts.filter((f) => f.post_visibility === 'followers' || f.post_visibility === 'mutuals' || (!f.is_public && !f.post_visibility)),
+    [yourPosts]
   );
 
   // Saved posts — filter all flyers that are saved
@@ -557,17 +568,33 @@ export function ProfilePanel() {
           <TouchableOpacity
             style={styles.tab}
             activeOpacity={0.7}
-            onPress={() => setActiveTab('posts')}
+            onPress={() => setActiveTab('public')}
           >
             <Text
               style={[
                 styles.tabText,
-                activeTab === 'posts' && styles.tabTextActive,
+                activeTab === 'public' && styles.tabTextActive,
               ]}
             >
-              YOUR POSTS
+              PUBLIC
             </Text>
-            {activeTab === 'posts' && <View style={styles.tabUnderline} />}
+            {activeTab === 'public' && <View style={styles.tabUnderline} />}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.tab}
+            activeOpacity={0.7}
+            onPress={() => setActiveTab('private')}
+          >
+            <Text
+              style={[
+                styles.tabText,
+                activeTab === 'private' && styles.tabTextActive,
+              ]}
+            >
+              PRIVATE
+            </Text>
+            {activeTab === 'private' && <View style={styles.tabUnderline} />}
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -588,9 +615,16 @@ export function ProfilePanel() {
         </View>
 
         {/* Content */}
-        {activeTab === 'posts' ? (
-          /* Posts — flat grid */
-          renderPostGrid(yourPosts, true)
+        {activeTab === 'public' ? (
+          /* Public posts */
+          yourPublicPosts.length > 0 ? renderPostGrid(yourPublicPosts, true) : (
+            <Text style={styles.emptyTabText}>No public posts yet</Text>
+          )
+        ) : activeTab === 'private' ? (
+          /* Private posts (followers/mutuals only) */
+          yourPrivatePosts.length > 0 ? renderPostGrid(yourPrivatePosts, true) : (
+            <Text style={styles.emptyTabText}>No private posts yet</Text>
+          )
         ) : (
           /* Saved — grouped by date */
           <View>
@@ -840,6 +874,13 @@ const styles = StyleSheet.create({
     backgroundColor: '#E9D25E',
     borderRadius: 1,
     marginTop: 6,
+  },
+  emptyTabText: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: 'rgba(2,4,15,0.4)',
+    textAlign: 'center',
+    marginTop: 40,
   },
   /* Date section headers */
   dateSectionHeader: {

@@ -12,7 +12,6 @@ import {
   Image,
   Alert,
   ActionSheetIOS,
-  Switch,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { scanFlyer, moderateContent } from '../lib/scan';
@@ -56,7 +55,7 @@ export function AddEventSheet() {
   const [tagInput, setTagInput] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
-  const [isPublic, setIsPublic] = useState(true);
+  const [postVisibility, setPostVisibility] = useState<'public' | 'followers' | 'mutuals'>('public');
   const [isAnonymous, setIsAnonymous] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [selectedHour, setSelectedHour] = useState<number | null>(null);
@@ -513,7 +512,7 @@ export function AddEventSheet() {
       setLocation(editingPost.location || '');
       setLink(editingPost.event_url || '');
       setSelectedCategory(editingPost.category || null);
-      setIsPublic(editingPost.is_public !== false);
+      setPostVisibility(editingPost.post_visibility || (editingPost.is_public !== false ? 'public' : 'mutuals'));
       setIsAnonymous(editingPost.is_anonymous === true);
       if (editingPost.image_url) {
         setImageUri(editingPost.image_url);
@@ -586,12 +585,12 @@ export function AddEventSheet() {
     setShowEndTime(false);
     setShowLinkField(false);
     setOccurrences([]);
-    setIsPublic(true);
+    setPostVisibility('public');
     setLocationResults([]);
     setShowLocationResults(false);
     setShowLinkField(false);
     setOccurrences([]);
-    setIsPublic(true);
+    setPostVisibility('public');
     setIsAnonymous(false);
     setPublishing(false);
     setScanError(null);
@@ -722,7 +721,8 @@ export function AddEventSheet() {
         pattern,
         category: selectedCategory || 'Community',
         tags: tags.map(t => `#${t}`),
-        is_public: isPublic,
+        is_public: postVisibility === 'public',
+        post_visibility: postVisibility,
         is_anonymous: isAnonymous,
         moderation_status: moderationStatus,
       };
@@ -1474,22 +1474,40 @@ export function AddEventSheet() {
               )}
             </View>
 
-            {/* Visibility toggle */}
-            <View style={styles.visibilityRow}>
-              <View>
-                <Text style={styles.visibilityLabel}>
-                  {isPublic ? 'Public Post' : 'Private Post 🔒'}
-                </Text>
-                <Text style={styles.visibilityHint}>
-                  {isPublic ? 'Visible to everyone in the feed' : 'Only visible to you & your community'}
-                </Text>
-              </View>
-              <Switch
-                value={isPublic}
-                onValueChange={setIsPublic}
-                trackColor={{ true: '#78B896', false: '#ddd' }}
-                thumbColor="#fff"
-              />
+            {/* Visibility picker */}
+            <View style={styles.visibilitySection}>
+              <Text style={styles.visibilityLabel}>Who can see this?</Text>
+              {([
+                { key: 'public' as const, label: 'Public', hint: 'Visible to everyone in the feed' },
+                { key: 'followers' as const, label: 'Followers & Mutuals', hint: 'Only people who follow you' },
+                { key: 'mutuals' as const, label: 'Mutuals Only', hint: 'Only people you both follow' },
+              ]).map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[
+                    styles.visibilityOption,
+                    postVisibility === opt.key && styles.visibilityOptionActive,
+                  ]}
+                  activeOpacity={0.7}
+                  onPress={() => setPostVisibility(opt.key)}
+                >
+                  <View style={[
+                    styles.visibilityRadio,
+                    postVisibility === opt.key && styles.visibilityRadioActive,
+                  ]}>
+                    {postVisibility === opt.key && <View style={styles.visibilityRadioDot} />}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[
+                      styles.visibilityOptionLabel,
+                      postVisibility === opt.key && styles.visibilityOptionLabelActive,
+                    ]}>
+                      {opt.label}{opt.key !== 'public' ? ' 🔒' : ''}
+                    </Text>
+                    <Text style={styles.visibilityHint}>{opt.hint}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
             </View>
 
 
@@ -1946,19 +1964,58 @@ const styles = StyleSheet.create({
   categoryChipTextSelected: {
     color: '#ffffff',
   },
-  visibilityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  visibilitySection: {
     paddingVertical: 16,
     marginTop: 8,
     borderTopWidth: 1,
     borderTopColor: 'rgba(2,4,15,0.06)',
+    gap: 10,
   },
   visibilityLabel: {
     fontFamily: FONTS.body,
     fontSize: 15,
     color: '#02040F',
+    marginBottom: 4,
+  },
+  visibilityOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(2,4,15,0.08)',
+  },
+  visibilityOptionActive: {
+    borderColor: '#E9D25E',
+    backgroundColor: 'rgba(233,210,94,0.06)',
+  },
+  visibilityRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: 'rgba(2,4,15,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  visibilityRadioActive: {
+    borderColor: '#E9D25E',
+  },
+  visibilityRadioDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#E9D25E',
+  },
+  visibilityOptionLabel: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: '#02040F',
+  },
+  visibilityOptionLabelActive: {
+    fontFamily: FONTS.display,
   },
   visibilityHint: {
     fontFamily: FONTS.mono,

@@ -65,9 +65,24 @@ function LinkIcon() {
   );
 }
 
+function LockIcon() {
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
+      <Path
+        d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2zM7 11V7a5 5 0 0110 0v4"
+        stroke="rgba(2,4,15,0.35)"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </Svg>
+  );
+}
+
 /**
- * Public profile page — viewable by anyone for public profiles.
- * Matches the same visual style as the own-profile panel (ProfilePanel).
+ * Profile page — handles both public and private profiles.
+ * Public profiles: PUBLIC tab (public posts) + PRIVATE tab (followers/mutuals posts)
+ * Private profiles: header only, "Private Profile" message, follow request system
  */
 export default function PublicProfilePage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -77,9 +92,11 @@ export default function PublicProfilePage() {
   const { session } = useAuth();
 
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [posts, setPosts] = useState<any[]>([]);
+  const [publicPosts, setPublicPosts] = useState<any[]>([]);
+  const [privatePosts, setPrivatePosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'public' | 'private'>('public');
 
   // Community stats
   const [followerCount, setFollowerCount] = useState(0);
@@ -87,9 +104,12 @@ export default function PublicProfilePage() {
   const [mutualCount, setMutualCount] = useState(0);
 
   // Follow state (for current user viewing this profile)
-  const [isFollowing, setIsFollowing] = useState(false);
-  const [isMutual, setIsMutual] = useState(false);
+  const [followState, setFollowState] = useState<'none' | 'pending' | 'following' | 'mutual'>('none');
   const [followLoading, setFollowLoading] = useState(false);
+
+  // Relationship: can the viewer see private posts?
+  const [canSeeFollowerPosts, setCanSeeFollowerPosts] = useState(false);
+  const [canSeeMutualPosts, setCanSeeMutualPosts] = useState(false);
 
   const currentUserId = session?.user?.id;
 
@@ -100,12 +120,11 @@ export default function PublicProfilePage() {
       try {
         setLoading(true);
 
-        // Fetch profile
+        // Fetch profile (both public and private — we show header for both)
         const { data: profileData, error: profileErr } = await supabase
           .from('profiles')
           .select('*')
           .eq('id', id)
-          .eq('is_public', true)
           .single();
 
         if (profileErr || !profileData) {
@@ -114,45 +133,100 @@ export default function PublicProfilePage() {
         }
         setProfile(profileData);
 
-        // Fetch their public posts
-        const { data: postsData } = await supabase
-          .from('posts')
-          .select('*')
-          .eq('user_id', id)
-          .eq('is_public', true)
-          .eq('moderation_status', 'approved')
-          .order('created_at', { ascending: false })
-          .limit(30);
-
-        setPosts(postsData || []);
-
-        // Fetch community stats
+        // Fetch community stats (only accepted follows)
         const [{ data: followers }, { data: following }] = await Promise.all([
-          supabase.from('follows').select('follower_id').eq('following_id', id),
-          supabase.from('follows').select('following_id').eq('follower_id', id),
+          supabase.from('follows').select('follower_id, status').eq('following_id', id),
+          supabase.from('follows').select('following_id, status').eq('follower_id', id),
         ]);
 
-        const followerIds = new Set((followers || []).map((f: any) => f.follower_id));
-        const followingIds = new Set((following || []).map((f: any) => f.following_id));
+        const acceptedFollowerIds = new Set(
+          (followers || []).filter((f: any) => f.status === 'accepted').map((f: any) => f.follower_id)
+        );
+        const acceptedFollowingIds = new Set(
+          (following || []).filter((f: any) => f.status === 'accepted').map((f: any) => f.following_id)
+        );
 
-        setFollowerCount(followerIds.size);
-        setFollowingCount(followingIds.size);
+        setFollowerCount(acceptedFollowerIds.size);
+        setFollowingCount(acceptedFollowingIds.size);
 
-        // Mutuals = intersection of followers and following
+        // Mutuals = intersection
         let mutuals = 0;
-        for (const fId of followerIds) {
-          if (followingIds.has(fId)) mutuals++;
+        for (const fId of acceptedFollowerIds) {
+          if (acceptedFollowingIds.has(fId)) mutuals++;
         }
         setMutualCount(mutuals);
 
-        // Check if current user follows this profile
+        // Determine current user's relationship with this profile
+        let viewerIsFollower = false;
+        let viewerIsMutual = false;
+
         if (currentUserId && currentUserId !== id) {
-          const isCurrentFollowing = followerIds.has(currentUserId);
-          setIsFollowing(isCurrentFollowing);
-          // Check if they also follow us back
-          const theyFollowUs = followingIds.has(currentUserId);
-          setIsMutual(isCurrentFollowing && theyFollowUs);
+          // Check if we follow them
+          const ourFollow = (followers || []).find((f: any) => f.follower_id === currentUserId);
+          // Check if they follow us
+          const theyFollowUs = acceptedFollowingIds.has(currentUserId);
+
+          if (ourFollow) {
+            if (ourFollow.status === 'pending') {
+              setFollowState('pending');
+            } else if (ourFollow.status === 'accepted') {
+              viewerIsFollower = true;
+              if (theyFollowUs) {
+                viewerIsMutual = true;
+                setFollowState('mutual');
+              } else {
+                setFollowState('following');
+              }
+            }
+          } else {
+            setFollowState('none');
+          }
         }
+
+        setCanSeeFollowerPosts(viewerIsFollower);
+        setCanSeeMutualPosts(viewerIsMutual);
+
+        // For public profiles, fetch public posts always
+        if (profileData.is_public) {
+          const { data: pubPosts } = await supabase
+            .from('posts')
+            .select('*')
+            .eq('user_id', id)
+            .eq('post_visibility', 'public')
+            .eq('moderation_status', 'approved')
+            .order('created_at', { ascending: false })
+            .limit(30);
+          setPublicPosts(pubPosts || []);
+
+          // Fetch private posts the viewer has access to
+          // RLS will enforce visibility — just fetch non-public posts
+          if (currentUserId) {
+            const { data: privPosts } = await supabase
+              .from('posts')
+              .select('*')
+              .eq('user_id', id)
+              .neq('post_visibility', 'public')
+              .eq('moderation_status', 'approved')
+              .order('created_at', { ascending: false })
+              .limit(30);
+            setPrivatePosts(privPosts || []);
+          }
+        } else if (viewerIsFollower) {
+          // Private profile but we're an accepted follower — can see their posts based on RLS
+          const { data: allPosts } = await supabase
+            .from('posts')
+            .select('*')
+            .eq('user_id', id)
+            .eq('moderation_status', 'approved')
+            .order('created_at', { ascending: false })
+            .limit(30);
+
+          const pub = (allPosts || []).filter((p: any) => p.post_visibility === 'public');
+          const priv = (allPosts || []).filter((p: any) => p.post_visibility !== 'public');
+          setPublicPosts(pub);
+          setPrivatePosts(priv);
+        }
+        // If private profile and not a follower — no posts fetched (gate shown)
       } catch {
         setError('Failed to load profile');
       } finally {
@@ -167,13 +241,27 @@ export default function PublicProfilePage() {
     if (!currentUserId || !id || followLoading) return;
     setFollowLoading(true);
     try {
+      // Private profiles require approval
+      const isPending = profile && !profile.is_public;
+      const status = isPending ? 'pending' : 'accepted';
+
       const { error: err } = await supabase.from('follows').insert({
         follower_id: currentUserId,
         following_id: id,
+        status,
       });
       if (err) throw err;
-      setIsFollowing(true);
-      setFollowerCount((c) => c + 1);
+
+      if (isPending) {
+        setFollowState('pending');
+        const msg = 'Follow request sent';
+        if (Platform.OS === 'web') window.alert(msg);
+        else Alert.alert('Request Sent', msg);
+      } else {
+        setFollowState('following');
+        setFollowerCount((c) => c + 1);
+        setCanSeeFollowerPosts(true);
+      }
     } catch {
       const msg = 'Could not follow. Please try again.';
       if (Platform.OS === 'web') window.alert(msg);
@@ -191,9 +279,11 @@ export default function PublicProfilePage() {
         .delete()
         .match({ follower_id: currentUserId, following_id: id });
       if (err) throw err;
-      setIsFollowing(false);
-      setIsMutual(false);
+      setFollowState('none');
+      setCanSeeFollowerPosts(false);
+      setCanSeeMutualPosts(false);
       setFollowerCount((c) => Math.max(0, c - 1));
+      setPrivatePosts([]);
     } catch {
       const msg = 'Could not unfollow. Please try again.';
       if (Platform.OS === 'web') window.alert(msg);
@@ -229,6 +319,46 @@ export default function PublicProfilePage() {
   const thumbWidth = (width - 24 * 2 - 12) / 2;
   const thumbHeight = (thumbWidth * 4) / 3;
   const isOwnProfile = currentUserId === id;
+  const isPrivateProfile = !profile.is_public;
+  const isProfileGated = isPrivateProfile && !canSeeFollowerPosts && !isOwnProfile;
+
+  // Follow button label
+  const followButtonLabel = (() => {
+    switch (followState) {
+      case 'mutual': return 'MUTUALS';
+      case 'following': return 'FOLLOWING';
+      case 'pending': return 'REQUESTED';
+      default: return 'FOLLOW';
+    }
+  })();
+
+  // Has private posts worth showing in the tab?
+  const hasPrivatePosts = privatePosts.length > 0;
+
+  const renderPostGrid = (posts: any[]) => (
+    <View style={styles.grid}>
+      {posts.map((post: any) => (
+        <TouchableOpacity
+          key={post.id}
+          style={[styles.gridItem, { width: thumbWidth, height: thumbHeight }]}
+          activeOpacity={0.8}
+          onPress={() => router.push(`/event/${post.id}`)}
+        >
+          {post.image_url ? (
+            <Image source={{ uri: post.image_url }} style={styles.gridImage} resizeMode="cover" />
+          ) : (
+            <View style={[styles.gridImage, { backgroundColor: post.bg_color || '#1a1a2e' }]} />
+          )}
+          <View style={styles.gridOverlay}>
+            <Text style={styles.gridTitle} numberOfLines={2}>{post.title}</Text>
+            {post.date_text ? (
+              <Text style={styles.gridDate} numberOfLines={1}>{post.date_text}</Text>
+            ) : null}
+          </View>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -265,22 +395,23 @@ export default function PublicProfilePage() {
           {/* Handle */}
           <Text style={styles.handle}>{profile.handle}</Text>
 
-          {/* Follow / Mutual button */}
+          {/* Follow / Mutual / Requested button */}
           {!isOwnProfile && currentUserId ? (
             <TouchableOpacity
               style={[
                 styles.followButton,
-                isFollowing && styles.followButtonFollowing,
+                followState !== 'none' && styles.followButtonFollowing,
+                followState === 'pending' && styles.followButtonPending,
               ]}
               activeOpacity={0.7}
-              onPress={isFollowing ? handleUnfollow : handleFollow}
+              onPress={followState === 'none' ? handleFollow : handleUnfollow}
               disabled={followLoading}
             >
               <Text style={[
                 styles.followButtonText,
-                isFollowing && styles.followButtonTextFollowing,
+                followState !== 'none' && styles.followButtonTextFollowing,
               ]}>
-                {isMutual ? 'MUTUALS' : isFollowing ? 'FOLLOWING' : 'FOLLOW'}
+                {followButtonLabel}
               </Text>
             </TouchableOpacity>
           ) : null}
@@ -321,7 +452,7 @@ export default function PublicProfilePage() {
         {/* Stats row */}
         <View style={styles.statsRow}>
           <View style={styles.stat}>
-            <Text style={styles.statNumber}>{posts.length}</Text>
+            <Text style={styles.statNumber}>{publicPosts.length + privatePosts.length}</Text>
             <Text style={styles.statLabel}>POSTS</Text>
           </View>
           <View style={styles.stat}>
@@ -338,38 +469,61 @@ export default function PublicProfilePage() {
           </View>
         </View>
 
-        {/* Posts header */}
-        <View style={styles.postsHeader}>
-          <Text style={styles.postsHeaderText}>POSTS</Text>
-          <View style={styles.postsHeaderUnderline} />
-        </View>
-
-        {/* Post grid */}
-        {posts.length > 0 ? (
-          <View style={styles.grid}>
-            {posts.map((post) => (
-              <TouchableOpacity
-                key={post.id}
-                style={[styles.gridItem, { width: thumbWidth, height: thumbHeight }]}
-                activeOpacity={0.8}
-                onPress={() => router.push(`/event/${post.id}`)}
-              >
-                {post.image_url ? (
-                  <Image source={{ uri: post.image_url }} style={styles.gridImage} resizeMode="cover" />
-                ) : (
-                  <View style={[styles.gridImage, { backgroundColor: post.bg_color || '#1a1a2e' }]} />
-                )}
-                <View style={styles.gridOverlay}>
-                  <Text style={styles.gridTitle} numberOfLines={2}>{post.title}</Text>
-                  {post.date_text ? (
-                    <Text style={styles.gridDate} numberOfLines={1}>{post.date_text}</Text>
-                  ) : null}
-                </View>
-              </TouchableOpacity>
-            ))}
+        {/* ─── Private profile gate ─── */}
+        {isProfileGated ? (
+          <View style={styles.privateGate}>
+            <LockIcon />
+            <Text style={styles.privateGateTitle}>Private Profile</Text>
+            <Text style={styles.privateGateText}>
+              {followState === 'pending'
+                ? 'Your follow request is pending. You\'ll see their posts once they accept.'
+                : 'Follow this account to see their posts.'}
+            </Text>
           </View>
         ) : (
-          <Text style={styles.emptyText}>No public posts yet</Text>
+          <>
+            {/* ─── Tabs: PUBLIC / PRIVATE ─── */}
+            <View style={styles.tabsRow}>
+              <TouchableOpacity
+                style={styles.tab}
+                activeOpacity={0.7}
+                onPress={() => setActiveTab('public')}
+              >
+                <Text style={[styles.tabText, activeTab === 'public' && styles.tabTextActive]}>
+                  PUBLIC
+                </Text>
+                {activeTab === 'public' && <View style={styles.tabUnderline} />}
+              </TouchableOpacity>
+
+              {(hasPrivatePosts || isOwnProfile) && (
+                <TouchableOpacity
+                  style={styles.tab}
+                  activeOpacity={0.7}
+                  onPress={() => setActiveTab('private')}
+                >
+                  <Text style={[styles.tabText, activeTab === 'private' && styles.tabTextActive]}>
+                    PRIVATE
+                  </Text>
+                  {activeTab === 'private' && <View style={styles.tabUnderline} />}
+                </TouchableOpacity>
+              )}
+            </View>
+
+            {/* ─── Tab content ─── */}
+            {activeTab === 'public' ? (
+              publicPosts.length > 0 ? (
+                renderPostGrid(publicPosts)
+              ) : (
+                <Text style={styles.emptyText}>No public posts yet</Text>
+              )
+            ) : (
+              privatePosts.length > 0 ? (
+                renderPostGrid(privatePosts)
+              ) : (
+                <Text style={styles.emptyText}>No private posts visible</Text>
+              )
+            )}
+          </>
         )}
       </ScrollView>
     </View>
@@ -457,6 +611,10 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
     borderColor: 'rgba(2,4,15,0.2)',
   },
+  followButtonPending: {
+    borderColor: 'rgba(2,4,15,0.15)',
+    borderStyle: 'dashed',
+  },
   followButtonText: {
     fontFamily: FONTS.display,
     fontSize: 12,
@@ -530,24 +688,58 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: 'rgba(2,4,15,0.5)',
   },
-  postsHeader: {
-    alignItems: 'center',
+
+  /* Tabs */
+  tabsRow: {
+    flexDirection: 'row',
+    gap: 24,
     marginBottom: 20,
+    justifyContent: 'center',
   },
-  postsHeaderText: {
+  tab: {
+    alignItems: 'center',
+    paddingBottom: 8,
+  },
+  tabText: {
     fontFamily: FONTS.display,
     fontSize: 12,
     letterSpacing: 1,
     textTransform: 'uppercase',
-    color: '#02040F',
-    paddingBottom: 8,
+    color: 'rgba(2,4,15,0.35)',
   },
-  postsHeaderUnderline: {
-    width: 40,
+  tabTextActive: {
+    color: '#02040F',
+  },
+  tabUnderline: {
+    width: '100%',
     height: 2,
     backgroundColor: '#E9D25E',
     borderRadius: 1,
+    marginTop: 6,
   },
+
+  /* Private profile gate */
+  privateGate: {
+    alignItems: 'center',
+    paddingVertical: 48,
+    gap: 12,
+  },
+  privateGateTitle: {
+    fontFamily: FONTS.display,
+    fontSize: 18,
+    color: '#02040F',
+    letterSpacing: 1,
+  },
+  privateGateText: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: 'rgba(2,4,15,0.5)',
+    textAlign: 'center',
+    maxWidth: 260,
+    lineHeight: 20,
+  },
+
+  /* Post grid */
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',

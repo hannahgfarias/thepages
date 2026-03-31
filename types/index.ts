@@ -4,6 +4,8 @@ export type Category = 'Party' | 'Music' | 'Community' | 'Arts' | 'Wellness' | '
 export type ModerationStatus = 'pending' | 'approved' | 'held' | 'rejected';
 export type ReportReason = 'harmful' | 'misleading' | 'inappropriate' | 'spam' | 'pii' | 'other';
 export type Visibility = 'public' | 'private';
+export type PostVisibility = 'public' | 'followers' | 'mutuals';
+export type FollowStatus = 'pending' | 'accepted';
 
 export interface BioLink {
   label: string;
@@ -45,6 +47,7 @@ export interface Post {
   category: string;
   tags: string[];
   is_public: boolean;
+  post_visibility: PostVisibility;
   is_anonymous: boolean;
   moderation_status: ModerationStatus;
   report_count: number;
