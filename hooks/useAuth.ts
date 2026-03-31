@@ -106,7 +106,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const formatted = '+1' + digits;
     setPendingPhone(formatted);
 
-    const { error } = await supabase.auth.signInWithOtp({ phone: formatted });
+    const { error } = await supabase.auth.signInWithOtp({
+      phone: formatted,
+      options: {
+        channel: 'sms',
+      },
+    });
     if (error) {
       console.warn('OTP send error:', error.message);
       return { error: error.message };
