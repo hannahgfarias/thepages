@@ -474,12 +474,13 @@ async function pickImageNative(options?: {
     if (newStatus !== 'granted') return null;
   }
 
-  // Launch picker — use lower quality to avoid crop editor timeout on large images
+  // Launch picker — skip built-in crop to avoid iOS editor dismissal bug
+  // The app handles cropping separately if needed
   const result = await ImagePicker.launchImageLibraryAsync({
-    allowsEditing: true,
-    aspect: options?.aspect || [4, 5],
+    allowsEditing: false,
     quality: options?.quality || 0.7,
     exif: false,
+    mediaTypes: 'images',
   });
 
   if (result.canceled || !result.assets?.[0]) return null;

@@ -451,10 +451,12 @@ export function AddEventSheet() {
     try {
       const picked = await pickImageFromLibrary({ aspect: [4, 5], quality: 0.8 });
       if (picked) {
-        // Pass base64 directly to avoid re-reading the file
         handlePickResult(picked.uri, picked.base64);
+      } else {
+        console.log('[AddEventSheet] pickFromPhotos: picker returned null (canceled or failed)');
       }
-    } catch {
+    } catch (err: any) {
+      console.error('[AddEventSheet] pickFromPhotos error:', err?.message || err);
       setScanError('Could not open photo picker.');
     }
   };
