@@ -197,6 +197,7 @@ export function CommunitySheet() {
         handle: member.handle,
         display_name: member.name,
         bio: null,
+        bio_links: [],
         location: null,
         avatar_url: null,
         avatar_color: member.color,
