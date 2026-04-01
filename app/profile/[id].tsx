@@ -367,7 +367,7 @@ export default function PublicProfilePage() {
             style={[styles.postCard, { width: postWidth, backgroundColor: item.bg_color || '#1a1a2e' }]}
             activeOpacity={0.8}
             onPress={() => {
-              router.push(`/event/${item.id}`);
+              router.replace({ pathname: '/(tabs)', params: { focus: item.id } });
             }}
           >
             {item.image_url ? (
