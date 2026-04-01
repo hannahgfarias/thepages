@@ -15,14 +15,13 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import Svg, { Path, Circle } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
+import { useRouter } from 'expo-router';
 import { useOverlay } from '../app/(tabs)/_layout';
 import { useAuth } from '../hooks/useAuth';
 import { supabase } from '../lib/supabase';
 import { FONTS } from '../constants/fonts';
 import { COLORS } from '../constants/colors';
-import { parseEventDate } from '../hooks/useFlyers';
-import type { Profile } from '../types';
 
 const EASING = Easing.bezier(0.16, 1, 0.3, 1);
 
@@ -39,13 +38,11 @@ interface CommunityMember {
 export function CommunitySheet() {
   const { showCommunity, setShowCommunity } = useOverlay();
   const { session } = useAuth();
+  const router = useRouter();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const [members, setMembers] = useState<CommunityMember[]>([]);
   const [loading, setLoading] = useState(false);
-  const [viewingUser, setViewingUser] = useState<Profile | null>(null);
-  const [viewingUserPosts, setViewingUserPosts] = useState<any[]>([]);
-  const [loadingUserPosts, setLoadingUserPosts] = useState(false);
 
   // Collapsible sections
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
@@ -142,8 +139,6 @@ export function CommunitySheet() {
 
   useEffect(() => {
     if (showCommunity) {
-      setViewingUser(null);
-      setViewingUserPosts([]);
       setCollapsedSections({});
       fetchCommunity();
       Animated.parallel([
@@ -211,50 +206,13 @@ export function CommunitySheet() {
     })
   ).current;
 
-  // Open a user's profile
-  const openProfile = useCallback(async (member: CommunityMember) => {
-    setLoadingUserPosts(true);
-    const { data: profileData } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', member.id)
-      .single();
-    if (profileData) {
-      setViewingUser(profileData);
-    } else {
-      setViewingUser({
-        id: member.id,
-        handle: member.handle,
-        display_name: member.name,
-        bio: null,
-        location: null,
-        avatar_url: null,
-        avatar_color: member.color,
-        avatar_initials: member.initials,
-        is_public: true,
-        created_at: '',
-      });
-    }
-    const { data: posts } = await supabase
-      .from('posts')
-      .select('*')
-      .eq('user_id', member.id)
-      .eq('is_public', true)
-      .eq('moderation_status', 'approved')
-      .order('created_at', { ascending: false })
-      .limit(20);
-    // Sort by event date chronologically (soonest first, unparseable at end)
-    const sorted = (posts || []).sort((a: any, b: any) => {
-      const dateA = parseEventDate(a.date_text || '');
-      const dateB = parseEventDate(b.date_text || '');
-      if (!dateA && !dateB) return 0;
-      if (!dateA) return 1;
-      if (!dateB) return -1;
-      return dateA.getTime() - dateB.getTime();
-    });
-    setViewingUserPosts(sorted);
-    setLoadingUserPosts(false);
-  }, []);
+  // Open a user's full profile page
+  const openProfile = useCallback((member: CommunityMember) => {
+    handleClose();
+    setTimeout(() => {
+      router.push(`/profile/${member.id}`);
+    }, 250);
+  }, [handleClose, router]);
 
   const handleFollow = async (targetId: string, targetName: string) => {
     if (!userId) return;
@@ -465,76 +423,7 @@ export function CommunitySheet() {
           </View>
         </View>
 
-        {viewingUser ? (
-          /* ── Profile viewer ── */
-          <View style={{ flex: 1 }}>
-            <View style={styles.profileBackRow}>
-              <TouchableOpacity
-                style={styles.profileBackButton}
-                activeOpacity={0.7}
-                onPress={() => { setViewingUser(null); setViewingUserPosts([]); }}
-              >
-                <Svg width={16} height={16} viewBox="0 0 24 24" fill="none">
-                  <Path d="M19 12H5M12 19l-7-7 7-7" stroke="#02040F" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
-                </Svg>
-                <Text style={styles.profileBackText}>BACK</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 24 }}
-            >
-              <View style={styles.profileHeaderBlock}>
-                {viewingUser.avatar_url ? (
-                  <Image source={{ uri: viewingUser.avatar_url }} style={styles.profileAvatarImg} />
-                ) : (
-                  <View style={[styles.profileAvatarFallback, { backgroundColor: viewingUser.avatar_color || '#EB736C' }]}>
-                    <Text style={styles.profileAvatarInitials}>{viewingUser.avatar_initials || '?'}</Text>
-                  </View>
-                )}
-                <Text style={styles.profileDisplayName}>{viewingUser.display_name || viewingUser.handle}</Text>
-                <Text style={styles.profileHandle}>{viewingUser.handle}</Text>
-                {viewingUser.bio ? <Text style={styles.profileBio}>{viewingUser.bio}</Text> : null}
-                {viewingUser.location ? (
-                  <View style={styles.profileLocationRow}>
-                    <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
-                      <Path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" stroke="rgba(2,4,15,0.5)" strokeWidth={2} />
-                      <Circle cx={12} cy={9} r={2.5} stroke="rgba(2,4,15,0.5)" strokeWidth={2} />
-                    </Svg>
-                    <Text style={styles.profileLocationText}>{viewingUser.location}</Text>
-                  </View>
-                ) : null}
-                <Text style={styles.profilePostCount}>
-                  {viewingUserPosts.length} post{viewingUserPosts.length !== 1 ? 's' : ''}
-                </Text>
-              </View>
-
-              {loadingUserPosts ? (
-                <ActivityIndicator color="rgba(2,4,15,0.3)" style={{ marginTop: 20 }} />
-              ) : viewingUserPosts.length > 0 ? (
-                <View style={styles.postsGrid}>
-                  {viewingUserPosts.map((post) => (
-                    <View key={post.id} style={styles.postThumb}>
-                      {post.image_url ? (
-                        <Image source={{ uri: post.image_url }} style={styles.postThumbImage} resizeMode="cover" />
-                      ) : (
-                        <View style={[styles.postThumbImage, { backgroundColor: post.bg_color || '#1a1a2e' }]} />
-                      )}
-                      <View style={styles.postThumbOverlay}>
-                        <Text style={styles.postThumbTitle} numberOfLines={2}>{post.title}</Text>
-                        {post.date_text ? <Text style={styles.postThumbDate} numberOfLines={1}>{post.date_text}</Text> : null}
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              ) : (
-                <View style={{ alignItems: 'center', paddingTop: 20 }}>
-                  <Text style={styles.emptyText}>No public posts yet</Text>
-                </View>
-              )}
-            </ScrollView>
-          </View>
-        ) : loading ? (
+        {loading ? (
           <View style={styles.loadingContainer}>
             <ActivityIndicator color="rgba(2,4,15,0.3)" />
           </View>
@@ -759,120 +648,5 @@ const styles = StyleSheet.create({
     color: 'rgba(2,4,15,0.4)',
     letterSpacing: 1,
     textTransform: 'uppercase',
-  },
-  /* Profile viewer */
-  profileBackRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 8,
-  },
-  profileBackButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  profileBackText: {
-    fontFamily: FONTS.display,
-    fontSize: 11,
-    color: '#02040F',
-    letterSpacing: 1,
-  },
-  profileHeaderBlock: {
-    alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 16,
-    gap: 4,
-  },
-  profileAvatarImg: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    marginBottom: 8,
-  },
-  profileAvatarFallback: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  profileAvatarInitials: {
-    fontFamily: FONTS.display,
-    fontSize: 22,
-    color: '#ffffff',
-  },
-  profileDisplayName: {
-    fontFamily: FONTS.display,
-    fontSize: 18,
-    color: '#02040F',
-    letterSpacing: 0.5,
-  },
-  profileHandle: {
-    fontFamily: FONTS.mono,
-    fontSize: 12,
-    color: 'rgba(2,4,15,0.4)',
-  },
-  profileBio: {
-    fontFamily: FONTS.body,
-    fontSize: 13,
-    color: 'rgba(2,4,15,0.6)',
-    textAlign: 'center',
-    marginTop: 4,
-    paddingHorizontal: 16,
-  },
-  profileLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: 4,
-  },
-  profileLocationText: {
-    fontFamily: FONTS.mono,
-    fontSize: 11,
-    color: 'rgba(2,4,15,0.4)',
-  },
-  profilePostCount: {
-    fontFamily: FONTS.mono,
-    fontSize: 11,
-    color: 'rgba(2,4,15,0.35)',
-    marginTop: 8,
-  },
-  postsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  postThumb: {
-    width: '48%' as any,
-    aspectRatio: 0.75,
-    borderRadius: 8,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  postThumbImage: {
-    width: '100%',
-    height: '100%',
-  },
-  postThumbOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 8,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-  },
-  postThumbTitle: {
-    fontFamily: FONTS.display,
-    fontSize: 11,
-    color: '#ffffff',
-    letterSpacing: 0.5,
-  },
-  postThumbDate: {
-    fontFamily: FONTS.mono,
-    fontSize: 9,
-    color: 'rgba(255,255,255,0.7)',
-    marginTop: 2,
   },
 });
