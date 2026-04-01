@@ -332,16 +332,8 @@ export default function PublicProfilePage() {
                 <Text style={styles.statLabel}>POSTS</Text>
               </View>
               <View style={styles.stat}>
-                <Text style={styles.statNumber}>{followerCount}</Text>
-                <Text style={styles.statLabel}>FOLLOWERS</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statNumber}>{followingCount}</Text>
-                <Text style={styles.statLabel}>FOLLOWING</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statNumber}>{mutualCount}</Text>
-                <Text style={styles.statLabel}>MUTUALS</Text>
+                <Text style={styles.statNumber}>{followerCount + followingCount + mutualCount}</Text>
+                <Text style={styles.statLabel}>COMMUNITY</Text>
               </View>
             </View>
 

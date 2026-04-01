@@ -502,58 +502,9 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
                 {flyer.title}
               </Text>
 
-              {/* Venue */}
-              {flyer.location ? (
-                <Text style={styles.detailsVenue}>{flyer.location}</Text>
-              ) : null}
-
-              {/* Date / Time */}
-              {flyer.date_text ? (
-                <Text style={styles.detailsDateTime}>{flyer.date_text}</Text>
-              ) : null}
-
-              {/* Caption with accent border */}
-              {flyer.description ? (
-                <View style={styles.captionContainer}>
-                  <Text style={styles.captionText}>{flyer.description}</Text>
-                </View>
-              ) : flyer.subtitle ? (
-                <View style={styles.captionContainer}>
-                  <Text style={styles.captionText}>{flyer.subtitle}</Text>
-                </View>
-              ) : null}
-
-              {/* Calendar row — tappable */}
-              {flyer.date_text ? (
-                <TouchableOpacity
-                  style={[styles.metaActionRow, !buttonsEnabled && styles.metaActionDisabled]}
-                  activeOpacity={buttonsEnabled ? 0.7 : 1}
-                  disabled={!buttonsEnabled}
-                  onPress={() => {
-                    const title = encodeURIComponent(flyer.title || 'Event');
-                    const location = encodeURIComponent(flyer.location || '');
-                    const details = encodeURIComponent(
-                      [flyer.subtitle, flyer.event_url ? `Link: ${flyer.event_url}` : '', `Found on The Pages`]
-                        .filter(Boolean).join('\n')
-                    );
-                    const dateText = encodeURIComponent(flyer.date_text || '');
-                    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dateText}&location=${location}&details=${details}`;
-                    if (Platform.OS === 'web') {
-                      window.open(url, '_blank', 'noopener,noreferrer');
-                    } else {
-                      Linking.openURL(url);
-                    }
-                  }}
-                >
-                  <CalendarIcon />
-                  <Text style={[styles.metaActionText, !buttonsEnabled && { opacity: 0.4 }]}>Add to Calendar</Text>
-                </TouchableOpacity>
-              ) : null}
-
-              {/* Maps row — tappable */}
+              {/* Venue — tappable, opens Maps */}
               {flyer.location ? (
                 <TouchableOpacity
-                  style={[styles.metaActionRow, !buttonsEnabled && styles.metaActionDisabled]}
                   activeOpacity={buttonsEnabled ? 0.7 : 1}
                   disabled={!buttonsEnabled}
                   onPress={() => {
@@ -572,10 +523,46 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
                     }
                   }}
                 >
-                  <PinIcon />
-                  <Text style={[styles.metaActionText, !buttonsEnabled && { opacity: 0.4 }]}>Open in Maps</Text>
+                  <Text style={styles.detailsVenue}>{flyer.location}</Text>
                 </TouchableOpacity>
               ) : null}
+
+              {/* Date / Time — tappable, opens Calendar */}
+              {flyer.date_text ? (
+                <TouchableOpacity
+                  activeOpacity={buttonsEnabled ? 0.7 : 1}
+                  disabled={!buttonsEnabled}
+                  onPress={() => {
+                    const title = encodeURIComponent(flyer.title || 'Event');
+                    const location = encodeURIComponent(flyer.location || '');
+                    const details = encodeURIComponent(
+                      [flyer.subtitle, flyer.event_url ? `Link: ${flyer.event_url}` : '', `Found on The Pages`]
+                        .filter(Boolean).join('\n')
+                    );
+                    const dateText = encodeURIComponent(flyer.date_text || '');
+                    const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${dateText}&location=${location}&details=${details}`;
+                    if (Platform.OS === 'web') {
+                      window.open(url, '_blank', 'noopener,noreferrer');
+                    } else {
+                      Linking.openURL(url);
+                    }
+                  }}
+                >
+                  <Text style={styles.detailsDateTime}>{flyer.date_text}</Text>
+                </TouchableOpacity>
+              ) : null}
+
+              {/* Caption with accent border */}
+              {flyer.description ? (
+                <View style={styles.captionContainer}>
+                  <Text style={styles.captionText}>{flyer.description}</Text>
+                </View>
+              ) : flyer.subtitle ? (
+                <View style={styles.captionContainer}>
+                  <Text style={styles.captionText}>{flyer.subtitle}</Text>
+                </View>
+              ) : null}
+
 
               {/* CTA */}
               {flyer.link ? (
@@ -989,7 +976,7 @@ const styles = StyleSheet.create({
     borderWidth: 0.5,
     borderColor: '#ffffff',
     paddingHorizontal: 14,
-    paddingVertical: 5,
+    paddingVertical: 7,
     marginBottom: 4,
   },
   categoryText: {
@@ -998,6 +985,7 @@ const styles = StyleSheet.create({
     letterSpacing: 2.5,
     textTransform: 'uppercase',
     color: '#ffffff',
+    lineHeight: 14,
   },
   title: {
     fontFamily: FONTS.display,
