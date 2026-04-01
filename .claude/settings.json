@@ -1,0 +1,18 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git commit:*)",
+            "command": "cd /home/user/thepages && npm run qa > /tmp/thepages-qa.log 2>&1 || { echo '{\"decision\":\"block\",\"reason\":\"Web build failed. Check /tmp/thepages-qa.log for details.\"}'; exit 0; }",
+            "timeout": 120,
+            "statusMessage": "Running QA build check..."
+          }
+        ]
+      }
+    ]
+  }
+}

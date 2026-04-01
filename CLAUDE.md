@@ -6,6 +6,20 @@ Read this entire file before writing a single line of code.
 
 ---
 
+## QA & Regression Testing
+
+**Before committing any changes**, always run the web build to verify nothing is broken:
+
+```bash
+npm run qa
+```
+
+This runs `npx expo export --platform web` and catches build errors, missing imports, and syntax issues. A PreToolUse hook is configured in `.claude/settings.json` to automatically block commits if the build fails.
+
+**Before making changes to a file**, read the existing code first to understand the current state and avoid regressions. When modifying shared modules (like `lib/scan.ts`, `lib/supabase.ts`, or `hooks/`), check all import sites to ensure nothing breaks.
+
+---
+
 ## What This App Is
 
 A visual discovery feed for local event flyers. The core loop:
