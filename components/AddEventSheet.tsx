@@ -14,7 +14,7 @@ import {
   ActionSheetIOS,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { scanFlyer, moderateContent, matchEvent } from '../lib/scan';
+import { scanFlyer, moderateContent } from '../lib/scan';
 import { pickImageFromLibrary, pickImageFromCamera, readFileAsBase64 } from '../lib/platform';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -815,10 +815,6 @@ export function AddEventSheet() {
             // Non-blocking — log failure shouldn't prevent post success
           }
 
-          // Fire-and-forget: auto-group into EventGroup by venue+date+time
-          for (const p of insertedPosts) {
-            matchEvent(p.id).catch(() => {});
-          }
         }
 
         const postCount = postsToInsert.length;
