@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   useWindowDimensions,
   Platform,
+  ScrollView,
   FlatList,
   Alert,
 } from 'react-native';
@@ -18,17 +19,18 @@ import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { FONTS } from '../../constants/fonts';
 import { COLORS } from '../../constants/colors';
-import type { Profile } from '../../types';
+import { FlyerCard } from '../../components/FlyerCard';
+import type { Profile, Post } from '../../types';
 
 function PinIcon() {
   return (
     <Svg width={12} height={12} viewBox="0 0 24 24" fill="none">
       <Path
         d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"
-        stroke="rgba(255,255,255,0.5)"
+        stroke="rgba(2,4,15,0.5)"
         strokeWidth={2}
       />
-      <Circle cx={12} cy={9} r={2.5} stroke="rgba(255,255,255,0.5)" strokeWidth={2} />
+      <Circle cx={12} cy={9} r={2.5} stroke="rgba(2,4,15,0.5)" strokeWidth={2} />
     </Svg>
   );
 }
@@ -36,20 +38,18 @@ function PinIcon() {
 function BackIcon() {
   return (
     <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
-      <Path d="M19 12H5M12 19l-7-7 7-7" stroke="#fff" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      <Path d="M19 12H5M12 19l-7-7 7-7" stroke="#02040F" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
     </Svg>
   );
 }
 
-/**
- * Profile page — shows profile info, follow button, stats, and posts.
- * Handles public profiles, private profiles (with gate), and pending follow requests.
- */
+const NAV_HEIGHT = 64;
+
 export default function PublicProfilePage() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const { session, isAuthenticated } = useAuth();
   const myUserId = session?.user?.id;
 
@@ -72,6 +72,15 @@ export default function PublicProfilePage() {
   const [followingCount, setFollowingCount] = useState(0);
   const [mutualCount, setMutualCount] = useState(0);
 
+  // Post viewer
+  const [viewerPosts, setViewerPosts] = useState<any[] | null>(null);
+  const [viewerInitialIndex, setViewerInitialIndex] = useState(0);
+  const viewerCardHeight = height - NAV_HEIGHT - insets.bottom;
+
+  // Grid dimensions
+  const thumbWidth = (width - 48 - 12) / 2;
+  const thumbHeight = thumbWidth * 1.25;
+
   useEffect(() => {
     if (!id) return;
 
@@ -79,7 +88,6 @@ export default function PublicProfilePage() {
       try {
         setLoading(true);
 
-        // Fetch profile — allow both public and private profiles to be viewed
         const { data: profileData, error: profileErr } = await supabase
           .from('profiles')
           .select('*')
@@ -108,14 +116,11 @@ export default function PublicProfilePage() {
         setFollowerCount(acceptedFollowerIds.size);
         setFollowingCount(acceptedFollowingIds.size);
 
-        // Mutuals = people in both accepted sets
         let mutuals = 0;
         acceptedFollowerIds.forEach((fid) => { if (acceptedFollowingIds.has(fid)) mutuals++; });
         setMutualCount(mutuals);
 
-        // Check current user's relationship with this profile
         if (myUserId) {
-          // Check if I follow them (accepted or pending)
           const myFollow = (followers || []).find((f: any) => f.follower_id === myUserId);
           if (myFollow) {
             setIsFollowing(true);
@@ -127,7 +132,6 @@ export default function PublicProfilePage() {
             setIsAcceptedFollower(false);
           }
 
-          // Check if they follow me
           const { data: theyFollowMe } = await supabase
             .from('follows')
             .select('id, status')
@@ -139,15 +143,12 @@ export default function PublicProfilePage() {
           setFollowsMe(!!theyFollowMe);
         }
 
-        // Fetch posts — RLS handles visibility, but for private profiles
-        // only show posts if viewer is accepted follower or owner
         const isOwner = myUserId === id;
         const viewerIsAccepted = myUserId
           ? (followers || []).some((f: any) => f.follower_id === myUserId && f.status === 'accepted')
           : false;
 
         if (profileData.is_public || isOwner || viewerIsAccepted) {
-          // RLS will filter which posts the viewer can see
           const { data: postsData } = await supabase
             .from('posts')
             .select('*')
@@ -174,7 +175,6 @@ export default function PublicProfilePage() {
     if (!myUserId || !id || !profile) return;
     setFollowLoading(true);
     try {
-      // Private profiles: send pending request. Public: auto-accept.
       const status = profile.is_public ? 'accepted' : 'pending';
       const { error: err } = await supabase.from('follows').insert({
         follower_id: myUserId,
@@ -224,6 +224,15 @@ export default function PublicProfilePage() {
     }
   }, [myUserId, id, followsMe, followPending]);
 
+  const openPostViewer = useCallback((postList: any[], index: number) => {
+    setViewerPosts(postList);
+    setViewerInitialIndex(index);
+  }, []);
+
+  const closePostViewer = useCallback(() => {
+    setViewerPosts(null);
+  }, []);
+
   if (loading) {
     return (
       <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -249,9 +258,9 @@ export default function PublicProfilePage() {
   const isOwnProfile = myUserId === id;
   const isMutual = isFollowing && !followPending && followsMe;
   const isPrivateAndGated = !profile.is_public && !isOwnProfile && !isAcceptedFollower;
-  const postWidth = (width - 48) / 2;
+  const communityCount = followerCount + followingCount + mutualCount;
 
-  // Determine follow button state and colors
+  // Determine follow button state
   let followLabel = 'FOLLOW';
   let followBtnStyle: any = styles.followButton;
   let followTxtStyle: any = styles.followButtonText;
@@ -275,117 +284,158 @@ export default function PublicProfilePage() {
   }
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top }]}>
+    <View style={styles.container}>
       {/* Back button */}
       <TouchableOpacity style={[styles.backButton, { top: insets.top + 12 }]} onPress={() => router.back()}>
         <BackIcon />
       </TouchableOpacity>
 
-      <FlatList
-        data={isPrivateAndGated ? [] : posts}
-        keyExtractor={(item) => item.id}
-        numColumns={2}
-        columnWrapperStyle={styles.gridRow}
-        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
-        ListHeaderComponent={
-          <View style={styles.header}>
-            {/* Avatar */}
-            {profile.avatar_url ? (
-              <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
-            ) : (
-              <View style={[styles.avatarFallback, { backgroundColor: profile.avatar_color || '#EB736C' }]}>
-                <Text style={styles.avatarInitials}>{profile.avatar_initials || '?'}</Text>
-              </View>
-            )}
-
-            {/* Name & handle */}
-            <Text style={styles.displayName}>{profile.display_name || profile.handle}</Text>
-            <Text style={styles.handle}>{profile.handle}</Text>
-
-            {/* Follow button — only show if not own profile */}
-            {!isOwnProfile && (
-              <TouchableOpacity
-                style={[followBtnStyle, followLoading && { opacity: 0.5 }]}
-                activeOpacity={0.7}
-                disabled={followLoading}
-                onPress={isFollowing ? handleUnfollow : handleFollow}
-              >
-                <Text style={followTxtStyle}>{followLabel}</Text>
-              </TouchableOpacity>
-            )}
-
-            {/* Bio */}
-            {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
-
-            {/* Location */}
-            {profile.location ? (
-              <View style={styles.locationRow}>
-                <PinIcon />
-                <Text style={styles.locationText}>{profile.location}</Text>
-              </View>
-            ) : null}
-
-            {/* Stats row */}
-            <View style={styles.statsRow}>
-              <View style={styles.stat}>
-                <Text style={styles.statNumber}>{posts.length}</Text>
-                <Text style={styles.statLabel}>POSTS</Text>
-              </View>
-              <View style={styles.stat}>
-                <Text style={styles.statNumber}>{followerCount + followingCount + mutualCount}</Text>
-                <Text style={styles.statLabel}>COMMUNITY</Text>
-              </View>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingTop: insets.top + 60, paddingBottom: insets.bottom + 24 },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Profile info */}
+        <View style={styles.profileInfo}>
+          {/* Avatar */}
+          {profile.avatar_url ? (
+            <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatarFallback, { backgroundColor: profile.avatar_color || '#EB736C' }]}>
+              <Text style={styles.avatarInitials}>{profile.avatar_initials || '?'}</Text>
             </View>
+          )}
 
-            {/* Private profile gate */}
-            {isPrivateAndGated && (
-              <View style={styles.privateGate}>
-                <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
-                  <Path
-                    d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2zM7 11V7a5 5 0 0110 0v4"
-                    stroke="rgba(255,255,255,0.3)"
-                    strokeWidth={1.8}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </Svg>
-                <Text style={styles.privateGateTitle}>PRIVATE PROFILE</Text>
-                <Text style={styles.privateGateText}>
-                  Follow this account to see their posts
-                </Text>
-              </View>
-            )}
+          {/* Name & handle */}
+          <Text style={styles.displayName}>{profile.display_name || profile.handle}</Text>
+          <Text style={styles.handle}>{profile.handle}</Text>
+
+          {/* Follow button */}
+          {!isOwnProfile && (
+            <TouchableOpacity
+              style={[followBtnStyle, followLoading && { opacity: 0.5 }]}
+              activeOpacity={0.7}
+              disabled={followLoading}
+              onPress={isFollowing ? handleUnfollow : handleFollow}
+            >
+              <Text style={followTxtStyle}>{followLabel}</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Bio */}
+          {profile.bio ? <Text style={styles.bio}>{profile.bio}</Text> : null}
+
+          {/* Location */}
+          {profile.location ? (
+            <View style={styles.locationRow}>
+              <PinIcon />
+              <Text style={styles.locationText}>{profile.location}</Text>
+            </View>
+          ) : null}
+        </View>
+
+        {/* Stats row */}
+        <View style={styles.statsRow}>
+          <View style={styles.stat}>
+            <Text style={styles.statNumber}>{posts.length}</Text>
+            <Text style={styles.statLabel}>POSTS</Text>
           </View>
-        }
-        ListEmptyComponent={
-          !isPrivateAndGated ? (
-            <Text style={styles.emptyText}>No posts yet</Text>
-          ) : null
-        }
-        renderItem={({ item }) => (
-          <TouchableOpacity
-            style={[styles.postCard, { width: postWidth, backgroundColor: item.bg_color || '#1a1a2e' }]}
-            activeOpacity={0.8}
-            onPress={() => {
-              router.replace({ pathname: '/(tabs)', params: { focus: item.id } });
-            }}
-          >
-            {item.image_url ? (
-              <Image source={{ uri: item.image_url }} style={styles.postImage} resizeMode="cover" />
-            ) : (
-              <View style={styles.postImagePlaceholder}>
-                <Text style={[styles.postTitle, { color: item.text_color || '#fff' }]} numberOfLines={3}>
-                  {item.title}
-                </Text>
-              </View>
-            )}
-            <View style={styles.postInfo}>
-              <Text style={styles.postInfoTitle} numberOfLines={1}>{item.title}</Text>
-              {item.date_text ? <Text style={styles.postInfoDate} numberOfLines={1}>{item.date_text}</Text> : null}
-            </View>
-          </TouchableOpacity>
+          <View style={styles.stat}>
+            <Text style={styles.statNumber}>{communityCount}</Text>
+            <Text style={styles.statLabel}>COMMUNITY</Text>
+          </View>
+        </View>
+
+        {/* Private profile gate */}
+        {isPrivateAndGated && (
+          <View style={styles.privateGate}>
+            <Svg width={32} height={32} viewBox="0 0 24 24" fill="none">
+              <Path
+                d="M19 11H5a2 2 0 00-2 2v7a2 2 0 002 2h14a2 2 0 002-2v-7a2 2 0 00-2-2zM7 11V7a5 5 0 0110 0v4"
+                stroke="rgba(2,4,15,0.3)"
+                strokeWidth={1.8}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </Svg>
+            <Text style={styles.privateGateTitle}>PRIVATE PROFILE</Text>
+            <Text style={styles.privateGateText}>
+              Follow this account to see their posts
+            </Text>
+          </View>
         )}
-      />
+
+        {/* Post grid */}
+        {!isPrivateAndGated && posts.length > 0 && (
+          <View style={styles.grid}>
+            {posts.map((post, index) => {
+              const imageSource = post.image_url ? { uri: post.image_url } : null;
+              return (
+                <TouchableOpacity
+                  key={post.id}
+                  style={[styles.gridItem, { width: thumbWidth, height: thumbHeight }]}
+                  activeOpacity={0.8}
+                  onPress={() => openPostViewer(posts, index)}
+                >
+                  {imageSource ? (
+                    <Image source={imageSource} style={styles.gridImage} resizeMode="cover" />
+                  ) : (
+                    <View style={[styles.gridImage, { backgroundColor: post.bg_color || '#1a1a2e' }]} />
+                  )}
+                  <View style={styles.gridOverlay}>
+                    <Text style={styles.gridTitle} numberOfLines={2}>{post.title}</Text>
+                    {post.date_text ? <Text style={styles.gridDate} numberOfLines={1}>{post.date_text}</Text> : null}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        )}
+
+        {!isPrivateAndGated && posts.length === 0 && (
+          <Text style={styles.emptyText}>No posts yet</Text>
+        )}
+      </ScrollView>
+
+      {/* Fullscreen post viewer */}
+      {viewerPosts && (
+        <View style={styles.viewerOverlay}>
+          <TouchableOpacity
+            style={[styles.viewerClose, { top: insets.top + 12 }]}
+            activeOpacity={0.7}
+            onPress={closePostViewer}
+          >
+            <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+              <Path d="M18 6L6 18M6 6l12 12" stroke="#fff" strokeWidth={2.5} strokeLinecap="round" />
+            </Svg>
+          </TouchableOpacity>
+
+          <FlatList
+            data={viewerPosts}
+            keyExtractor={(item) => item.id}
+            renderItem={({ item }) => (
+              <FlyerCard
+                flyer={item}
+                cardHeight={viewerCardHeight}
+              />
+            )}
+            pagingEnabled
+            showsVerticalScrollIndicator={false}
+            snapToAlignment="start"
+            decelerationRate="fast"
+            initialScrollIndex={viewerInitialIndex}
+            getItemLayout={(_, index) => ({
+              length: viewerCardHeight,
+              offset: viewerCardHeight * index,
+              index,
+            })}
+            onScrollToIndexFailed={() => {}}
+          />
+        </View>
+      )}
     </View>
   );
 }
@@ -393,32 +443,35 @@ export default function PublicProfilePage() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a0a0a',
+    backgroundColor: '#F0ECEC',
   },
   backButton: {
     position: 'absolute',
     left: 16,
-    zIndex: 10,
+    zIndex: 20,
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(2,4,15,0.06)',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  listContent: {
-    paddingHorizontal: 16,
+  scrollView: {
+    flex: 1,
   },
-  header: {
+  scrollContent: {
+    paddingHorizontal: 24,
+  },
+  profileInfo: {
     alignItems: 'center',
-    paddingTop: 60,
-    paddingBottom: 24,
+    marginBottom: 28,
   },
   avatar: {
     width: 80,
     height: 80,
     borderRadius: 40,
-    marginBottom: 12,
+    marginBottom: 14,
+    overflow: 'hidden',
   },
   avatarFallback: {
     width: 80,
@@ -426,7 +479,7 @@ const styles = StyleSheet.create({
     borderRadius: 40,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 12,
+    marginBottom: 14,
   },
   avatarInitials: {
     fontFamily: FONTS.display,
@@ -436,18 +489,36 @@ const styles = StyleSheet.create({
   },
   displayName: {
     fontFamily: FONTS.display,
-    fontSize: 24,
-    color: '#fff',
-    letterSpacing: 0.5,
-    marginBottom: 2,
+    fontSize: 22,
+    color: '#02040F',
+    marginBottom: 4,
   },
   handle: {
     fontFamily: FONTS.mono,
     fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(2,4,15,0.5)',
     marginBottom: 12,
   },
-  // Follow button styles — coral for follow states, custard for mutuals
+  bio: {
+    fontFamily: FONTS.body,
+    fontSize: 14,
+    color: 'rgba(2,4,15,0.6)',
+    textAlign: 'center',
+    maxWidth: 280,
+    marginBottom: 10,
+    lineHeight: 20,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  locationText: {
+    fontFamily: FONTS.mono,
+    fontSize: 11,
+    color: 'rgba(2,4,15,0.5)',
+  },
+  // Follow button styles
   followButton: {
     backgroundColor: COLORS.followState,
     paddingVertical: 10,
@@ -529,6 +600,30 @@ const styles = StyleSheet.create({
     letterSpacing: 1.5,
     textTransform: 'uppercase',
   },
+  // Stats
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 32,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(2,4,15,0.06)',
+    marginBottom: 20,
+  },
+  stat: {
+    alignItems: 'center',
+    gap: 4,
+  },
+  statNumber: {
+    fontFamily: FONTS.display,
+    fontSize: 20,
+    color: '#02040F',
+  },
+  statLabel: {
+    fontFamily: FONTS.mono,
+    fontSize: 10,
+    color: 'rgba(2,4,15,0.5)',
+  },
   // Private profile gate
   privateGate: {
     alignItems: 'center',
@@ -539,76 +634,70 @@ const styles = StyleSheet.create({
   privateGateTitle: {
     fontFamily: FONTS.display,
     fontSize: 14,
-    color: 'rgba(255,255,255,0.5)',
+    color: 'rgba(2,4,15,0.5)',
     letterSpacing: 2,
   },
   privateGateText: {
     fontFamily: FONTS.body,
     fontSize: 13,
-    color: 'rgba(255,255,255,0.3)',
+    color: 'rgba(2,4,15,0.3)',
     textAlign: 'center',
   },
-  bio: {
-    fontFamily: FONTS.body,
-    fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
-    textAlign: 'center',
-    paddingHorizontal: 24,
-    marginBottom: 10,
-    lineHeight: 20,
-  },
-  locationRow: {
+  // Post grid
+  grid: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginBottom: 16,
+    flexWrap: 'wrap',
+    gap: 12,
   },
-  locationText: {
-    fontFamily: FONTS.body,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.5)',
+  gridItem: {
+    borderRadius: 0,
+    overflow: 'hidden',
+    position: 'relative',
   },
-  // Stats
-  statsRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 24,
-    marginTop: 8,
-    marginBottom: 8,
-    paddingVertical: 16,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: 'rgba(255,255,255,0.08)',
-    alignSelf: 'stretch',
+  gridImage: {
+    width: '100%',
+    height: '100%',
   },
-  stat: {
-    alignItems: 'center',
+  gridOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    paddingTop: 30,
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
-  statNumber: {
+  gridTitle: {
     fontFamily: FONTS.display,
-    fontSize: 20,
-    color: '#fff',
-    letterSpacing: 0.5,
-  },
-  statLabel: {
-    fontFamily: FONTS.mono,
-    fontSize: 9,
-    color: 'rgba(255,255,255,0.4)',
-    letterSpacing: 1.5,
-    marginTop: 2,
+    fontSize: 13,
+    color: '#ffffff',
     textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
+  },
+  gridDate: {
+    fontFamily: FONTS.mono,
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.7)',
+    marginTop: 2,
+    textShadowColor: 'rgba(0,0,0,0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   emptyText: {
     fontFamily: FONTS.body,
     fontSize: 14,
-    color: 'rgba(255,255,255,0.4)',
+    color: 'rgba(2,4,15,0.4)',
     textAlign: 'center',
     marginTop: 40,
   },
   errorText: {
     fontFamily: FONTS.display,
     fontSize: 20,
-    color: '#fff',
+    color: '#02040F',
     textAlign: 'center',
     marginTop: 80,
     letterSpacing: 1,
@@ -626,45 +715,21 @@ const styles = StyleSheet.create({
     color: '#fff',
     letterSpacing: 1.5,
   },
-  gridRow: {
-    justifyContent: 'space-between',
-    marginBottom: 12,
+  // Fullscreen post viewer
+  viewerOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#0a0a0a',
+    zIndex: 50,
   },
-  postCard: {
-    borderRadius: 0,
-    overflow: 'hidden',
-  },
-  postImage: {
-    width: '100%',
-    aspectRatio: 4 / 5,
-  },
-  postImagePlaceholder: {
-    width: '100%',
-    aspectRatio: 4 / 5,
-    padding: 12,
+  viewerClose: {
+    position: 'absolute',
+    left: 16,
+    zIndex: 60,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center',
     justifyContent: 'center',
-  },
-  postTitle: {
-    fontFamily: FONTS.display,
-    fontSize: 16,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  postInfo: {
-    padding: 8,
-    backgroundColor: 'rgba(0,0,0,0.3)',
-  },
-  postInfoTitle: {
-    fontFamily: FONTS.display,
-    fontSize: 12,
-    color: '#fff',
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  postInfoDate: {
-    fontFamily: FONTS.mono,
-    fontSize: 10,
-    color: 'rgba(255,255,255,0.5)',
-    marginTop: 2,
   },
 });
