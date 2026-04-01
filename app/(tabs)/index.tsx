@@ -25,7 +25,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { supabase } from '../../lib/supabase';
 import { FONTS } from '../../constants/fonts';
 import { COLORS } from '../../constants/colors';
-import type { Post, FeedItem } from '../../types';
+import type { Post } from '../../types';
 
 type FeedTab = 'following' | 'mutuals' | 'all';
 
@@ -62,7 +62,7 @@ function SearchIcon({ color = '#02040F' }: { color?: string }) {
 
 export default function FeedScreen() {
   const { user } = useAuth();
-  const { flyers, feedItems, loading, error, toggleSave, recordShare, refetch } = useSharedFlyers();
+  const { flyers, loading, error, toggleSave, recordShare, refetch } = useSharedFlyers();
   const { setShowSearch, setShowProfile, showProfile, showAddEvent, searchFilters, setSearchFilters, setShowAuthPrompt, setEditingPost, setShowAddEvent, scrollToTopRef, focusPostId, setFocusPostId } = useOverlay();
   const { focus } = useLocalSearchParams<{ focus?: string }>();
   const flatListRef = useRef<FlatList>(null);
@@ -257,31 +257,10 @@ export default function FeedScreen() {
     return true;
   }, [activeTopTab, user?.id, followingIds, mutualIds, activeTag, searchFilters]);
 
-  // Filter feedItems: for groups, keep if any post matches; for singles, apply directly
-  const filteredFeedItems: FeedItem[] = useMemo(() => {
-    const result: FeedItem[] = [];
-    for (const item of feedItems) {
-      if (item.type === 'single') {
-        if (postMatchesFilters(item.post)) result.push(item);
-      } else {
-        const matchingPosts = item.posts.filter(postMatchesFilters);
-        if (matchingPosts.length > 0) {
-          result.push({ ...item, posts: matchingPosts });
-        }
-      }
-    }
-    return result;
-  }, [feedItems, postMatchesFilters]);
-
-  // Flat list of posts for scroll-to-focus and legacy compatibility
+  // Filter flyers directly (grouping/carousel disabled for stability)
   const filteredFlyers = useMemo(() => {
-    const posts: Post[] = [];
-    for (const item of filteredFeedItems) {
-      if (item.type === 'single') posts.push(item.post);
-      else posts.push(...item.posts);
-    }
-    return posts;
-  }, [filteredFeedItems]);
+    return flyers.filter(postMatchesFilters);
+  }, [flyers, postMatchesFilters]);
 
   const filteredFlyersRef = useRef(filteredFlyers);
   filteredFlyersRef.current = filteredFlyers;
@@ -477,42 +456,12 @@ export default function FeedScreen() {
     viewAreaCoveragePercentThreshold: 50,
   }).current;
 
-  const renderFeedItem = useCallback(
-    ({ item }: { item: FeedItem }) => {
-      if (item.type === 'single') {
-        return (
-          <FlyerCard flyer={item.post} cardHeight={cardHeight} onSave={handleSave} onShare={handleShare} onActiveChange={handleCardActiveChange} onTagPress={handleTagPress} onCategoryPress={handleCategoryPress} onEdit={handleEdit} onDelete={handleDelete} />
-        );
-      }
-      // Group: horizontal carousel of flyers for the same event
-      const groupPosts = item.posts;
-      return (
-        <View style={{ height: cardHeight, width }}>
-          {/* Group indicator */}
-          <View style={styles.groupBadge}>
-            <Text style={styles.groupBadgeText}>{groupPosts.length} FLYERS FOR THIS EVENT</Text>
-          </View>
-          <FlatList
-            data={groupPosts}
-            keyExtractor={(p) => p.id}
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            renderItem={({ item: post }) => (
-              <View style={{ width }}>
-                <FlyerCard flyer={post} cardHeight={cardHeight} onSave={handleSave} onShare={handleShare} onActiveChange={handleCardActiveChange} onTagPress={handleTagPress} onCategoryPress={handleCategoryPress} onEdit={handleEdit} onDelete={handleDelete} />
-              </View>
-            )}
-          />
-        </View>
-      );
-    },
-    [cardHeight, width, handleSave, handleShare, handleCardActiveChange, handleTagPress, handleCategoryPress, handleEdit, handleDelete]
+  const renderItem = useCallback(
+    ({ item }: { item: Post }) => (
+      <FlyerCard flyer={item} cardHeight={cardHeight} onSave={handleSave} onShare={handleShare} onActiveChange={handleCardActiveChange} onTagPress={handleTagPress} onCategoryPress={handleCategoryPress} onEdit={handleEdit} onDelete={handleDelete} />
+    ),
+    [cardHeight, handleSave, handleShare, handleCardActiveChange, handleTagPress, handleCategoryPress, handleEdit, handleDelete]
   );
-
-  const feedItemKey = useCallback((item: FeedItem) => {
-    return item.type === 'single' ? item.post.id : `group-${item.group.id}`;
-  }, []);
 
   const getItemLayout = useCallback(
     (_: any, index: number) => ({
@@ -623,7 +572,7 @@ export default function FeedScreen() {
       )}
 
       {/* Empty state — no results from filters */}
-      {!error && !loading && filteredFeedItems.length === 0 && (
+      {!error && !loading && filteredFlyers.length === 0 && (
         <View style={[styles.stateContainer, { height: cardHeight }]}>
           <Svg width={40} height={40} viewBox="0 0 24 24" fill="none">
             <Circle cx={11} cy={11} r={7} stroke="rgba(2,4,15,0.15)" strokeWidth={1.5} />
@@ -663,12 +612,12 @@ export default function FeedScreen() {
       )}
 
       {/* Feed */}
-      {filteredFeedItems.length > 0 && (
+      {filteredFlyers.length > 0 && (
         <FlatList
           ref={flatListRef}
-          data={filteredFeedItems}
-          renderItem={renderFeedItem}
-          keyExtractor={feedItemKey}
+          data={filteredFlyers}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id}
           pagingEnabled
           showsVerticalScrollIndicator={false}
           snapToAlignment="start"
@@ -736,23 +685,6 @@ const styles = StyleSheet.create({
   },
 
   /* Group carousel badge */
-  groupBadge: {
-    position: 'absolute',
-    top: 8,
-    alignSelf: 'center',
-    zIndex: 30,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  groupBadgeText: {
-    fontFamily: FONTS.mono,
-    fontSize: 10,
-    letterSpacing: 1,
-    color: '#ffffff',
-  },
-
   /* Top bar */
   topBar: {
     position: 'absolute',
