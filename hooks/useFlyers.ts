@@ -114,7 +114,7 @@ export function useFlyers(userId?: string) {
             id, handle, display_name, avatar_url, avatar_color, avatar_initials
           ),
           event_group:event_groups (
-            id, canonical_name, venue_text, venue_id, event_date, start_time, end_time, post_count
+            id, canonical_name, venue_text, event_date, start_time, end_time, post_count
           )
         `)
         .eq('moderation_status', 'approved')

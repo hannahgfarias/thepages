@@ -14,7 +14,7 @@ import {
   ActionSheetIOS,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { scanFlyer, moderateContent } from '../lib/scan';
+import { scanFlyer, moderateContent, matchEvent } from '../lib/scan';
 import { pickImageFromLibrary, pickImageFromCamera, readFileAsBase64 } from '../lib/platform';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -799,7 +799,7 @@ export function AddEventSheet() {
           return;
         }
 
-        // Write moderation audit log
+        // Write moderation audit log + match event groups (non-blocking)
         if (insertedPosts && insertedPosts.length > 0) {
           try {
             const logEntries = insertedPosts.map((p: any) => ({
@@ -813,6 +813,15 @@ export function AddEventSheet() {
             await supabase.from('moderation_log').insert(logEntries);
           } catch {
             // Non-blocking — log failure shouldn't prevent post success
+          }
+
+          // Fire-and-forget: match each post into an event group by venue+date
+          try {
+            for (const p of insertedPosts) {
+              matchEvent(p.id).catch((e) => console.log('[MATCH] Failed for', p.id, e));
+            }
+          } catch {
+            // Non-blocking — match failure shouldn't prevent post success
           }
 
         }

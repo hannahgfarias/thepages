@@ -71,3 +71,32 @@ export async function moderateContent(
     return { status: 'held', confidence: 0.5 };
   }
 }
+
+/**
+ * After a post is inserted, call the match-event edge function to
+ * find or create an event group (same venue + date = same event).
+ * Fire-and-forget — failures here should never block posting.
+ */
+export async function matchEvent(postId: string): Promise<{ grouped: boolean; event_group_id?: string; action?: string }> {
+  try {
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/match-event`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ postId }),
+    });
+
+    if (!response.ok) {
+      console.log('[MATCH] Edge function returned', response.status);
+      return { grouped: false };
+    }
+
+    return response.json();
+  } catch (e) {
+    console.log('[MATCH] Error:', e);
+    return { grouped: false };
+  }
+}

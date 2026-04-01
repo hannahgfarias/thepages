@@ -122,7 +122,6 @@ export interface EventGroup {
   id: string;
   canonical_name: string;
   venue_text: string | null;
-  venue_id: string | null;
   event_date: string | null;
   start_time: string | null;
   end_time: string | null;
