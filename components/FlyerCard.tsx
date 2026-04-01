@@ -453,12 +453,6 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
             ]}
           />
 
-          {/* Mini title overlaid on compressed image (details only) */}
-          {active && (
-            <View style={styles.miniTitleOverlay}>
-              <Text style={styles.miniTitleText} numberOfLines={1}>{flyer.title}</Text>
-            </View>
-          )}
         </Animated.View>
       </TouchableWithoutFeedback>
 
@@ -816,21 +810,6 @@ const styles = StyleSheet.create({
   },
 
   /* Mini title on compressed image */
-  miniTitleOverlay: {
-    position: 'absolute',
-    bottom: 8,
-    left: 16,
-    right: 16,
-    zIndex: 5,
-  },
-  miniTitleText: {
-    fontFamily: FONTS.display,
-    fontSize: 14,
-    color: '#ffffff',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-
   /* Details panel — slides up from bottom */
   detailsPanel: {
     position: 'absolute',
