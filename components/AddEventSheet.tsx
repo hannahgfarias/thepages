@@ -14,7 +14,7 @@ import {
   ActionSheetIOS,
 } from 'react-native';
 import { supabase } from '../lib/supabase';
-import { scanFlyer, moderateContent, matchEvent } from '../lib/scan';
+import { scanFlyer, moderateContent, matchEvent, getUserCoords } from '../lib/scan';
 import { pickImageFromLibrary, pickImageFromCamera, readFileAsBase64 } from '../lib/platform';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Path } from 'react-native-svg';
@@ -76,6 +76,12 @@ export function AddEventSheet() {
   // Track which occurrence's date/location is being edited (-1 = none)
   const [editingOccDate, setEditingOccDate] = useState(-1);
   const [editingOccLocation, setEditingOccLocation] = useState(-1);
+  const [userCoords, setUserCoords] = useState<{ lat: number; lon: number } | null>(null);
+
+  // Fetch user's coordinates on mount for proximity-biased location search
+  useEffect(() => {
+    getUserCoords().then(setUserCoords).catch(() => {});
+  }, []);
 
   const addTag = () => {
     const cleaned = tagInput.trim().replace(/^#/, '');
@@ -159,9 +165,12 @@ export function AddEventSheet() {
     locationDebounce.current = setTimeout(async () => {
       try {
         // Search both Photon (for businesses/POIs) and Nominatim (for addresses)
+        // Bias results toward user's current location when available
+        const locBias = userCoords ? `&lat=${userCoords.lat}&lon=${userCoords.lon}` : '';
+        const nomBias = userCoords ? `&viewbox=${userCoords.lon - 0.5},${userCoords.lat + 0.5},${userCoords.lon + 0.5},${userCoords.lat - 0.5}&bounded=0` : '';
         const [photonRes, nominatimRes] = await Promise.allSettled([
-          fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=4&lang=en&osm_tag=amenity&osm_tag=shop&osm_tag=tourism&osm_tag=leisure`),
-          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=4&addressdetails=1&countrycodes=us`, { headers: { 'User-Agent': 'ThePages/1.0' } }),
+          fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=4&lang=en&osm_tag=amenity&osm_tag=shop&osm_tag=tourism&osm_tag=leisure${locBias}`),
+          fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=4&addressdetails=1&countrycodes=us${nomBias}`, { headers: { 'User-Agent': 'ThePages/1.0' } }),
         ]);
 
         const combined: any[] = [];
@@ -242,9 +251,11 @@ export function AddEventSheet() {
   const autoResolveLocation = async (query: string): Promise<string> => {
     if (query.length < 2) return query;
     try {
+      const locBias = userCoords ? `&lat=${userCoords.lat}&lon=${userCoords.lon}` : '';
+      const nomBias = userCoords ? `&viewbox=${userCoords.lon - 0.5},${userCoords.lat + 0.5},${userCoords.lon + 0.5},${userCoords.lat - 0.5}&bounded=0` : '';
       const [photonRes, nominatimRes] = await Promise.allSettled([
-        fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1&lang=en&osm_tag=amenity&osm_tag=shop&osm_tag=tourism&osm_tag=leisure`),
-        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&addressdetails=1&countrycodes=us`, { headers: { 'User-Agent': 'ThePages/1.0' } }),
+        fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=1&lang=en&osm_tag=amenity&osm_tag=shop&osm_tag=tourism&osm_tag=leisure${locBias}`),
+        fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&addressdetails=1&countrycodes=us${nomBias}`, { headers: { 'User-Agent': 'ThePages/1.0' } }),
       ]);
       // Try Photon first (better for venue names)
       if (photonRes.status === 'fulfilled') {
