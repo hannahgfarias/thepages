@@ -106,21 +106,46 @@ export function useFlyers(userId?: string) {
 
       // RLS handles visibility filtering (public, followers, mutuals)
       // We only need to filter for approved moderation status
-      const { data, error: fetchError } = await supabase
-        .from('posts')
-        .select(`
+      // Try with event_group join first, fall back without it
+      let data: any[] | null = null;
+      let fetchError: any = null;
+
+      const baseQuery = `
           *,
           profile:profiles!posts_user_id_fkey (
             id, handle, display_name, avatar_url, avatar_color, avatar_initials
-          ),
+          )`;
+
+      const queryWithGroups = `${baseQuery},
           event_group:event_groups (
             id, canonical_name, venue_text, event_date, start_time, end_time, post_count
-          )
-        `)
+          )`;
+
+      // Try with event_group join
+      const result1 = await supabase
+        .from('posts')
+        .select(queryWithGroups)
         .eq('moderation_status', 'approved')
         .gte('created_at', fiveYearsAgo.toISOString())
         .order('created_at', { ascending: false })
         .limit(50);
+
+      if (result1.error) {
+        // Fall back without event_group join
+        console.warn('Event group join failed, falling back:', result1.error.message);
+        const result2 = await supabase
+          .from('posts')
+          .select(baseQuery)
+          .eq('moderation_status', 'approved')
+          .gte('created_at', fiveYearsAgo.toISOString())
+          .order('created_at', { ascending: false })
+          .limit(50);
+        data = result2.data;
+        fetchError = result2.error;
+      } else {
+        data = result1.data;
+        fetchError = null;
+      }
 
       if (fetchError) {
         console.warn('Supabase fetch error:', fetchError.message);
