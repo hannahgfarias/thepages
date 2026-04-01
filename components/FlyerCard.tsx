@@ -113,11 +113,11 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
   // Derived animated values from detailsProgress
   const imageHeight = detailsProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [cardHeight, cardHeight * 0.35],
+    outputRange: [cardHeight, cardHeight * 0.67],
   });
   const detailsPanelTranslateY = detailsProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [cardHeight * 0.65, 0],
+    outputRange: [cardHeight * 0.33, 0],
   });
   const sideIconsOpacity = detailsProgress.interpolate({
     inputRange: [0, 0.5, 1],
@@ -467,7 +467,7 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
         <Animated.View
           style={[
             styles.detailsPanel,
-            { height: cardHeight * 0.65, transform: [{ translateY: detailsPanelTranslateY }] },
+            { height: cardHeight * 0.33, transform: [{ translateY: detailsPanelTranslateY }] },
           ]}
         >
           {!detailsLoaded ? (
@@ -496,7 +496,7 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
 
               {/* Event name */}
               <Text
-                style={[styles.title, { fontSize: titleFontSize * 0.9, lineHeight: titleFontSize * 0.88 }]}
+                style={[styles.title, { fontSize: titleFontSize * 0.9, lineHeight: titleFontSize * 1.05 }]}
                 numberOfLines={2}
               >
                 {flyer.title}
@@ -855,10 +855,10 @@ const styles = StyleSheet.create({
   },
   detailsScrollContent: {
     paddingHorizontal: 24,
-    paddingTop: 16,
-    paddingBottom: 60,
+    paddingTop: 12,
+    paddingBottom: 48,
     paddingRight: 60, // room for side icons
-    gap: 8,
+    gap: 6,
   },
 
   /* Caption with accent border */
@@ -877,16 +877,20 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
-  /* Details venue/datetime */
+  /* Details venue/datetime — underlined to indicate tappable */
   detailsVenue: {
     fontFamily: FONTS.body,
     fontSize: 14,
     color: COLORS.text85,
+    textDecorationLine: 'underline',
+    textDecorationColor: 'rgba(255,255,255,0.3)',
   },
   detailsDateTime: {
     fontFamily: FONTS.mono,
     fontSize: 13,
     color: COLORS.text60,
+    textDecorationLine: 'underline',
+    textDecorationColor: 'rgba(255,255,255,0.2)',
   },
 
   /* Calendar/Maps action rows */
