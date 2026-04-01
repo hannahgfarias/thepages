@@ -113,11 +113,11 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
   // Derived animated values from detailsProgress
   const imageHeight = detailsProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [cardHeight, cardHeight * 0.67],
+    outputRange: [cardHeight, cardHeight * 0.5],
   });
   const detailsPanelTranslateY = detailsProgress.interpolate({
     inputRange: [0, 1],
-    outputRange: [cardHeight * 0.33, 0],
+    outputRange: [cardHeight * 0.5, 0],
   });
   const sideIconsOpacity = detailsProgress.interpolate({
     inputRange: [0, 0.5, 1],
@@ -467,7 +467,7 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
         <Animated.View
           style={[
             styles.detailsPanel,
-            { height: cardHeight * 0.33, transform: [{ translateY: detailsPanelTranslateY }] },
+            { height: cardHeight * 0.5, transform: [{ translateY: detailsPanelTranslateY }] },
           ]}
         >
           {!detailsLoaded ? (
@@ -577,6 +577,53 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
             </ScrollView>
           )}
 
+          {/* Side icons — inside details panel, right edge */}
+          {detailsLoaded ? (
+            <Animated.View style={[styles.sideIcons, { opacity: sideIconsOpacity }]}>
+              {/* User avatar */}
+              {flyer.profile && !flyer.is_anonymous ? (
+                <TouchableOpacity
+                  style={styles.sideIconButton}
+                  activeOpacity={0.7}
+                  onPress={() => router.push(`/profile/${flyer.profile!.id}`)}
+                >
+                  {flyer.profile.avatar_url ? (
+                    <Image source={{ uri: flyer.profile.avatar_url }} style={styles.sideAvatar} />
+                  ) : (
+                    <View style={[styles.sideAvatarFallback, { backgroundColor: flyer.profile.avatar_color || '#EB736C' }]}>
+                      <Text style={styles.sideAvatarInitial}>{flyer.profile.avatar_initials || '?'}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ) : null}
+
+              {/* Save */}
+              <TouchableOpacity style={styles.sideIconButton} onPress={handleSave} activeOpacity={0.7}>
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M5 2h14a1 1 0 011 1v19.143a.5.5 0 01-.766.424L12 18.03l-7.234 4.537A.5.5 0 014 22.143V3a1 1 0 011-1z"
+                    stroke="#fff" strokeWidth={1.5} fill={saved ? '#EB736C' : 'none'}
+                  />
+                </Svg>
+              </TouchableOpacity>
+
+              {/* Share */}
+              <TouchableOpacity style={styles.sideIconButton} onPress={handleShare} activeOpacity={0.7}>
+                <Svg width={20} height={20} viewBox="0 0 24 24" fill="none">
+                  <Path
+                    d="M12 3v12M12 3l4 4M12 3L8 7M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"
+                    stroke="#fff" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"
+                  />
+                </Svg>
+              </TouchableOpacity>
+
+              {/* More */}
+              <TouchableOpacity style={styles.sideIconButton} onPress={handleMore} activeOpacity={0.7}>
+                <MoreIcon />
+              </TouchableOpacity>
+            </Animated.View>
+          ) : null}
+
           {/* Hashtag pills — pinned to bottom, horizontal scroll */}
           {flyer.tags && flyer.tags.length > 0 && detailsLoaded ? (
             <ScrollView
@@ -603,56 +650,6 @@ export const FlyerCard = React.memo(function FlyerCard({ flyer, cardHeight, onSa
               })}
             </ScrollView>
           ) : null}
-        </Animated.View>
-      )}
-
-      {/* ─── Side Icons (details state only, right edge) ─── */}
-      {active && detailsLoaded && (
-        <Animated.View style={[styles.sideIcons, { opacity: sideIconsOpacity }]}>
-          {/* User avatar */}
-          {flyer.profile && !flyer.is_anonymous ? (
-            <TouchableOpacity
-              style={styles.sideIconButton}
-              activeOpacity={0.7}
-              onPress={() => router.push(`/profile/${flyer.profile!.id}`)}
-            >
-              {flyer.profile.avatar_url ? (
-                <Image source={{ uri: flyer.profile.avatar_url }} style={styles.sideAvatar} />
-              ) : (
-                <View style={[styles.sideAvatarFallback, { backgroundColor: flyer.profile.avatar_color || '#EB736C' }]}>
-                  <Text style={styles.sideAvatarInitial}>{flyer.profile.avatar_initials || '?'}</Text>
-                </View>
-              )}
-              <Text style={styles.sideIconLabel} numberOfLines={1}>
-                {flyer.profile.display_name || flyer.profile.handle || ''}
-              </Text>
-            </TouchableOpacity>
-          ) : null}
-
-          {/* Save */}
-          <TouchableOpacity style={styles.sideIconButton} onPress={handleSave} activeOpacity={0.7}>
-            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M5 2h14a1 1 0 011 1v19.143a.5.5 0 01-.766.424L12 18.03l-7.234 4.537A.5.5 0 014 22.143V3a1 1 0 011-1z"
-                stroke="#fff" strokeWidth={1.5} fill={saved ? '#EB736C' : 'none'}
-              />
-            </Svg>
-          </TouchableOpacity>
-
-          {/* Share */}
-          <TouchableOpacity style={styles.sideIconButton} onPress={handleShare} activeOpacity={0.7}>
-            <Svg width={22} height={22} viewBox="0 0 24 24" fill="none">
-              <Path
-                d="M12 3v12M12 3l4 4M12 3L8 7M4 15v4a2 2 0 002 2h12a2 2 0 002-2v-4"
-                stroke="#fff" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round"
-              />
-            </Svg>
-          </TouchableOpacity>
-
-          {/* More */}
-          <TouchableOpacity style={styles.sideIconButton} onPress={handleMore} activeOpacity={0.7}>
-            <MoreIcon />
-          </TouchableOpacity>
         </Animated.View>
       )}
 
@@ -929,28 +926,20 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
 
-  /* Side icons — right edge, vertically stacked */
+  /* Side icons — inside details panel, right edge */
   sideIcons: {
     position: 'absolute',
-    right: 12,
-    top: '38%', // below compressed image area
+    right: 10,
+    top: 12,
     zIndex: 20,
     alignItems: 'center',
-    gap: 16,
+    gap: 6,
   },
   sideIconButton: {
     alignItems: 'center',
     justifyContent: 'center',
-    width: 40,
-    height: 40,
-  },
-  sideIconLabel: {
-    fontFamily: FONTS.mono,
-    fontSize: 9,
-    color: COLORS.text60,
-    marginTop: 2,
-    maxWidth: 50,
-    textAlign: 'center',
+    width: 34,
+    height: 34,
   },
   sideAvatar: {
     width: 32,
